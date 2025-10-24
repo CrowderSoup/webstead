@@ -1,5 +1,8 @@
+import markdown
+
 from django.db import models
 from django.utils.text import slugify
+from django.utils.safestring import mark_safe
 
 from solo.models import SingletonModel
 from markdownx.models import MarkdownxField
@@ -25,6 +28,10 @@ class Page(models.Model):
                 i += 1
             self.slug = slug
         super().save(*args, **kwargs)
+
+    def html(self):
+        md = markdown.Markdown(extensions=["fenced_code"])
+        return mark_safe(md.convert(self.content))
 
 
 class Menu(models.Model):

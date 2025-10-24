@@ -13,14 +13,24 @@
       </figure>
     </aside>
     <div class="author-box">
-      <div class="author-intro">{{ settings.intro|safe }}</div>
-      <div class="author-bio p-note">{{ settings.bio|safe }}</div>
+      <div class="author-intro">{{ settings.intro }}</div>
+      <div class="author-bio p-note">{{ settings.bio }}</div>
     </div>
   </section>
 </div>
-<!--
 <div class="h-feed">
   <h3>Recent Blog Posts</h3>
+  <ul>
+    {% for post in recent_posts %}
+    <li class="h-entry">
+      <time class="dt-published" datetime="{{ post.published_on }}">
+        {{ post.published_on|date:"Y-m-d" }}
+      </time>
+      <a class="u-url" href="/blog/post/{{ post.slug }}">
+        <span class="p-name">{{ post.title }}</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
 </div>
--->
 {% endblock %}

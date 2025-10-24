@@ -1,4 +1,4 @@
-{% extends "base.html" %} {% load static %} {% block content %}
+{% extends "base.html" %} {% block content %}
 <article class="h-entry">
   <header>
     <a class="u-url" href="/page/{{ page.slug }}">
@@ -11,10 +11,10 @@
       </a>
       on
       <time class="dt-published" datetime="{{ page.published_on }}">
-        {{ page.published_on }}
+        {{ page.published_on|date:"Y-m-d" }}
       </time>
     </p>
   </header>
-  <div class="e-content">{{ page.content|safe }}</div>
+  <div class="e-content">{{ page.html }}</div>
 </article>
 {% endblock %}

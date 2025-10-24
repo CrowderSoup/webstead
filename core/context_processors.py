@@ -1,5 +1,7 @@
 import markdown
 
+from django.utils.safestring import mark_safe
+
 from .models import SiteConfiguration
 
 def site_configuration(request):
@@ -7,8 +9,8 @@ def site_configuration(request):
     menu_items = settings.main_menu.menuitem_set.all()
 
     md = markdown.Markdown(extensions=["fenced_code"])
-    settings.intro = md.convert(settings.intro)
-    settings.bio = md.convert(settings.bio)
+    settings.intro = mark_safe(md.convert(settings.intro))
+    settings.bio = mark_safe(md.convert(settings.bio))
 
     return {
         "settings": settings,

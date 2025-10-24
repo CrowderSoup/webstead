@@ -18,6 +18,7 @@ ALLOWED_HOSTS = []
 INSTALLED_APPS = [
     # Internal Apps
     'core.apps.CoreConfig',
+    'blog.apps.BlogConfig',
 
     # Django Apps
     'django.contrib.admin',
