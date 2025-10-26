@@ -1,4 +1,5 @@
-{% extends "base.html" %} {% block content %} 
+{% extends "base.html" %} {% block content %}
+<h1>Tag: {{ tag }}</h1>
 <div class="h-feed">
   {% for post in posts %}
   <article class="h-entry">
@@ -18,33 +19,33 @@
     <nav class="tags">
       <strong>Tags:</strong>
       {% for tag in post.tags.all %}
-        <a
-          href="/blog/tag/{{ tag }}"
-          rel="tag"
-          class="p-category"
-          title="{{ tag }}">
-            #{{ tag }}
-        </a>
-        {% endfor %}
+      <a
+        href="/blog/tag/{{ tag }}"
+        rel="tag"
+        class="p-category"
+        title="{{ tag }}"
+      >
+        #{{ tag }}
+      </a>
+      {% endfor %}
     </nav>
   </article>
   {% endfor %}
 </div>
 
-
 <nav class="paginator">
-    {% if posts.has_previous %}
-        <span class="pagination-item">
-            <a href="?page={{ posts.previous_page_number }}">&larr; Newer</a>
-        </span>
-    {% endif %}
-    <span class="pagination-item-spacer">
-        Page {{ posts.number }} of {{ posts.paginator.num_pages }}
-    </span>
-    {% if posts.has_next %}
-        <span class="pagination-item">
-            <a href="?page={{ posts.next_page_number }}">Older &rarr;</a>
-        </span>
-    {% endif %}
+  {% if posts.has_previous %}
+  <span class="pagination-item">
+    <a href="?page={{ posts.previous_page_number }}">&larr; Newer</a>
+  </span>
+  {% endif %}
+  <span class="pagination-item-spacer">
+    Page {{ posts.number }} of {{ posts.paginator.num_pages }}
+  </span>
+  {% if posts.has_next %}
+  <span class="pagination-item">
+    <a href="?page={{ posts.next_page_number }}">Older &rarr;</a>
+  </span>
+  {% endif %}
 </nav>
 {% endblock %}
