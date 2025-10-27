@@ -4,9 +4,12 @@ from django.conf import settings
 from django.db import models
 from django.utils.text import slugify
 from django.utils.safestring import mark_safe
+from django.contrib.contenttypes.fields import GenericRelation
 
 from solo.models import SingletonModel
 from mdeditor.fields import MDTextField
+
+from files.models import Attachment
 
 
 class Page(models.Model):
@@ -15,6 +18,8 @@ class Page(models.Model):
     author = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     content = MDTextField()
     published_on = models.DateTimeField("date published")
+    attachments = GenericRelation(Attachment, related_query_name="pages")
+
 
     def __str__(self):
         return self.title
