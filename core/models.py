@@ -1,5 +1,6 @@
 import markdown
 
+from django.conf import settings
 from django.db import models
 from django.utils.text import slugify
 from django.utils.safestring import mark_safe
@@ -11,6 +12,7 @@ from mdeditor.fields import MDTextField
 class Page(models.Model):
     title = models.CharField(max_length=512)
     slug = models.SlugField(max_length=255, unique=True)
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     content = MDTextField()
     published_on = models.DateTimeField("date published")
 

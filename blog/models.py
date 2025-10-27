@@ -1,11 +1,15 @@
 import markdown
 
+from django.conf import settings
 from django.db import models
 from django.utils.text import slugify, Truncator
 from django.utils.safestring import mark_safe
 from django.utils.html import strip_tags
+from django.contrib.contenttypes.fields import GenericRelation
 
 from mdeditor.fields import MDTextField
+
+from files.models import Attachment
 
 
 class Tag(models.Model):
@@ -17,9 +21,11 @@ class Tag(models.Model):
 class Post(models.Model):
     title = models.CharField(max_length=512)
     slug = models.SlugField(max_length=255, unique=True)
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     content = MDTextField()
     published_on = models.DateTimeField("date published", null=True, blank=True)
     tags = models.ManyToManyField(Tag)
+    attachments = GenericRelation(Attachment, related_query_name="posts")
 
     def __str__(self):
         return self.title

@@ -21,6 +21,7 @@ INSTALLED_APPS = [
     # Internal Apps
     'core.apps.CoreConfig',
     'blog.apps.BlogConfig',
+    'files.apps.FilesConfig',
 
     # Django Apps
     'django.contrib.admin',
@@ -114,6 +115,9 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
+MEDIA_ROOT = os.path.join(BASE_DIR, 'uploads')
+MEDIA_URL = '/media/'
+
 WHITENOISE_MAX_AGE = 31536000
 
 # Default primary key field type
@@ -151,7 +155,3 @@ MDEDITOR_CONFIGS = {
         'language': 'en'
     }
 }
-
-# enabling media uploads
-MEDIA_ROOT = os.path.join(BASE_DIR, 'uploads')
-MEDIA_URL = '/media/'
