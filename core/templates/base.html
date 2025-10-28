@@ -7,6 +7,12 @@
     <title>$❯ CrowderSoup{% block title %}{% endblock %}</title>
     <link rel="stylesheet" href="https://cdn.simplecss.org/simple.min.css" />
     <link rel="stylesheet" href="{% static 'css/site.css' %}" />
+
+    <!-- IndieWeb -->
+    <link rel="authorization_endpoint" href="https://indieauth.com/auth">
+    <link rel="token_endpoint" href="https://tokens.indieauth.com/token">
+    <link rel="microsub" href="https://aperture.p3k.io/microsub/205">
+
     {% block head %}{% endblock %}
   </head>
   <body>
