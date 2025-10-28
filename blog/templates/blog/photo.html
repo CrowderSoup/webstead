@@ -1,0 +1,45 @@
+<article class="h-entry">
+  <section class="photo-slider" aria-labelledby="gallery-title" role="region">
+    <ol class="slides" tabindex="0">
+      {% for photo in post.attachments.all %}
+      <li>
+        <figure id="photo-{{ photo.asset.id }}">
+          <img
+            src="{{ photo.asset.file.url }}"
+            alt="{{ photo.asset.alt_text }}"
+            loading="lazy"
+          />
+          {% if photo.asset.caption %}
+          <figcaption>{{ photo.asset.caption }}</figcaption>
+          {% endif %}
+        </figure>
+      </li>
+      {% endfor %}
+    </ol>
+    {% if post.attachments.count > 1 %}
+    <nav class="slider-nav" aria-label="Slide navigation">
+      <ol>
+        {% for photo in post.attachments.all %}
+        <li>
+          <a
+            href="#photo-{{ photo.asset.id }}"
+            aria-label="Go to photo {{ photo.asset.file.name }}"
+          >
+            ●
+          </a>
+        </li>
+        {% endfor %}
+      </ol>
+    </nav>
+    {% endif %}
+  </section>
+  <div class="p-content">{{ post.html }}</div>
+  {% include 'blog/tags.html' %}
+  <a class="u-url" href="/blog/post/{{ post.slug }}">
+    <time class="dt-published" datetime="{{ page.published_on }}">
+      {{ post.published_on|date:"Y-m-d" }}
+    </time>
+  </a>
+  by
+  <a class="p-author h-card" href="#">Aaron Crowder</a>
+</article>

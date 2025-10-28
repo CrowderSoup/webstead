@@ -1,0 +1,17 @@
+<article class="h-entry">
+  <header>
+    <a class="u-url" href="/blog/post/{{ post.slug }}">
+      <h3 class="p-name">{{ post.title }}</h3>
+    </a>
+    <p>
+      by
+      <a class="p-author h-card" href="#"> Aaron Crowder </a>
+      on
+      <time class="dt-published" datetime="{{ page.published_on }}">
+        {{ post.published_on|date:"Y-m-d" }}
+      </time>
+    </p>
+  </header>
+  <div class="e-content">{{ post.html }}</div>
+  {% include 'blog/tags.html' %}
+</article>

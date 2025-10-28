@@ -38,3 +38,6 @@ class Attachment(models.Model):
 
     class Meta:
         ordering = ["sort_order", "id"]
+
+    def __str__(self):
+        return self.asset.file.name

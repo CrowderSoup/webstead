@@ -1,33 +1,18 @@
-{% extends "base.html" %} {% block content %} 
+{% extends "base.html" %}
+{% block content %}
 <div class="h-feed">
   {% for post in posts %}
-  <article class="h-entry">
-    <header>
-      <a class="u-url" href="/blog/post/{{ post.slug }}">
-        <h3 class="p-name">{{ post.title }}</h3>
-      </a>
-      <p>
-        by <a class="p-author h-card" href="#"> Aaron Crowder </a> on
-        <time class="dt-published" datetime="{{ post.published_on }}">
-          {{ post.published_on|date:"Y-m-d" }}
-        </time>
-      </p>
-    </header>
-    <p class="p-summary">{{ post.summary }}</p>
-    <a href="/blog/post/{{ post.slug }}" class="u-url">Read more...</a>
-    <nav class="tags">
-      <strong>Tags:</strong>
-      {% for tag in post.tags.all %}
-        <a
-          href="/blog/tag/{{ tag }}"
-          rel="tag"
-          class="p-category"
-          title="{{ tag }}">
-            #{{ tag }}
-        </a>
-        {% endfor %}
-    </nav>
-  </article>
+    <!-- Post Kind Detection -->
+    {% if post.kind == 'note' %}
+      <!-- Show Note Template -->
+      {% include 'blog/note.html' %} 
+    {% elif post.kind == 'photo' %}
+      <!-- Show Photo Template -->
+      {% include 'blog/photo.html' %} 
+    {% else %}
+      <!-- Show Article Template -->
+      {% include 'blog/article.html' %} 
+    {% endif %}
   {% endfor %}
 </div>
 

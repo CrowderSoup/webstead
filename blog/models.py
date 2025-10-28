@@ -19,8 +19,12 @@ class Tag(models.Model):
         return self.tag
 
 class Post(models.Model):
+    ARTICLE = "article"; NOTE = "note"; PHOTO = "photo"
+    KIND_CHOICES = [(ARTICLE, "Article"), (NOTE, "Note"), (PHOTO, "Photo")]
+
     title = models.CharField(max_length=512)
     slug = models.SlugField(max_length=255, unique=True)
+    kind = models.CharField(max_length=16, choices=KIND_CHOICES, default=ARTICLE)
     author = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     content = MDTextField()
     published_on = models.DateTimeField("date published", null=True, blank=True)

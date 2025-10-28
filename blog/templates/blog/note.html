@@ -1,0 +1,11 @@
+<article class="h-entry note">
+  <div class="p-content">{{ post.html }}</div>
+  {% include 'blog/tags.html' %}
+  <a href="/blog/post/{{ post.slug }}">
+    <time class="dt-published" datetime="{{ page.published_on }}">
+      {{ post.published_on|date:"Y-m-d" }}
+    </time>
+  </a>
+  by
+  <a class="p-author h-card" href="#">Aaron Crowder</a>
+</article>

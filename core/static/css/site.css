@@ -12,6 +12,7 @@ article a h3 {
 
 article.h-entry {
   margin: 1rem auto;
+  padding: 0 1rem 1rem 1rem;
 }
 
 .elsewhere-icon {
@@ -29,4 +30,91 @@ nav.tags {
 .author-image-container .u-photo {
   display: block;
   margin: 5px auto;
+}
+
+/* Scope styles so we don't fight SimpleCSS */
+.photo-slider {
+  --gap: 0.75rem;
+  margin: 1rem auto;
+  padding: 1rem 0;
+}
+
+.photo-slider .slider-nav ol {
+  display: flex;
+  justify-content: center; /* centers bullets */
+  gap: 0.5rem;
+  list-style: none;
+  padding: 0;
+  margin: 0.25rem 0 0;
+}
+
+.photo-slider .slides {
+  display: flex;
+  gap: var(--gap);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  padding: 0;
+  margin: 0 0 0.5rem 0;
+  list-style: none;
+  border-radius: 0.5rem;
+}
+
+.photo-slider .slides:focus {
+  outline: 2px solid var(--accent, currentColor);
+}
+
+/* Each slide takes full viewport width on mobile, then clamps nicely on wide screens */
+.photo-slider .slides > li {
+  flex: 0 0 100%;
+  max-width: min(60rem, 100%);
+  scroll-snap-align: start;
+}
+
+.photo-slider figure {
+  margin: 0;
+}
+
+.photo-slider img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  aspect-ratio: 3 / 2; /* prevents layout shift if width/height missing */
+  border-radius: 0.5rem;
+}
+
+/* Optional, smaller caption */
+.photo-slider figcaption {
+  font-size: 0.9rem;
+  opacity: 0.85;
+  margin-top: 0.25rem;
+}
+
+/* Dot navigation (anchors jump to figure IDs) */
+.photo-slider .slider-nav ol {
+  display: flex;
+  gap: 0.5rem;
+  list-style: none;
+  padding: 0;
+  margin: 0.25rem 0 0;
+}
+
+.photo-slider .slider-nav a {
+  text-decoration: none;
+  font-size: 1.1rem;
+  line-height: 1;
+  opacity: 0.5;
+}
+
+.photo-slider .slider-nav a:focus,
+.photo-slider .slider-nav a:hover {
+  opacity: 1;
+}
+
+/* Respect accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .photo-slider .slides {
+    scroll-behavior: auto;
+  }
 }
