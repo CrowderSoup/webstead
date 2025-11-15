@@ -4,7 +4,8 @@ FROM python:3.14-alpine
 # Python runtime tweaks
 ENV PYTHONDONTWRITEBYTECODE=1 \
   PYTHONUNBUFFERED=1 \
-  PATH="/app/.venv/bin:${PATH}"
+  PATH="/app/.venv/bin:${PATH}" \
+  UV_NO_DEV=1
 
 WORKDIR /app
 
