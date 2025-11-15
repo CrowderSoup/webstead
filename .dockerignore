@@ -1,5 +1,7 @@
-.venv
-__pycache__/
-*.pyc
 .git
+__pycache__
+*.pyc
+.venv
 .env
+staticfiles
+media
