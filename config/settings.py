@@ -23,10 +23,15 @@ SECRET_KEY = env("SECRET_KEY")
 
 ALLOWED_HOSTS: list[str] = []
 INTERNAL_IPS = ["127.0.0.1"]
+CSRF_TRUSTED_ORIGINS: list[str] = []
 
 if not DEBUG:
     # Example: ALLOWED_HOSTS=example.com,.example.org
     ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[])
+    CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
 
 # ---------------------------------------------------------------------------
 # Applications
@@ -153,6 +158,8 @@ AWS_DEFAULT_ACL = None
 AWS_S3_USE_SSL = False
 AWS_S3_VERIFY = False
 AWS_S3_ADDRESSING_STYLE = "path"
+AWS_DEFAULT_ACL="public-read"
+AWS_S3_OBJECT_PARAMETERS={"CacheControl": "max-age=86400"}
 
 _S3_OPTIONS = {
     "access_key": AWS_ACCESS_KEY_ID,
