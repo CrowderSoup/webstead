@@ -99,16 +99,26 @@ TEMPLATES = [
 # Database
 # ---------------------------------------------------------------------------
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": env("DB_NAME"),
-        "USER": env("DB_USER"),
-        "PASSWORD": env("DB_PASS"),
-        "HOST": env("DB_HOST"),
-        "PORT": env("DB_PORT"),
+_DB_ENGINE = env("DB_ENGINE", default="django.db.backends.postgresql")
+
+if _DB_ENGINE == "django.db.backends.sqlite3":
+    DATABASES = {
+        "default": {
+            "ENGINE": _DB_ENGINE,
+            "NAME": env("DB_NAME", default=str(BASE_DIR / "db.sqlite3")),
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": _DB_ENGINE,
+            "NAME": env("DB_NAME"),
+            "USER": env("DB_USER"),
+            "PASSWORD": env("DB_PASS"),
+            "HOST": env("DB_HOST"),
+            "PORT": env("DB_PORT"),
+        }
+    }
 
 # ---------------------------------------------------------------------------
 # Password validation
