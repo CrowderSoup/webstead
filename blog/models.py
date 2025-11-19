@@ -43,7 +43,7 @@ class Post(models.Model):
             slug = base
             i = 2
             # Ensure uniqueness without race conditions
-            while Page.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+            while Post.objects.filter(slug=slug).exclude(pk=self.pk).exists():
                 slug = f"{base}-{i}"
                 i += 1
             self.slug = slug
