@@ -1,10 +1,13 @@
 import markdown
+from datetime import datetime
 
 from django.conf import settings
 from django.db import models
 from django.utils.text import slugify, Truncator
 from django.utils.safestring import mark_safe
 from django.utils.html import strip_tags
+from django.utils import timezone
+from django.urls import reverse
 from django.contrib.contenttypes.fields import GenericRelation
 
 from mdeditor.fields import MDTextField
@@ -22,8 +25,15 @@ class Tag(models.Model):
         ordering = ['tag']
 
 class Post(models.Model):
-    ARTICLE = "article"; NOTE = "note"; PHOTO = "photo"
-    KIND_CHOICES = [(ARTICLE, "Article"), (NOTE, "Note"), (PHOTO, "Photo")]
+    ARTICLE = "article"; NOTE = "note"; PHOTO = "photo"; LIKE = "like"; REPOST = "repost"; REPLY = "reply"
+    KIND_CHOICES = [
+        (ARTICLE, "Article"),
+        (NOTE, "Note"),
+        (PHOTO, "Photo"),
+        (LIKE, "Like"),
+        (REPOST, "Repost"),
+        (REPLY, "Reply"),
+    ]
 
     title = models.CharField(max_length=512)
     slug = models.SlugField(max_length=255, unique=True)
@@ -33,13 +43,27 @@ class Post(models.Model):
     published_on = models.DateTimeField("date published", null=True, blank=True)
     tags = models.ManyToManyField(Tag)
     attachments = GenericRelation(Attachment, related_query_name="posts")
+    like_of = models.URLField(blank=True)
+    repost_of = models.URLField(blank=True)
+    in_reply_to = models.URLField(blank=True)
 
     def __str__(self):
         return self.title
 
     def save(self, *args, **kwargs):
+        title_blank = not self.title
+        if title_blank:
+            suffix = timezone.now().strftime("%Y%m%d%H%M%S")
+            base_titles = {
+                Post.NOTE: "Note",
+                Post.PHOTO: "Photo",
+                Post.LIKE: "Like",
+                Post.REPOST: "Repost",
+                Post.REPLY: "Reply",
+            }
+            self.title = base_titles.get(self.kind, "Article") + f" {suffix}"
         if not self.slug:
-            base = slugify(self.title or '') or 'page'
+            base = 'page' if title_blank else (slugify(self.title or '') or 'page')
             slug = base
             i = 2
             # Ensure uniqueness without race conditions
@@ -48,6 +72,9 @@ class Post(models.Model):
                 i += 1
             self.slug = slug
         super().save(*args, **kwargs)
+
+    def get_absolute_url(self):
+        return reverse("post", kwargs={"slug": self.slug})
 
     def html(self):
         md = markdown.Markdown(extensions=["fenced_code"])
@@ -66,4 +93,3 @@ class Post(models.Model):
     
     class Meta:
         ordering = ['-published_on']
-

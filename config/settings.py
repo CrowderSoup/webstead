@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     "core.apps.CoreConfig",
     "blog.apps.BlogConfig",
     "files.apps.FilesConfig",
+    "micropub.apps.MicropubConfig",
 
     # Django apps
     "django.contrib.admin",
