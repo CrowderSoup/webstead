@@ -3,17 +3,17 @@ import markdown
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.shortcuts import render, get_object_or_404
 
+from urllib.parse import urlencode
+
 from .models import Post, Tag
 
 def posts(request):
-    selected_kind = request.GET.get("kind")
-    valid_kinds = [kind for kind, _ in Post.KIND_CHOICES]
+    selected_kinds = request.GET.getlist("kind")
+    valid_kinds = {kind for kind, _ in Post.KIND_CHOICES}
+    selected_kinds = [kind for kind in selected_kinds if kind in valid_kinds] or [Post.ARTICLE]
 
     query_set = Post.objects.exclude(published_on__isnull=True).order_by("-published_on")
-    if selected_kind in valid_kinds:
-        query_set = query_set.filter(kind=selected_kind)
-    else:
-        selected_kind = None
+    query_set = query_set.filter(kind__in=selected_kinds)
 
     paginator = Paginator(query_set, 10)
     page_number = request.GET.get("page")
@@ -31,7 +31,8 @@ def posts(request):
         {
             "posts": posts,
             "post_kinds": Post.KIND_CHOICES,
-            "selected_kind": selected_kind,
+            "selected_kinds": selected_kinds,
+            "selected_kinds_query": urlencode([("kind", kind) for kind in selected_kinds]),
         },
     )
 

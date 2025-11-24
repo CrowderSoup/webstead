@@ -1,15 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
-<form class="post-type-filter" action="{% url 'posts' %}" method="get" style="display:inline-flex; align-items:center; gap:0.5rem;">
-  <label for="post-kind-select">Filter posts by...</label>
-  <select id="post-kind-select" name="kind" onchange="this.form.submit()">
-    <option value="" {% if not selected_kind %}selected{% endif %}>All</option>
-    {% for kind_value, kind_label in post_kinds %}
-      <option value="{{ kind_value }}" {% if selected_kind == kind_value %}selected{% endif %}>
-        {{ kind_label }}
-      </option>
-    {% endfor %}
-  </select>
+<form class="post-type-filter" action="{% url 'posts' %}" method="get" style="display:inline-flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+  <span>Filter posts by...</span>
+  {% for kind_value, kind_label in post_kinds %}
+    <label style="display:flex; align-items:center; gap:0.25rem;">
+      <input type="checkbox" name="kind" value="{{ kind_value }}" {% if kind_value in selected_kinds %}checked{% endif %} onchange="this.form.submit()">
+      {{ kind_label }}
+    </label>
+  {% endfor %}
 </form>
 
 <div class="h-feed">
@@ -32,7 +30,7 @@
 <nav class="paginator">
     {% if posts.has_previous %}
         <span class="pagination-item">
-            <a href="?{% if selected_kind %}kind={{ selected_kind }}&{% endif %}page={{ posts.previous_page_number }}">&larr; Newer</a>
+            <a href="?{{ selected_kinds_query }}{% if selected_kinds_query %}&{% endif %}page={{ posts.previous_page_number }}">&larr; Newer</a>
         </span>
     {% endif %}
     <span class="pagination-item-spacer">
@@ -40,7 +38,7 @@
     </span>
     {% if posts.has_next %}
         <span class="pagination-item">
-            <a href="?{% if selected_kind %}kind={{ selected_kind }}&{% endif %}page={{ posts.next_page_number }}">Older &rarr;</a>
+            <a href="?{{ selected_kinds_query }}{% if selected_kinds_query %}&{% endif %}page={{ posts.next_page_number }}">Older &rarr;</a>
         </span>
     {% endif %}
 </nav>
