@@ -1,10 +1,11 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 
 from .models import Webmention
 
 
 @admin.register(Webmention)
-class WebmentionAdmin(admin.ModelAdmin):
+class WebmentionAdmin(ModelAdmin):
     list_display = [
         "source",
         "target",

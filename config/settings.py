@@ -44,8 +44,11 @@ INSTALLED_APPS = [
     "files.apps.FilesConfig",
     "micropub.apps.MicropubConfig",
 
+    # Django admin UI
+    "unfold",
+
     # Django apps
-    "django.contrib.admin",
+    "config.apps.CustomAdminConfig",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",

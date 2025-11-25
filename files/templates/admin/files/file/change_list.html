@@ -1,0 +1,42 @@
+{% extends "admin/change_list.html" %}
+{% load i18n admin_urls %}
+
+{% block result_list %}
+    {% include "unfold/helpers/change_list_actions.html" %}
+
+    <div class="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+        {% for obj in cl.result_list %}
+            <div class="relative overflow-hidden rounded-default border border-base-200 bg-white shadow-xs dark:border-base-800 dark:bg-base-900">
+                <label class="absolute left-2 top-2 z-10 flex h-6 w-6 cursor-pointer items-center justify-center rounded-sm border border-base-300 bg-white shadow-sm dark:border-base-700 dark:bg-base-950">
+                    <input type="checkbox" name="_selected_action" value="{{ obj.pk }}" class="action-select absolute inset-0 opacity-0" />
+                    <span class="material-symbols-outlined md-18 text-base-400 pointer-events-none">check</span>
+                </label>
+
+                {% if obj.kind == "image" %}
+                    <a href="{% url cl.opts|admin_urlname:'change' obj.pk|admin_urlquote %}">
+                        <img src="{{ obj.file.url }}" alt="{{ obj.alt_text|default:obj }}" class="h-48 w-full object-cover bg-base-100 dark:bg-base-950" loading="lazy" />
+                    </a>
+                {% else %}
+                    <div class="flex h-48 items-center justify-center bg-base-100 text-base-400 dark:bg-base-950 dark:text-base-500">
+                        <span class="material-symbols-outlined md-36">insert_drive_file</span>
+                    </div>
+                {% endif %}
+
+                <div class="space-y-1 p-3 text-sm">
+                    <div class="truncate font-semibold text-font-important-light dark:text-font-important-dark" title="{{ obj }}">
+                        {{ obj }}
+                    </div>
+                    <div class="text-base-500 dark:text-base-400">{{ obj.get_kind_display }}</div>
+                    <div class="text-base-500 dark:text-base-400">{{ obj.created_at|date:"Y-m-d H:i" }}</div>
+
+                    <div class="flex gap-3 text-xs font-semibold text-primary-600 dark:text-primary-500">
+                        <a href="{% url cl.opts|admin_urlname:'change' obj.pk|admin_urlquote %}">{% trans "Edit" %}</a>
+                        <a href="{{ obj.file.url }}" target="_blank" rel="noopener">{% trans "Open" %}</a>
+                    </div>
+                </div>
+            </div>
+        {% empty %}
+            <p class="text-base-500 dark:text-base-400">{% trans "No files available." %}</p>
+        {% endfor %}
+    </div>
+{% endblock %}

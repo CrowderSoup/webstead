@@ -1,4 +1,5 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 
 from solo.admin import SingletonModelAdmin
 
@@ -11,6 +12,6 @@ admin.site.register(MenuItem)
 admin.site.register(Elsewhere)
 
 @admin.register(Page)
-class PageAdmin(admin.ModelAdmin):
+class PageAdmin(ModelAdmin):
     prepopulated_fields = {"slug": ("title",)}
     inlines = [AttachmentInline]
