@@ -8,9 +8,11 @@ from urllib.parse import urlencode
 from .models import Post, Tag
 
 def posts(request):
-    selected_kinds = request.GET.getlist("kind")
+    requested_kinds = request.GET.getlist("kind")
     valid_kinds = {kind for kind, _ in Post.KIND_CHOICES}
-    selected_kinds = [kind for kind in selected_kinds if kind in valid_kinds] or [Post.ARTICLE]
+    selected_kinds = [kind for kind in requested_kinds if kind in valid_kinds]
+    feed_kinds_query = urlencode([("kind", kind) for kind in selected_kinds])
+    selected_kinds = selected_kinds or [Post.ARTICLE]
 
     query_set = Post.objects.exclude(published_on__isnull=True).order_by("-published_on")
     query_set = query_set.filter(kind__in=selected_kinds)
@@ -33,6 +35,7 @@ def posts(request):
             "post_kinds": Post.KIND_CHOICES,
             "selected_kinds": selected_kinds,
             "selected_kinds_query": urlencode([("kind", kind) for kind in selected_kinds]),
+            "feed_kinds_query": feed_kinds_query,
         },
     )
 

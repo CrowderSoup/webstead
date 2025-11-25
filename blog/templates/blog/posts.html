@@ -23,7 +23,7 @@
       <!-- Show Article Template -->
       {% include 'blog/article-summary.html' %} 
     {% endif %}
-  {% endfor %}
+{% endfor %}
 </div>
 
 
@@ -42,4 +42,8 @@
         </span>
     {% endif %}
 </nav>
+{% block footer_extra %}
+  <span aria-hidden="true">·</span>
+  <a href="{% url 'posts_feed' %}{% if feed_kinds_query %}?{{ feed_kinds_query }}{% endif %}">RSS feed</a>
+{% endblock %}
 {% endblock %}

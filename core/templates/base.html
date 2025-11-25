@@ -7,6 +7,9 @@
     <title>$❯ CrowderSoup{% block title %}{% endblock %}</title>
     <link rel="stylesheet" href="https://cdn.simplecss.org/simple.min.css" />
     <link rel="stylesheet" href="{% static 'css/site.css' %}" />
+    {% if feed_url %}
+    <link rel="feed" href="{{ feed_url }}">
+    {% endif %}
 
     <!-- IndieWeb -->
     <link rel="authorization_endpoint" href="https://indieauth.com/auth">
@@ -28,6 +31,9 @@
       </nav>
     </header>
     <main>{% block content %}{% endblock %}</main>
-    <footer>© {{ now|date:"Y" }} Aaron Crowder.</footer>
+    <footer>
+      <span>© {{ now|date:"Y" }} Aaron Crowder.</span>
+      {% block footer_extra %}{% endblock %}
+    </footer>
   </body>
 </html>
