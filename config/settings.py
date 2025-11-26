@@ -192,6 +192,7 @@ STORAGES = {
 }
 
 if not DEBUG:
+    AWS_S3_VERIFY = True
     AWS_S3_CUSTOM_DOMAIN = env("AWS_S3_CUSTOM_DOMAIN")
 
 # ---------------------------------------------------------------------------
