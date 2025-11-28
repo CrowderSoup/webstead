@@ -36,6 +36,14 @@ def _first_value(data: dict, key: str, default=None):
     return value or default
 
 
+def _parse_scope(scope_value):
+    if isinstance(scope_value, list):
+        scope_value = _first_value({"scope": scope_value}, "scope", "")
+    if isinstance(scope_value, str):
+        return [s for s in scope_value.split() if s]
+    return []
+
+
 def _normalize_property(key: str, values):
     normalized_key = key[:-2] if key.endswith("[]") else key
     normalized_values = []
@@ -104,6 +112,13 @@ def _extract_mf2_objects(data: dict):
     return mf2_objects
 
 
+def _require_scope(request, needed):
+    scopes = getattr(request, "micropub_scopes", [])
+    if needed and needed not in scopes:
+        return JsonResponse({"error": "insufficient_scope"}, status=403)
+    return None
+
+
 def _download_and_attach_photo(post, url: str, alt_text: str = ""):
     try:
         with urlopen(url, timeout=10) as response:
@@ -135,7 +150,7 @@ def _authorized(request):
         token = request.POST.get("access_token") or request.GET.get("access_token")
 
     if not token:
-        return False
+        return False, []
 
     verification_request = Request(
         TOKEN_ENDPOINT,
@@ -152,30 +167,33 @@ def _authorized(request):
             status_code = response.status
             content_type = response.headers.get("Content-Type", "")
     except (HTTPError, URLError, TimeoutError):
-        return False
+        return False, []
 
     if status_code != 200:
-        return False
+        return False, []
 
+    scopes = []
     if body:
         try:
             token_data = json.loads(body) if "application/json" in content_type else parse_qs(body)
         except json.JSONDecodeError:
-            return False
+            return False, []
 
         active = token_data.get("active")
         if isinstance(active, list):
             active = _first_value({"active": active}, "active")
         if active is False or (isinstance(active, str) and active.lower() == "false"):
-            return False
+            return False, []
 
         error = token_data.get("error")
         if isinstance(error, list):
             error = _first_value({"error": error}, "error")
         if error:
-            return False
+            return False, []
 
-    return True
+        scopes = _parse_scope(token_data.get("scope", []))
+
+    return True, scopes
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -183,13 +201,18 @@ class MicropubView(View):
     http_method_names = ["get", "post"]
 
     def dispatch(self, request, *args, **kwargs):
-        if not _authorized(request):
+        authorized, scopes = _authorized(request)
+        if not authorized:
             return JsonResponse({"error": "unauthorized"}, status=401)
+        request.micropub_scopes = scopes
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request):
         query = request.GET.get("q")
         if query == "config":
+            insufficient = _require_scope(request, None)
+            if insufficient:
+                return insufficient
             media_endpoint = request.build_absolute_uri(reverse("micropub-media"))
             return JsonResponse(
                 {
@@ -206,8 +229,14 @@ class MicropubView(View):
                 }
             )
         if query == "syndicate-to":
+            insufficient = _require_scope(request, None)
+            if insufficient:
+                return insufficient
             return JsonResponse({"syndicate-to": []})
         if query == "source":
+            insufficient = _require_scope(request, "read")
+            if insufficient:
+                return insufficient
             target_url = request.GET.get("url")
             if not target_url:
                 return HttpResponseBadRequest("Missing url for source query")
@@ -260,6 +289,9 @@ class MicropubView(View):
         action = _first_value(data, "action")
 
         if action == "delete":
+            insufficient = _require_scope(request, "delete")
+            if insufficient:
+                return insufficient
             target_url = _first_value(data, "url")
             if not target_url:
                 return HttpResponseBadRequest("Missing url for delete")
@@ -280,6 +312,9 @@ class MicropubView(View):
             return HttpResponse(status=204)
 
         if action == "update":
+            insufficient = _require_scope(request, "update")
+            if insufficient:
+                return insufficient
             target_url = _first_value(data, "url")
             if not target_url:
                 return HttpResponseBadRequest("Missing url for update")
@@ -367,6 +402,9 @@ class MicropubView(View):
             return HttpResponse(status=204)
 
         if action == "undelete":
+            insufficient = _require_scope(request, "undelete")
+            if insufficient:
+                return insufficient
             target_url = _first_value(data, "url")
             if not target_url:
                 return HttpResponseBadRequest("Missing url for undelete")
@@ -387,6 +425,10 @@ class MicropubView(View):
                 post.save(update_fields=["deleted"])
 
             return HttpResponse(status=204)
+
+        insufficient = _require_scope(request, "create")
+        if insufficient:
+            return insufficient
 
         content = _first_value(data, "content", "") or ""
         name = _first_value(data, "name")
@@ -488,11 +530,17 @@ class MicropubMediaView(View):
     http_method_names = ["post"]
 
     def dispatch(self, request, *args, **kwargs):
-        if not _authorized(request):
+        authorized, scopes = _authorized(request)
+        if not authorized:
             return JsonResponse({"error": "unauthorized"}, status=401)
+        request.micropub_scopes = scopes
         return super().dispatch(request, *args, **kwargs)
 
     def post(self, request):
+        insufficient = _require_scope(request, "create")
+        if insufficient:
+            return insufficient
+
         upload = request.FILES.get("file") or request.FILES.get("photo")
         if not upload:
             return HttpResponseBadRequest("No file provided")
