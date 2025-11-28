@@ -36,7 +36,11 @@ def _normalize_payload(request):
             raw = json.loads(request.body or "{}")
         except json.JSONDecodeError:
             return {}
-        raw_data = {key: value if isinstance(value, list) else [value] for key, value in raw.items()}
+        if isinstance(raw, dict) and isinstance(raw.get("properties"), dict):
+            properties = raw["properties"]
+            raw_data = {key: value if isinstance(value, list) else [value] for key, value in properties.items()}
+        else:
+            raw_data = {key: value if isinstance(value, list) else [value] for key, value in raw.items()}
     else:
         raw_data = {key: request.POST.getlist(key) for key in request.POST}
 
