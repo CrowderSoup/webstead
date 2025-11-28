@@ -226,7 +226,8 @@ class MicropubView(View):
             except Post.DoesNotExist:
                 return HttpResponse(status=404)
 
-            post.delete()
+            post.deleted = True
+            post.save(update_fields=["deleted"])
             return HttpResponse(status=204)
 
         if action == "update":
@@ -314,6 +315,28 @@ class MicropubView(View):
                     post.tags.clear()
 
             post.save()
+            return HttpResponse(status=204)
+
+        if action == "undelete":
+            target_url = _first_value(data, "url")
+            if not target_url:
+                return HttpResponseBadRequest("Missing url for undelete")
+
+            parsed = urlparse(target_url)
+            path_parts = [part for part in parsed.path.split("/") if part]
+            slug = path_parts[-1] if path_parts else ""
+            if not slug:
+                return HttpResponseBadRequest("Invalid url for undelete")
+
+            try:
+                post = Post.objects.get(slug=slug)
+            except Post.DoesNotExist:
+                return HttpResponse(status=404)
+
+            if post.deleted:
+                post.deleted = False
+                post.save(update_fields=["deleted"])
+
             return HttpResponse(status=204)
 
         content = _first_value(data, "content", "") or ""

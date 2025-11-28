@@ -14,7 +14,7 @@ def posts(request):
     feed_kinds_query = urlencode([("kind", kind) for kind in selected_kinds])
     selected_kinds = selected_kinds or [Post.ARTICLE]
 
-    query_set = Post.objects.exclude(published_on__isnull=True).order_by("-published_on")
+    query_set = Post.objects.exclude(published_on__isnull=True).filter(deleted=False).order_by("-published_on")
     query_set = query_set.filter(kind__in=selected_kinds)
 
     paginator = Paginator(query_set, 10)
@@ -41,7 +41,7 @@ def posts(request):
 
 def posts_by_tag(request, tag):
     tag = get_object_or_404(Tag, tag=tag)
-    query_set = Post.objects.exclude(published_on__isnull=True).filter(tags=tag).order_by("-published_on")
+    query_set = Post.objects.exclude(published_on__isnull=True).filter(tags=tag, deleted=False).order_by("-published_on")
     paginator = Paginator(query_set, 10)
     page_number = request.GET.get("page")
 
@@ -58,6 +58,7 @@ def post(request, slug):
     post = get_object_or_404(
         Post.objects.only("title", "content", "slug", "published_on", "tags"),
         slug=slug,
+        deleted=False,
     )
 
     tags = post.tags.all()

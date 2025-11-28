@@ -40,7 +40,7 @@ class PostsFeed(Feed):
         valid_kinds = {kind for kind, _ in Post.KIND_CHOICES}
         selected_kinds = [kind for kind in selected_kinds if kind in valid_kinds]
 
-        queryset = Post.objects.exclude(published_on__isnull=True).order_by("-published_on")
+        queryset = Post.objects.exclude(published_on__isnull=True).filter(deleted=False).order_by("-published_on")
         if selected_kinds:
             queryset = queryset.filter(kind__in=selected_kinds)
         return queryset

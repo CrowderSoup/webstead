@@ -41,6 +41,7 @@ class Post(models.Model):
     author = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     content = MDTextField()
     mf2 = models.JSONField(default=dict, blank=True)
+    deleted = models.BooleanField(default=False)
     published_on = models.DateTimeField("date published", null=True, blank=True)
     tags = models.ManyToManyField(Tag)
     attachments = GenericRelation(Attachment, related_query_name="posts")
