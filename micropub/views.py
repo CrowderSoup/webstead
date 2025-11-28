@@ -210,6 +210,25 @@ class MicropubView(View):
         data = _normalize_payload(request)
         action = _first_value(data, "action")
 
+        if action == "delete":
+            target_url = _first_value(data, "url")
+            if not target_url:
+                return HttpResponseBadRequest("Missing url for delete")
+
+            parsed = urlparse(target_url)
+            path_parts = [part for part in parsed.path.split("/") if part]
+            slug = path_parts[-1] if path_parts else ""
+            if not slug:
+                return HttpResponseBadRequest("Invalid url for delete")
+
+            try:
+                post = Post.objects.get(slug=slug)
+            except Post.DoesNotExist:
+                return HttpResponse(status=404)
+
+            post.delete()
+            return HttpResponse(status=204)
+
         if action == "update":
             target_url = _first_value(data, "url")
             if not target_url:
