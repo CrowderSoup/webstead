@@ -64,6 +64,19 @@ def _normalize_payload(request):
     return normalized
 
 
+def _is_mf2_object(value):
+    return isinstance(value, dict) and value.get("type") and value.get("properties")
+
+
+def _extract_mf2_objects(data: dict):
+    mf2_objects = {}
+    for key, values in data.items():
+        nested_objects = [value for value in values if _is_mf2_object(value)]
+        if nested_objects:
+            mf2_objects[key] = nested_objects
+    return mf2_objects
+
+
 def _authorized(request):
     auth_header = request.META.get("HTTP_AUTHORIZATION", "")
     if auth_header.startswith("Bearer "):
@@ -152,6 +165,7 @@ class MicropubView(View):
         in_reply_to = _first_value(data, "in-reply-to")
         categories = data.get("category", [])
         published = _first_value(data, "published")
+        mf2_objects = _extract_mf2_objects(data)
 
         if like_of:
             kind = Post.LIKE
@@ -194,6 +208,7 @@ class MicropubView(View):
             like_of=like_of or "",
             repost_of=repost_of or "",
             in_reply_to=in_reply_to or "",
+            mf2=mf2_objects,
         )
         post.save()
 
