@@ -237,6 +237,17 @@ class MicropubView(View):
                 n_key, n_values = _normalize_property(key, value_list)
                 normalized_replace[n_key] = n_values
 
+            add_list = data.get("add", [])
+            add_data = add_list[0] if add_list else {}
+            if add_data and not isinstance(add_data, dict):
+                return HttpResponseBadRequest("Invalid add payload")
+
+            normalized_add = {}
+            for key, value in (add_data or {}).items():
+                value_list = value if isinstance(value, list) else [value]
+                n_key, n_values = _normalize_property(key, value_list)
+                normalized_add[n_key] = n_values
+
             if "content" in normalized_replace:
                 new_content = _first_value({"content": normalized_replace["content"]}, "content")
                 if new_content is not None:
@@ -245,6 +256,14 @@ class MicropubView(View):
             if "category" in normalized_replace:
                 post.tags.clear()
                 for category in normalized_replace["category"]:
+                    tag_slug = slugify(str(category))
+                    if not tag_slug:
+                        continue
+                    tag, _ = Tag.objects.get_or_create(tag=tag_slug)
+                    post.tags.add(tag)
+
+            if "category" in normalized_add:
+                for category in normalized_add["category"]:
                     tag_slug = slugify(str(category))
                     if not tag_slug:
                         continue
