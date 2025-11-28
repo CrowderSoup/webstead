@@ -78,14 +78,35 @@ nav.tags {
   align-items: center;
 }
 
-.photo-slider img {
+.photo-slider figure .photo-container {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+}
+
+.photo-slider figure .photo-container::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--src);
+  background-size: cover;
+  background-position: center;
+  filter: blur(20px);
+  transform: scale(1.2); /* gives room so blur doesn't show edges */
+  z-index: 0;
+}
+
+.photo-slider figure .photo-container img {
+  position: relative;
   display: block;
   width: 100%;
   max-width: 100%;
   height: clamp(16rem, 75vh, 48rem);
   object-fit: contain; /* show the whole photo (prevents cropping tall shots) */
-  background: #f8f8f8;
+  background: transparent;
   border-radius: 0.5rem;
+  z-index: 1;
 }
 
 /* Optional, smaller caption */

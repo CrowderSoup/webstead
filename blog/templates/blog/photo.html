@@ -4,11 +4,13 @@
       {% for photo in post.attachments.all %}
       <li>
         <figure id="photo-{{ photo.asset.id }}">
-          <img
-            src="{{ photo.asset.file.url }}"
-            alt="{{ photo.asset.alt_text }}"
-            loading="lazy"
-          />
+          <div class="photo-container" style="--src: url('{{ photo.asset.file.url }}')">
+            <img
+              src="{{ photo.asset.file.url }}"
+              alt="{{ photo.asset.alt_text }}"
+              loading="lazy"
+            />
+          </div>
           {% if photo.asset.caption %}
           <figcaption>{{ photo.asset.caption }}</figcaption>
           {% endif %}
