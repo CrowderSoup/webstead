@@ -42,7 +42,7 @@
   .photo-grid {display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem;}
   .photo-card {border: 1px solid #d5dce2; border-radius: 12px; padding: 0.75rem; background: #fff; display: grid; gap: 0.5rem; box-shadow: 0 2px 10px rgba(0,0,0,0.04);}
   .photo-card img {width: 100%; height: 180px; object-fit: cover; border-radius: 8px; background: #f2f4f7;}
-  .photo-actions {display: flex; gap: 0.35rem; justify-content: space-between;}
+  .photo-actions {display: flex; gap: 0.35rem; justify-content: space-between; flex-wrap: wrap;}
   .photo-actions button {flex: 1 1 auto;}
   .photo-meta {display: grid; gap: 0.35rem;}
   .photo-meta input, .photo-meta textarea {width: 100%;}
@@ -173,7 +173,58 @@
   const form = document.getElementById('post-editor-form');
   const existingDataEl = document.getElementById('existing-photos-data');
   let photoData = [];
+  const removedExisting = new Set();
   let previewEnabled = false;
+
+  function getCsrfToken() {
+    const match = document.cookie.match(/csrftoken=([^;]+)/);
+    return match ? match[1] : '';
+  }
+
+  async function uploadPhoto(file) {
+    const formData = new FormData();
+    formData.append('photo', file);
+    const response = await fetch('{% url "post_editor_upload_photo" %}', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': getCsrfToken() },
+      body: formData
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.id || !data.url) {
+      throw new Error(data.error || 'Upload failed.');
+    }
+    return data;
+  }
+
+  async function deleteRemotePhoto(id) {
+    const formData = new FormData();
+    formData.append('id', id);
+    const response = await fetch('{% url "post_editor_delete_photo" %}', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': getCsrfToken() },
+      body: formData
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || 'Delete failed.');
+    }
+  }
+
+  async function copyUrlToClipboard(url) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(url);
+        return;
+      }
+    } catch (e) {}
+
+    const tempInput = document.createElement('input');
+    tempInput.value = url;
+    document.body.appendChild(tempInput);
+    tempInput.select();
+    document.execCommand('copy');
+    document.body.removeChild(tempInput);
+  }
 
   try {
     if (existingDataEl && existingDataEl.textContent.trim()) {
@@ -276,7 +327,7 @@
 
     const img = document.createElement('img');
     img.alt = 'Selected image preview';
-    img.src = item.kind === 'existing' ? item.url : URL.createObjectURL(item.file);
+    img.src = item.url;
 
     const meta = document.createElement('div');
     meta.className = 'photo-meta';
@@ -312,6 +363,33 @@
     actions.appendChild(up);
     actions.appendChild(down);
 
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.textContent = 'Copy URL';
+    copy.addEventListener('click', () => copyUrlToClipboard(item.url));
+    actions.appendChild(copy);
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.textContent = 'Delete';
+    remove.addEventListener('click', async () => {
+      if (item.kind === 'existing') {
+        removedExisting.add(item.id);
+        photoData = photoData.filter((photo) => photo !== item);
+        renderPhotos();
+        return;
+      }
+
+      try {
+        await deleteRemotePhoto(item.id);
+        photoData = photoData.filter((photo) => photo !== item);
+        renderPhotos();
+      } catch (error) {
+        alert(error.message || 'Unable to delete photo.');
+      }
+    });
+    actions.appendChild(remove);
+
     card.appendChild(img);
     card.appendChild(meta);
     card.appendChild(actions);
@@ -341,13 +419,29 @@
     });
   }
 
+  async function handleUploads(files) {
+    for (const file of files) {
+      try {
+        const uploaded = await uploadPhoto(file);
+        photoData.push({
+          kind: 'uploaded',
+          id: uploaded.id,
+          url: uploaded.url,
+          alt: '',
+          caption: '',
+        });
+        renderPhotos();
+      } catch (error) {
+        alert(error.message || 'Upload failed.');
+      }
+    }
+  }
+
   fileInput.addEventListener('change', () => {
     const files = Array.from(fileInput.files || []);
-    const existingOnly = photoData.filter((item) => item.kind === 'existing');
-    photoData = existingOnly.concat(
-      files.map((file, idx) => ({ kind: 'new', file, idx, order: idx + existingOnly.length, alt: '', caption: '' }))
-    );
-    renderPhotos();
+    if (!files.length) return;
+    handleUploads(files);
+    fileInput.value = '';
   });
 
   form.addEventListener('submit', () => {
@@ -362,17 +456,20 @@
 
     photoData.forEach((item, position) => {
       if (item.kind === 'existing') {
+        if (removedExisting.has(item.id)) return;
         makeHidden('existing_ids', item.id);
         makeHidden('existing_alts', item.alt || '');
         makeHidden('existing_captions', item.caption || '');
         makeHidden('existing_positions', position);
       } else {
-        makeHidden('photo_indices', item.idx);
-        makeHidden('photo_alts', item.alt || '');
-        makeHidden('photo_captions', item.caption || '');
-        makeHidden('photo_positions', position);
+        makeHidden('uploaded_ids', item.id);
+        makeHidden('uploaded_alts', item.alt || '');
+        makeHidden('uploaded_captions', item.caption || '');
+        makeHidden('uploaded_positions', position);
       }
     });
+
+    removedExisting.forEach((id) => makeHidden('existing_remove_ids', id));
   });
 
   if ('serviceWorker' in navigator) {

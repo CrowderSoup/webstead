@@ -3,7 +3,7 @@ import markdown
 from string import Template
 
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render, get_object_or_404
 from django.templatetags.static import static
 from django.urls import reverse
@@ -143,27 +143,16 @@ def post_editor(request, slug=None):
         all_tags = list(dict.fromkeys(tag_slugs + new_tags))
         context["selected_tags"] = all_tags
 
-        uploads = request.FILES.getlist("photos")
-        photo_indices = request.POST.getlist("photo_indices")
-        photo_alts = request.POST.getlist("photo_alts")
-        photo_captions = request.POST.getlist("photo_captions")
-        photo_positions = request.POST.getlist("photo_positions")
-        photo_meta = {}
-        for i in range(min(len(photo_indices), len(photo_positions))):
-            try:
-                original_index = int(photo_indices[i])
-                position = int(photo_positions[i])
-            except (TypeError, ValueError):
-                continue
-
-            alt_text = photo_alts[i] if i < len(photo_alts) else ""
-            caption = photo_captions[i] if i < len(photo_captions) else ""
-            photo_meta[original_index] = {"position": position, "alt": alt_text, "caption": caption}
-
         existing_ids = request.POST.getlist("existing_ids")
         existing_alts = request.POST.getlist("existing_alts")
         existing_captions = request.POST.getlist("existing_captions")
         existing_positions = request.POST.getlist("existing_positions")
+        existing_remove_ids = set()
+        for raw_id in request.POST.getlist("existing_remove_ids"):
+            try:
+                existing_remove_ids.add(int(raw_id))
+            except (TypeError, ValueError):
+                continue
         existing_meta = {}
         for i in range(min(len(existing_ids), len(existing_positions))):
             try:
@@ -175,6 +164,23 @@ def post_editor(request, slug=None):
             caption = existing_captions[i] if i < len(existing_captions) else ""
             existing_meta[asset_id] = {"position": position, "alt": alt_text, "caption": caption}
 
+        uploaded_ids = request.POST.getlist("uploaded_ids")
+        uploaded_alts = request.POST.getlist("uploaded_alts")
+        uploaded_captions = request.POST.getlist("uploaded_captions")
+        uploaded_positions = request.POST.getlist("uploaded_positions")
+        uploaded_meta = {}
+        for i in range(min(len(uploaded_ids), len(uploaded_positions))):
+            try:
+                asset_id = int(uploaded_ids[i])
+                position = int(uploaded_positions[i])
+            except (TypeError, ValueError):
+                continue
+            alt_text = uploaded_alts[i] if i < len(uploaded_alts) else ""
+            caption = uploaded_captions[i] if i < len(uploaded_captions) else ""
+            uploaded_meta[asset_id] = {"position": position, "alt": alt_text, "caption": caption}
+
+        uploads = request.FILES.getlist("photos")
+
         errors = []
         if selected_kind == Post.LIKE and not context["like_of_value"]:
             errors.append("Provide a URL for the like.")
@@ -184,7 +190,11 @@ def post_editor(request, slug=None):
             errors.append("Provide a URL for the reply.")
         if selected_kind in (Post.ARTICLE, Post.NOTE) and not context["content_value"]:
             errors.append("Content is required for this post type.")
-        if selected_kind == Post.PHOTO and not (context["content_value"] or uploads or editing_post and editing_post.attachments.exists()):
+        remaining_existing_photos = (
+            editing_post.attachments.exclude(asset__id__in=existing_remove_ids).exists() if editing_post else False
+        )
+        has_new_uploads = bool(uploaded_meta) or bool(uploads)
+        if selected_kind == Post.PHOTO and not (context["content_value"] or has_new_uploads or remaining_existing_photos):
             errors.append("Add a caption or at least one photo for photo posts.")
 
         if errors:
@@ -218,9 +228,13 @@ def post_editor(request, slug=None):
                 tags_to_assign.append(tag)
             post.tags.set(tags_to_assign)
 
-        if editing_post and existing_meta:
-            for attachment in post.attachments.select_related("asset"):
-                meta = existing_meta.get(attachment.asset.id)
+        if editing_post:
+            for attachment in list(post.attachments.select_related("asset")):
+                asset_id = attachment.asset.id
+                if asset_id in existing_remove_ids:
+                    attachment.asset.delete()
+                    continue
+                meta = existing_meta.get(asset_id)
                 if not meta:
                     continue
                 asset = attachment.asset
@@ -230,8 +244,22 @@ def post_editor(request, slug=None):
                 attachment.sort_order = meta.get("position", attachment.sort_order)
                 attachment.save(update_fields=["sort_order"])
 
+        if uploaded_meta:
+            uploaded_assets = File.objects.filter(id__in=uploaded_meta.keys(), owner=request.user)
+            for asset in uploaded_assets:
+                meta = uploaded_meta.get(asset.id, {})
+                asset.alt_text = meta.get("alt", "")
+                asset.caption = meta.get("caption", "")
+                asset.save(update_fields=["alt_text", "caption"])
+                Attachment.objects.create(
+                    content_object=post,
+                    asset=asset,
+                    role="photo",
+                    sort_order=meta.get("position", 0),
+                )
+
         for index, upload in enumerate(uploads):
-            meta = photo_meta.get(index, {})
+            meta = {}
             asset = File.objects.create(
                 kind=File.IMAGE,
                 file=upload,
@@ -239,12 +267,45 @@ def post_editor(request, slug=None):
                 alt_text=meta.get("alt", ""),
                 caption=meta.get("caption", ""),
             )
-            sort_order = meta.get("position", index)
-            Attachment.objects.create(content_object=post, asset=asset, role="photo", sort_order=sort_order)
+            Attachment.objects.create(content_object=post, asset=asset, role="photo", sort_order=index)
 
         return redirect(post.get_absolute_url())
 
     return render(request, "blog/editor.html", context)
+
+
+@require_POST
+def upload_editor_photo(request):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    upload = request.FILES.get("photo")
+    if not upload:
+        return JsonResponse({"error": "No file provided."}, status=400)
+
+    asset = File.objects.create(kind=File.IMAGE, file=upload, owner=request.user)
+    return JsonResponse({"id": asset.id, "url": asset.file.url})
+
+
+@require_POST
+def delete_editor_photo(request):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    try:
+        asset_id = int(request.POST.get("id", ""))
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "Invalid id."}, status=400)
+
+    try:
+        asset = File.objects.get(id=asset_id, owner=request.user)
+    except File.DoesNotExist:
+        return JsonResponse({"error": "Not found."}, status=404)
+
+    asset.delete()
+    return JsonResponse({"status": "deleted"})
 
 
 def post_editor_service_worker(request):

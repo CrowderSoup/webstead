@@ -6,6 +6,8 @@ from . import views
 urlpatterns = [
     path("editor/", views.post_editor, name="post_editor"),
     path("editor/<slug:slug>/", views.post_editor, name="post_editor_edit"),
+    path("editor/upload-photo/", views.upload_editor_photo, name="post_editor_upload_photo"),
+    path("editor/delete-photo/", views.delete_editor_photo, name="post_editor_delete_photo"),
     path("post-editor-sw.js", views.post_editor_service_worker, name="post_editor_sw"),
     path("post/<slug:slug>/delete/", views.delete_post, name="delete_post"),
     path("post/<slug:slug>/edit/", views.post_editor, name="edit_post"),
