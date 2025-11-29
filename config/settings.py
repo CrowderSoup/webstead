@@ -174,6 +174,7 @@ AWS_S3_VERIFY = False
 AWS_S3_ADDRESSING_STYLE = "path"
 AWS_DEFAULT_ACL="public-read"
 AWS_S3_OBJECT_PARAMETERS={"CacheControl": "max-age=86400"}
+AWS_S3_CUSTOM_DOMAIN = env("AWS_S3_CUSTOM_DOMAIN", default=None)
 
 _S3_OPTIONS = {
     "access_key": AWS_ACCESS_KEY_ID,
@@ -193,7 +194,6 @@ STORAGES = {
 
 if not DEBUG:
     AWS_S3_VERIFY = True
-    AWS_S3_CUSTOM_DOMAIN = env("AWS_S3_CUSTOM_DOMAIN")
 
 # ---------------------------------------------------------------------------
 # Static and media

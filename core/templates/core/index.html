@@ -22,7 +22,7 @@
 				class="elsewhere-link"
 				target="_blank"
 				rel="me"
-				href="{{ profile.profile_url }}">
+				href="{% if profile.place == 'email' %}mailto:{{ profile.profile_url }}{% else %}{{ profile.profile_url }}{% endif %}">
         {% if profile.place == 'x' %}
           {% include 'core/svg/twitter.svg' %}
         {% elif profile.place == 'bsky' %}
