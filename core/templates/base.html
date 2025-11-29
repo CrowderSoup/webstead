@@ -33,7 +33,11 @@
     <main>{% block content %}{% endblock %}</main>
     <footer>
       <span>© {{ now|date:"Y" }} Aaron Crowder.</span>
-      {% block footer_extra %}{% endblock %}
+      {% block footer_extra %}
+      {% if user.is_authenticated and user.is_staff %}
+      <span> · </span><a href="{% url 'post_editor' %}">Post editor</a>
+      {% endif %}
+      {% endblock %}
     </footer>
   </body>
 </html>

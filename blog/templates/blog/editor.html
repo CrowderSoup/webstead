@@ -1,0 +1,385 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %} | Post editor{% endblock %}
+
+{% block head %}
+<link rel="manifest" href="{{ manifest_url }}" type="application/manifest+json">
+<link rel="apple-touch-icon" href="{% static 'pwa/icons/post-editor-192.png' %}">
+<link rel="icon" sizes="192x192" href="{% static 'pwa/icons/post-editor-192.png' %}">
+<link rel="icon" sizes="512x512" href="{% static 'pwa/icons/post-editor-512.png' %}">
+<meta name="theme-color" content="#0f5257">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CrowderSoup Post">
+<style>
+  .editor-shell {max-width: 960px; margin: 0 auto; padding: 0.5rem 0 2rem 0;}
+  .headline {margin-bottom: 1.5rem;}
+  .headline .eyebrow {text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.75rem; color: #0f5257; font-weight: 700;}
+  .headline h2 {margin: 0.2rem 0;}
+  .headline .lede {color: #3a3f45; margin: 0;}
+
+  .kind-grid {display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.5rem; margin-top: 0.5rem;}
+  .kind-pill {border: 1px solid #b8c4cc; border-radius: 999px; padding: 0.65rem 0.9rem; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; transition: border-color 0.2s ease, box-shadow 0.2s ease;}
+  .kind-pill input {margin: 0;}
+  .kind-pill.active {border-color: #0f5257; box-shadow: 0 0 0 3px rgba(15, 82, 87, 0.12);}
+  .hint {background: #0f5257; color: #e7f3f5; padding: 0.75rem 1rem; border-radius: 10px; margin: 0.75rem 0 1rem; font-size: 0.8rem;}
+
+  form#post-editor-form {display: grid; gap: 1rem;}
+  .field {display: flex; flex-direction: column; gap: 0.35rem;}
+  .field label {font-weight: 700;}
+  .field small {color: #59626a;}
+  .two-up {display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;}
+  textarea {min-height: 220px;}
+  .controls {display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;}
+  .tag-grid {display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.35rem;}
+  .alert {border-radius: 8px; padding: 0.85rem 1rem; border: 1px solid #c62828; color: #7d1c1c;}
+  .success {border: 1px solid #0f5257; color: #0f3337;}
+  .preview {border: 1px dashed #9aa6b2; border-radius: 10px; padding: 0.75rem; min-height: 120px;}
+  .hidden {display: none;}
+  .divider {height: 1px; background: #d9dfe4; border: 0;}
+  .muted {color: #6b7280;}
+  .photo-grid {display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem;}
+  .photo-card {border: 1px solid #d5dce2; border-radius: 12px; padding: 0.75rem; background: #fff; display: grid; gap: 0.5rem; box-shadow: 0 2px 10px rgba(0,0,0,0.04);}
+  .photo-card img {width: 100%; height: 180px; object-fit: cover; border-radius: 8px; background: #f2f4f7;}
+  .photo-actions {display: flex; gap: 0.35rem; justify-content: space-between;}
+  .photo-actions button {flex: 1 1 auto;}
+  .photo-meta {display: grid; gap: 0.35rem;}
+  .photo-meta input, .photo-meta textarea {width: 100%;}
+  @media (max-width: 640px) { .kind-grid {grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));} }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="editor-shell">
+  <div class="headline">
+    <div class="eyebrow">Draft + publish</div>
+    <h2>Post to the blog</h2>
+    <p class="lede">Pick a post type, drop photos, write in Markdown, and hit publish. Preview stays off until you need it.</p>
+  </div>
+
+  {% if errors %}
+  <div class="alert">
+    <strong>Heads up:</strong>
+    <ul>
+      {% for error in errors %}
+      <li>{{ error }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <form id="post-editor-form" method="post" enctype="multipart/form-data" action="{{ form_action }}">
+    {% csrf_token %}
+    <div class="field">
+      <label>Post type</label>
+      <div class="kind-grid" id="kind-grid">
+        {% for kind, label in post_kinds %}
+        <label class="kind-pill{% if kind == selected_kind %} active{% endif %}">
+          <input type="radio" name="kind" value="{{ kind }}" {% if kind == selected_kind %}checked{% endif %}>
+          <span>{{ label }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="hint" id="kind-hint">Choose the right flavor for this post.</div>
+
+    <div class="field">
+      <label for="title">Title</label>
+      <input type="text" id="title" name="title" value="{{ title_value }}" placeholder="Optional for notes, great for articles" />
+    </div>
+
+    <div class="field">
+      <label for="content">Content</label>
+      <div class="controls">
+        <button type="button" id="toggle-preview">Show preview</button>
+      </div>
+      <textarea id="content" name="content" placeholder="Write in Markdown...">{{ content_value }}</textarea>
+      <div id="preview" class="preview hidden"></div>
+    </div>
+
+    <div class="two-up">
+      <div class="field" data-kind-section="like">
+        <label for="like_of">Like of</label>
+        <input type="url" id="like_of" name="like_of" value="{{ like_of_value }}" placeholder="https://" />
+        <small>Required when posting a Like.</small>
+      </div>
+      <div class="field" data-kind-section="repost">
+        <label for="repost_of">Repost of</label>
+        <input type="url" id="repost_of" name="repost_of" value="{{ repost_of_value }}" placeholder="https://" />
+        <small>Required when reposting.</small>
+      </div>
+      <div class="field" data-kind-section="reply">
+        <label for="in_reply_to">In reply to</label>
+        <input type="url" id="in_reply_to" name="in_reply_to" value="{{ in_reply_to_value }}" placeholder="https://" />
+        <small>Required when replying.</small>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <div class="field">
+      <label>Tags</label>
+      <div class="tag-grid">
+        {% for tag in tags %}
+        <label class="kind-pill" style="border-radius: 12px;">
+          <input type="checkbox" name="tags" value="{{ tag.tag }}" {% if tag.tag in selected_tags %}checked{% endif %}>
+          <span>#{{ tag.tag }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <input type="text" name="new_tags" value="{{ new_tags_value }}" placeholder="Add new tags (comma or space separated)">
+      <small>Existing tags stay selected; new entries will be created automatically.</small>
+    </div>
+
+    <div class="field">
+      <label for="photos">Images</label>
+      <input type="file" id="photos" name="photos" accept="image/*" multiple>
+      <small>Upload one or more images; use the move buttons below to reorder.</small>
+      <div id="photo-grid" class="photo-grid hidden" aria-live="polite"></div>
+      <div id="photo-metadata-fields"></div>
+    </div>
+
+    <div class="field" style="align-items:flex-start;">
+      <button type="submit">{% if edit_mode %}Update{% else %}Publish{% endif %}</button>
+      <small>{% if edit_mode %}Your changes save immediately.{% else %}Your post publishes immediately.{% endif %}</small>
+    </div>
+  </form>
+</section>
+
+<script id="existing-photos-data" type="application/json">{{ existing_photos_json|safe }}</script>
+
+<script>
+(function() {
+  const hints = {
+    article: 'Long-form writing with a title. Markdown is your friend.',
+    note: 'Quick thoughts; title optional.',
+    photo: 'Share a photo set with captions in the content area.',
+    like: 'Point to something you enjoyed.',
+    repost: 'Share someone else\'s post with credit.',
+    reply: 'Respond directly with a target URL.'
+  };
+
+  const kindHint = document.getElementById('kind-hint');
+  const kindInputs = Array.from(document.querySelectorAll('input[name="kind"]'));
+  const kindSections = Array.from(document.querySelectorAll('[data-kind-section]'));
+  const preview = document.getElementById('preview');
+  const textarea = document.getElementById('content');
+  const togglePreview = document.getElementById('toggle-preview');
+  const fileInput = document.getElementById('photos');
+  const photoGrid = document.getElementById('photo-grid');
+  const metadataFields = document.getElementById('photo-metadata-fields');
+  const form = document.getElementById('post-editor-form');
+  const existingDataEl = document.getElementById('existing-photos-data');
+  let photoData = [];
+  let previewEnabled = false;
+
+  try {
+    if (existingDataEl && existingDataEl.textContent.trim()) {
+      const parsed = JSON.parse(existingDataEl.textContent);
+      photoData = parsed.map((item, idx) => ({
+        kind: 'existing',
+        id: item.id,
+        url: item.url,
+        alt: item.alt || '',
+        caption: item.caption || '',
+        order: idx
+      }));
+      if (photoData.length) {
+        photoGrid.classList.remove('hidden');
+      }
+    }
+  } catch (e) {
+    photoData = [];
+  }
+
+  function escapeHtml(str) {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function inlineMarkdown(str) {
+    let html = escapeHtml(str);
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+    return html;
+  }
+
+  function renderMarkdown(text) {
+    const blocks = text.split(/\n\n+/).map((block) => block.trim()).filter(Boolean);
+    const htmlBlocks = blocks.map((block) => {
+      if (block.startsWith('### ')) {
+        return '<h3>' + inlineMarkdown(block.slice(4)) + '</h3>';
+      }
+      if (block.startsWith('## ')) {
+        return '<h2>' + inlineMarkdown(block.slice(3)) + '</h2>';
+      }
+      if (block.startsWith('# ')) {
+        return '<h1>' + inlineMarkdown(block.slice(2)) + '</h1>';
+      }
+
+      if (/^(\-|\*)\s+/m.test(block)) {
+        const items = block.split(/\n/).map((line) => line.replace(/^(\-|\*)\s*/, '')).filter(Boolean);
+        return '<ul>' + items.map((item) => '<li>' + inlineMarkdown(item) + '</li>').join('') + '</ul>';
+      }
+
+      if (block.startsWith('```') && block.endsWith('```')) {
+        return '<pre><code>' + escapeHtml(block.slice(3, -3).trim()) + '</code></pre>';
+      }
+
+      return '<p>' + inlineMarkdown(block).replace(/\n/g, '<br />') + '</p>';
+    });
+
+    return htmlBlocks.join('\n');
+  }
+
+  function updatePreview() {
+    if (!previewEnabled) return;
+    const text = textarea.value || '';
+    preview.innerHTML = text.trim() ? renderMarkdown(text) : '<p class="muted">Nothing to preview yet.</p>';
+  }
+
+  function setKindState(kind) {
+    kindHint.textContent = hints[kind] || 'Choose the right flavor for this post.';
+    document.querySelectorAll('.kind-pill').forEach((pill) => pill.classList.remove('active'));
+    const active = document.querySelector(`.kind-pill input[value="${kind}"]`);
+    if (active) { active.parentElement.classList.add('active'); }
+
+    kindSections.forEach((section) => {
+      const matches = section.dataset.kindSection === kind;
+      section.classList.toggle('hidden', !matches);
+    });
+  }
+
+  kindInputs.forEach((input) => {
+    input.addEventListener('change', (event) => setKindState(event.target.value));
+  });
+  setKindState(document.querySelector('input[name="kind"]:checked')?.value || 'article');
+
+  togglePreview.addEventListener('click', () => {
+    previewEnabled = !previewEnabled;
+    preview.classList.toggle('hidden', !previewEnabled);
+    togglePreview.textContent = previewEnabled ? 'Hide preview' : 'Show preview';
+    updatePreview();
+  });
+
+  textarea.addEventListener('input', updatePreview);
+
+  function buildCard(item, idx) {
+    const card = document.createElement('div');
+    card.className = 'photo-card';
+
+    const img = document.createElement('img');
+    img.alt = 'Selected image preview';
+    img.src = item.kind === 'existing' ? item.url : URL.createObjectURL(item.file);
+
+    const meta = document.createElement('div');
+    meta.className = 'photo-meta';
+
+    const altInput = document.createElement('input');
+    altInput.type = 'text';
+    altInput.placeholder = 'Alt text';
+    altInput.value = item.alt || '';
+    altInput.addEventListener('input', (event) => { item.alt = event.target.value; });
+
+    const captionInput = document.createElement('textarea');
+    captionInput.placeholder = 'Caption';
+    captionInput.value = item.caption || '';
+    captionInput.addEventListener('input', (event) => { item.caption = event.target.value; });
+
+    meta.appendChild(altInput);
+    meta.appendChild(captionInput);
+
+    const actions = document.createElement('div');
+    actions.className = 'photo-actions';
+    const up = document.createElement('button');
+    up.type = 'button';
+    up.textContent = 'Move up';
+    up.disabled = idx === 0;
+    up.addEventListener('click', () => moveCard(idx, -1));
+
+    const down = document.createElement('button');
+    down.type = 'button';
+    down.textContent = 'Move down';
+    down.disabled = idx === photoData.length - 1;
+    down.addEventListener('click', () => moveCard(idx, 1));
+
+    actions.appendChild(up);
+    actions.appendChild(down);
+
+    card.appendChild(img);
+    card.appendChild(meta);
+    card.appendChild(actions);
+    return card;
+  }
+
+  function moveCard(currentIndex, delta) {
+    const target = currentIndex + delta;
+    if (target < 0 || target >= photoData.length) return;
+    const temp = photoData[currentIndex];
+    photoData[currentIndex] = photoData[target];
+    photoData[target] = temp;
+    renderPhotos();
+  }
+
+  function renderPhotos() {
+    photoGrid.innerHTML = '';
+    if (!photoData.length) {
+      photoGrid.classList.add('hidden');
+      return;
+    }
+
+    photoGrid.classList.remove('hidden');
+    photoData.forEach((item, idx) => {
+      item.order = idx;
+      photoGrid.appendChild(buildCard(item, idx));
+    });
+  }
+
+  fileInput.addEventListener('change', () => {
+    const files = Array.from(fileInput.files || []);
+    const existingOnly = photoData.filter((item) => item.kind === 'existing');
+    photoData = existingOnly.concat(
+      files.map((file, idx) => ({ kind: 'new', file, idx, order: idx + existingOnly.length, alt: '', caption: '' }))
+    );
+    renderPhotos();
+  });
+
+  form.addEventListener('submit', () => {
+    metadataFields.innerHTML = '';
+    const makeHidden = (name, value) => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = name;
+      input.value = value;
+      metadataFields.appendChild(input);
+    };
+
+    photoData.forEach((item, position) => {
+      if (item.kind === 'existing') {
+        makeHidden('existing_ids', item.id);
+        makeHidden('existing_alts', item.alt || '');
+        makeHidden('existing_captions', item.caption || '');
+        makeHidden('existing_positions', position);
+      } else {
+        makeHidden('photo_indices', item.idx);
+        makeHidden('photo_alts', item.alt || '');
+        makeHidden('photo_captions', item.caption || '');
+        makeHidden('photo_positions', position);
+      }
+    });
+  });
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('{% url "post_editor_sw" %}', { scope: '/blog/' }).catch(() => {});
+  }
+
+  renderPhotos();
+})();
+</script>
+{% endblock %}

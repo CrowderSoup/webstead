@@ -2,6 +2,16 @@
 <!-- Content -->
 {% block content %}
 
+{% if user.is_authenticated and user.is_staff %}
+<div class="staff-controls" style="display:flex; gap:0.5rem; align-items:center; margin-bottom:1rem;">
+  <a class="button" href="{% url 'edit_post' slug=post.slug %}">Edit</a>
+  <form method="post" action="{% url 'delete_post' slug=post.slug %}" style="display:inline;">
+    {% csrf_token %}
+    <button type="submit" class="secondary">Delete</button>
+  </form>
+</div>
+{% endif %}
+
 <!-- Post Kind Detection -->
 {% if post.kind == 'note' %}
 <!-- Show Note Template -->
