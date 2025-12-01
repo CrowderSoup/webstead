@@ -39,6 +39,8 @@
   .hidden {display: none;}
   .divider {height: 1px; background: #d9dfe4; border: 0;}
   .muted {color: #6b7280;}
+  .connect-pill {text-decoration: none; color: #0f5257; font-weight: 700; justify-content: center;}
+  .connect-pill:hover {border-color: #0f5257;}
   .photo-grid {display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem;}
   .photo-card {border: 1px solid #d5dce2; border-radius: 12px; padding: 0.75rem; background: #fff; display: grid; gap: 0.5rem; box-shadow: 0 2px 10px rgba(0,0,0,0.04);}
   .photo-card img {width: 100%; height: 180px; object-fit: cover; border-radius: 8px; background: #f2f4f7;}
@@ -66,6 +68,11 @@
       <li>{{ error }}</li>
       {% endfor %}
     </ul>
+  </div>
+  {% endif %}
+  {% if status_message %}
+  <div class="alert success">
+    {{ status_message }}
   </div>
   {% endif %}
 
@@ -133,11 +140,11 @@
       <small>Existing tags stay selected; new entries will be created automatically.</small>
     </div>
 
-    <div class="field" data-kind-section="note,photo">
+    <div class="field">
       <label>Syndication</label>
       <small>Automatically share to connected accounts and capture the resulting links.</small>
       {% if syndication_targets %}
-      <div class="kind-grid">
+      <div class="kind-grid" data-kind-section="note,photo">
         {% for target in syndication_targets %}
         <label class="kind-pill" style="border-radius: 12px;">
           <input type="checkbox" name="syndicate_{{ target.uid }}" value="1"{% if target.uid == 'mastodon' and syndicate_mastodon %} checked{% endif %}{% if target.uid == 'bluesky' and syndicate_bluesky %} checked{% endif %}>
@@ -145,8 +152,16 @@
         </label>
         {% endfor %}
       </div>
-      {% else %}
-      <p class="muted">Add Mastodon or Bluesky credentials in the environment to enable syndication.</p>
+      {% endif %}
+      {% if syndication_connect %}
+      <div class="kind-grid">
+        {% for target in syndication_connect %}
+        <a class="kind-pill connect-pill" style="border-radius: 12px;" href="{{ target.connect_url }}">Connect {{ target.name }}</a>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if not syndication_targets and not syndication_connect %}
+      <p class="muted">Connect Mastodon or Bluesky to enable syndication.</p>
       {% endif %}
       {% if syndication_links.mastodon or syndication_links.bluesky %}
       <ul class="simple-list">

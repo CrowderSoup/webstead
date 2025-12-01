@@ -79,10 +79,23 @@ class SiteConfiguration(SingletonModel):
     intro = MDTextField(max_length=512, default="")
     bio = MDTextField()
     main_menu = models.ForeignKey(Menu, null=True, on_delete=models.SET_NULL)
+    mastodon_base_url = models.CharField(max_length=255, blank=True, default="")
+    mastodon_client_id = models.CharField(max_length=255, blank=True, default="")
+    mastodon_client_secret = models.CharField(max_length=255, blank=True, default="")
+    mastodon_access_token = models.CharField(max_length=512, blank=True, default="")
+    mastodon_refresh_token = models.CharField(max_length=512, blank=True, default="")
+    mastodon_token_expires_at = models.DateTimeField(null=True, blank=True)
+    bluesky_service = models.CharField(max_length=255, blank=True, default="")
+    bluesky_client_id = models.CharField(max_length=255, blank=True, default="")
+    bluesky_client_secret = models.CharField(max_length=255, blank=True, default="")
+    bluesky_access_token = models.CharField(max_length=512, blank=True, default="")
+    bluesky_refresh_token = models.CharField(max_length=512, blank=True, default="")
+    bluesky_token_expires_at = models.DateTimeField(null=True, blank=True)
+    bluesky_did = models.CharField(max_length=255, blank=True, default="")
+    bluesky_handle = models.CharField(max_length=255, blank=True, default="")
 
     def __str__(self):
         return "Site Configuration"
 
     class Meta:
         verbose_name = "Site Configuration"
-

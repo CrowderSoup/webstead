@@ -1,7 +1,13 @@
+import base64
+import hashlib
 import json
+import logging
 import markdown
+import secrets
+from datetime import timedelta
 from string import Template
 
+from django.conf import settings
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render, get_object_or_404
@@ -11,18 +17,74 @@ from django.utils import timezone
 from django.utils.text import slugify
 from django.views.decorators.http import require_http_methods, require_POST
 
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
+from core.models import SiteConfiguration
 from files.models import Attachment, File
-from .syndication import available_targets, syndicate_post
+from .syndication import available_targets, syndicate_post, target_statuses
 
 from .models import Post, Tag
+
+logger = logging.getLogger(__name__)
 
 
 def _staff_guard(request):
     if not request.user.is_authenticated or not request.user.is_staff:
         return HttpResponse(status=401)
     return None
+
+
+def _flash(request, key, message):
+    if message:
+        request.session[key] = message
+
+
+def _oauth_error(request, message):
+    _flash(request, "post_editor_error", message)
+    return redirect(reverse("post_editor"))
+
+
+def _oauth_success(request, message):
+    _flash(request, "post_editor_success", message)
+    return redirect(reverse("post_editor"))
+
+
+def _pkce_pair():
+    verifier = secrets.token_urlsafe(64)
+    digest = hashlib.sha256(verifier.encode("utf-8")).digest()
+    challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("utf-8")
+    return verifier, challenge
+
+
+def _fetch_bluesky_identity(service: str, token: str) -> tuple[str | None, str | None]:
+    endpoint = f"{service}/xrpc/com.atproto.server.getSession"
+    request = Request(
+        endpoint,
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+        method="GET",
+    )
+
+    try:
+        with urlopen(request, timeout=10) as response:
+            body = response.read().decode()
+            if response.status >= 400:
+                logger.error("Bluesky identity lookup failed with status %s: %s", response.status, body)
+                return None, None
+    except (HTTPError, URLError, TimeoutError) as exc:  # pragma: no cover - network
+        logger.exception("Error fetching Bluesky identity: %s", exc)
+        return None, None
+
+    try:
+        data = json.loads(body or "{}")
+    except json.JSONDecodeError:
+        logger.error("Invalid JSON from Bluesky identity response")
+        return None, None
+
+    did = data.get("did") if isinstance(data.get("did"), str) else None
+    handle = data.get("handle") if isinstance(data.get("handle"), str) else None
+    return did, handle
 
 def posts(request):
     requested_kinds = request.GET.getlist("kind")
@@ -89,6 +151,9 @@ def post_editor(request, slug=None):
     if guard:
         return guard
 
+    flash_error = request.session.pop("post_editor_error", None)
+    flash_success = request.session.pop("post_editor_success", None)
+
     editing_post = None
     if slug:
         editing_post = get_object_or_404(Post, slug=slug, deleted=False)
@@ -98,8 +163,24 @@ def post_editor(request, slug=None):
     if selected_kind not in valid_kinds:
         selected_kind = Post.ARTICLE
 
+    connect_urls = {
+        "mastodon": reverse("mastodon_oauth_start"),
+        "bluesky": reverse("bluesky_oauth_start"),
+    }
+    syndication_options = []
+    for status in target_statuses():
+        syndication_options.append(
+            {
+                "uid": status["uid"],
+                "name": status["name"],
+                "connected": status["connected"],
+                "connect_url": connect_urls.get(status["uid"]),
+            }
+        )
+
     configured_targets = available_targets()
     configured_target_ids = {target.uid for target in configured_targets}
+    connected_by_uid = {target.uid: True for target in configured_targets}
 
     existing_tags = Tag.objects.all()
 
@@ -108,16 +189,19 @@ def post_editor(request, slug=None):
     content_initial = editing_post.content if editing_post else ""
     mastodon_initial = editing_post.mastodon_url if editing_post else ""
     bluesky_initial = editing_post.bluesky_url if editing_post else ""
-    syndicate_mastodon_raw = (
-        bool(request.POST.get("syndicate_mastodon"))
-        if request.method == "POST" and "mastodon" in configured_target_ids
-        else bool(mastodon_initial)
-    )
-    syndicate_bluesky_raw = (
-        bool(request.POST.get("syndicate_bluesky"))
-        if request.method == "POST" and "bluesky" in configured_target_ids
-        else bool(bluesky_initial)
-    )
+    default_checked = not editing_post
+
+    def _initial_syndicate(uid: str, initial_url: str) -> bool:
+        if uid not in configured_target_ids:
+            return False
+        if request.method == "POST":
+            return bool(request.POST.get(f"syndicate_{uid}"))
+        if editing_post:
+            return bool(initial_url)
+        return default_checked
+
+    syndicate_mastodon_raw = _initial_syndicate("mastodon", mastodon_initial)
+    syndicate_bluesky_raw = _initial_syndicate("bluesky", bluesky_initial)
 
     context = {
         "hide_nav": True,
@@ -136,10 +220,13 @@ def post_editor(request, slug=None):
         "syndicate_mastodon": syndicate_mastodon_raw,
         "syndicate_bluesky": syndicate_bluesky_raw,
         "syndication_targets": configured_targets,
+        "syndication_options": syndication_options,
+        "syndication_connect": [opt for opt in syndication_options if not opt["connected"]],
         "syndication_links": {"mastodon": mastodon_initial, "bluesky": bluesky_initial},
         "manifest_url": static("pwa/post-editor.webmanifest"),
         "form_action": reverse("post_editor_edit", kwargs={"slug": editing_post.slug}) if editing_post else reverse("post_editor"),
         "edit_mode": bool(editing_post),
+        "status_message": flash_success or "",
         "existing_photos_json": json.dumps(
             [
                 {
@@ -152,6 +239,8 @@ def post_editor(request, slug=None):
             ]
         ) if editing_post else "[]",
     }
+    if flash_error:
+        context["errors"].append(flash_error)
 
     if request.method == "POST":
         tag_slugs = context["selected_tags"]
@@ -208,8 +297,14 @@ def post_editor(request, slug=None):
         if selected_kind not in (Post.NOTE, Post.PHOTO):
             context["syndicate_mastodon"] = False
             context["syndicate_bluesky"] = False
+        if "mastodon" not in connected_by_uid:
+            syndicate_mastodon = False
+            context["syndicate_mastodon"] = False
+        if "bluesky" not in connected_by_uid:
+            syndicate_bluesky = False
+            context["syndicate_bluesky"] = False
 
-        errors = []
+        errors = list(context["errors"])
         if selected_kind == Post.LIKE and not context["like_of_value"]:
             errors.append("Provide a URL for the like.")
         if selected_kind == Post.REPOST and not context["repost_of_value"]:
@@ -330,6 +425,302 @@ def post_editor(request, slug=None):
         return redirect(post.get_absolute_url())
 
     return render(request, "blog/editor.html", context)
+
+
+@require_http_methods(["GET"])
+def mastodon_oauth_start(request):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    config = SiteConfiguration.get_solo()
+    base_url = (config.mastodon_base_url or getattr(settings, "MASTODON_BASE_URL", "")).rstrip("/")
+    if not base_url:
+        return _oauth_error(request, "Set MASTODON_BASE_URL to your instance URL before connecting Mastodon.")
+
+    redirect_uri = request.build_absolute_uri(reverse("mastodon_oauth_callback"))
+    client_id = config.mastodon_client_id
+    client_secret = config.mastodon_client_secret
+
+    if not client_id or not client_secret:
+        payload = urlencode(
+            {
+                "client_name": config.title or "Blog syndication",
+                "redirect_uris": redirect_uri,
+                "scopes": "write:statuses offline",
+                "website": request.build_absolute_uri("/"),
+            }
+        ).encode("utf-8")
+        app_request = Request(
+            f"{base_url}/api/v1/apps",
+            data=payload,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            method="POST",
+        )
+
+        try:
+            with urlopen(app_request, timeout=10) as response:
+                body = response.read().decode()
+                if response.status >= 400:
+                    logger.error("Mastodon app registration failed with status %s: %s", response.status, body)
+                    return _oauth_error(request, "Unable to register Mastodon application.")
+        except (HTTPError, URLError, TimeoutError) as exc:  # pragma: no cover - network
+            logger.exception("Error registering Mastodon app: %s", exc)
+            return _oauth_error(request, "Unable to register Mastodon app right now.")
+
+        try:
+            app_data = json.loads(body or "{}")
+        except json.JSONDecodeError:
+            return _oauth_error(request, "Invalid response while registering Mastodon app.")
+
+        client_id = app_data.get("client_id")
+        client_secret = app_data.get("client_secret")
+        if not client_id or not client_secret:
+            return _oauth_error(request, "Mastodon did not return client credentials.")
+
+        config.mastodon_client_id = client_id
+        config.mastodon_client_secret = client_secret
+        config.mastodon_base_url = base_url
+        config.save(update_fields=["mastodon_client_id", "mastodon_client_secret", "mastodon_base_url"])
+
+    state = secrets.token_urlsafe(16)
+    request.session["mastodon_oauth_state"] = state
+    params = {
+        "response_type": "code",
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "scope": "write:statuses offline",
+        "state": state,
+    }
+    authorize_url = f"{base_url}/oauth/authorize?{urlencode(params)}"
+    return redirect(authorize_url)
+
+
+@require_http_methods(["GET"])
+def mastodon_oauth_callback(request):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    code = request.GET.get("code")
+    state = request.GET.get("state")
+    expected_state = request.session.pop("mastodon_oauth_state", None)
+    if not code or not state or state != expected_state:
+        return _oauth_error(request, "Mastodon authorization failed. Please try again.")
+
+    config = SiteConfiguration.get_solo()
+    base_url = (config.mastodon_base_url or getattr(settings, "MASTODON_BASE_URL", "")).rstrip("/")
+    client_id = config.mastodon_client_id
+    client_secret = config.mastodon_client_secret
+    if not (base_url and client_id and client_secret):
+        return _oauth_error(request, "Mastodon OAuth is not configured for this site.")
+
+    redirect_uri = request.build_absolute_uri(reverse("mastodon_oauth_callback"))
+    payload = urlencode(
+        {
+            "grant_type": "authorization_code",
+            "code": code,
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "redirect_uri": redirect_uri,
+            "scope": "write:statuses offline",
+        }
+    ).encode("utf-8")
+    token_request = Request(
+        f"{base_url}/oauth/token",
+        data=payload,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+
+    try:
+        with urlopen(token_request, timeout=10) as response:
+            body = response.read().decode()
+            if response.status >= 400:
+                logger.error("Mastodon token exchange failed with status %s: %s", response.status, body)
+                return _oauth_error(request, "Mastodon did not accept the authorization code.")
+    except (HTTPError, URLError, TimeoutError) as exc:  # pragma: no cover - network
+        logger.exception("Error exchanging Mastodon code: %s", exc)
+        return _oauth_error(request, "Unable to complete Mastodon authorization.")
+
+    try:
+        data = json.loads(body or "{}")
+    except json.JSONDecodeError:
+        return _oauth_error(request, "Invalid Mastodon token response.")
+
+    access_token = data.get("access_token")
+    if not isinstance(access_token, str) or not access_token:
+        return _oauth_error(request, "Mastodon did not return an access token.")
+
+    refresh_token = data.get("refresh_token", "")
+    expires_at = None
+    expires_in = data.get("expires_in")
+    try:
+        if expires_in:
+            expires_at = timezone.now() + timedelta(seconds=int(expires_in))
+    except (TypeError, ValueError):
+        expires_at = None
+
+    config.mastodon_access_token = access_token
+    config.mastodon_refresh_token = refresh_token or ""
+    config.mastodon_token_expires_at = expires_at
+    config.mastodon_base_url = base_url
+    config.save(
+        update_fields=[
+            "mastodon_access_token",
+            "mastodon_refresh_token",
+            "mastodon_token_expires_at",
+            "mastodon_base_url",
+        ]
+    )
+
+    return _oauth_success(request, "Mastodon connected. You can syndicate posts now.")
+
+
+@require_http_methods(["GET"])
+def bluesky_oauth_start(request):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    config = SiteConfiguration.get_solo()
+    env_client_id = getattr(settings, "BLUESKY_CLIENT_ID", "")
+    env_client_secret = getattr(settings, "BLUESKY_CLIENT_SECRET", "")
+    client_id = config.bluesky_client_id or env_client_id
+    client_secret = config.bluesky_client_secret or env_client_secret
+    service = (config.bluesky_service or getattr(settings, "BLUESKY_SERVICE", "https://bsky.social")).rstrip("/")
+
+    if not client_id:
+        return _oauth_error(request, "Set a Bluesky OAuth client id in site settings before connecting.")
+
+    verifier, challenge = _pkce_pair()
+    state = secrets.token_urlsafe(16)
+    request.session["bluesky_oauth_state"] = state
+    request.session["bluesky_code_verifier"] = verifier
+    redirect_uri = request.build_absolute_uri(reverse("bluesky_oauth_callback"))
+
+    params = {
+        "response_type": "code",
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "scope": "atproto",
+        "state": state,
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
+    }
+    authorize_url = f"{service}/oauth/authorize?{urlencode(params)}"
+
+    updates = ["bluesky_client_id", "bluesky_service"]
+    config.bluesky_client_id = client_id
+    config.bluesky_service = service
+    if client_secret:
+        config.bluesky_client_secret = client_secret
+        updates.append("bluesky_client_secret")
+    config.save(update_fields=updates)
+
+    return redirect(authorize_url)
+
+
+@require_http_methods(["GET"])
+def bluesky_oauth_callback(request):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    code = request.GET.get("code")
+    state = request.GET.get("state")
+    expected_state = request.session.pop("bluesky_oauth_state", None)
+    code_verifier = request.session.pop("bluesky_code_verifier", None)
+    if not code or not state or state != expected_state or not code_verifier:
+        return _oauth_error(request, "Bluesky authorization failed. Please try again.")
+
+    config = SiteConfiguration.get_solo()
+    env_client_id = getattr(settings, "BLUESKY_CLIENT_ID", "")
+    env_client_secret = getattr(settings, "BLUESKY_CLIENT_SECRET", "")
+    client_id = config.bluesky_client_id or env_client_id
+    client_secret = config.bluesky_client_secret or env_client_secret
+    service = (config.bluesky_service or getattr(settings, "BLUESKY_SERVICE", "https://bsky.social")).rstrip("/")
+    if not (client_id and service):
+        return _oauth_error(request, "Bluesky OAuth is not configured for this site.")
+
+    redirect_uri = request.build_absolute_uri(reverse("bluesky_oauth_callback"))
+    payload = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "code_verifier": code_verifier,
+    }
+    if client_secret:
+        payload["client_secret"] = client_secret
+
+    token_body = urlencode(payload).encode("utf-8")
+    token_request = Request(
+        f"{service}/oauth/token",
+        data=token_body,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+
+    try:
+        with urlopen(token_request, timeout=10) as response:
+            body = response.read().decode()
+            if response.status >= 400:
+                logger.error("Bluesky token exchange failed with status %s: %s", response.status, body)
+                return _oauth_error(request, "Bluesky did not accept the authorization code.")
+    except (HTTPError, URLError, TimeoutError) as exc:  # pragma: no cover - network
+        logger.exception("Error exchanging Bluesky code: %s", exc)
+        return _oauth_error(request, "Unable to complete Bluesky authorization.")
+
+    try:
+        data = json.loads(body or "{}")
+    except json.JSONDecodeError:
+        return _oauth_error(request, "Invalid Bluesky token response.")
+
+    access_token = data.get("access_token")
+    if not isinstance(access_token, str) or not access_token:
+        return _oauth_error(request, "Bluesky did not return an access token.")
+
+    refresh_token = data.get("refresh_token", "")
+    expires_at = None
+    expires_in = data.get("expires_in")
+    try:
+        if expires_in:
+            expires_at = timezone.now() + timedelta(seconds=int(expires_in))
+    except (TypeError, ValueError):
+        expires_at = None
+
+    did = data.get("did") if isinstance(data.get("did"), str) else None
+    handle = data.get("handle") if isinstance(data.get("handle"), str) else None
+    if not did or not handle:
+        fetched_did, fetched_handle = _fetch_bluesky_identity(service, access_token)
+        did = did or fetched_did
+        handle = handle or fetched_handle
+
+    updates = [
+        "bluesky_access_token",
+        "bluesky_refresh_token",
+        "bluesky_token_expires_at",
+        "bluesky_service",
+        "bluesky_client_id",
+    ]
+    config.bluesky_access_token = access_token
+    config.bluesky_refresh_token = refresh_token or ""
+    config.bluesky_token_expires_at = expires_at
+    config.bluesky_service = service
+    config.bluesky_client_id = client_id
+    if client_secret:
+        config.bluesky_client_secret = client_secret
+        updates.append("bluesky_client_secret")
+    if did:
+        config.bluesky_did = did
+        updates.append("bluesky_did")
+    if handle:
+        config.bluesky_handle = handle
+        updates.append("bluesky_handle")
+
+    config.save(update_fields=updates)
+    return _oauth_success(request, "Bluesky connected. You can syndicate posts now.")
 
 
 @require_POST
