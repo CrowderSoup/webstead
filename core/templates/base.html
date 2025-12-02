@@ -18,6 +18,10 @@
     <link rel="micropub" href="{% url 'micropub-endpoint' %}">
     <link rel="webmention" href="{% url 'webmention-endpoint' %}">
 
+    <!-- Analytics -->
+    <meta name="visit-id" content="{{ request.visit_id }}">
+    <script src="{% static 'analytics/beacon.js' %}"></script>
+
     {% block head %}{% endblock %}
   </head>
   <body>

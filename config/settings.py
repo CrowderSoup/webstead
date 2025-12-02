@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "blog.apps.BlogConfig",
     "files.apps.FilesConfig",
     "micropub.apps.MicropubConfig",
+    "analytics.apps.AnalyticsConfig",
 
     # Django admin UI
     "unfold",
@@ -76,6 +77,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "analytics.middleware.AnalyticsMiddleware",
 ]
 
 if DEBUG:
