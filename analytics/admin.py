@@ -11,7 +11,7 @@ class VisitAdmin(admin.ModelAdmin):
         "session_key",
         "ip_address",
         "started_at",
-        "duration_seconds",
+        "response_status_code",
     )
     list_filter = (
         ("user", admin.EmptyFieldListFilter),
