@@ -1,7 +1,7 @@
 from django.test import TestCase
 from django.utils import timezone
 
-from .models import Menu, MenuItem, Page
+from .models import Menu, MenuItem, Page, Redirect
 
 
 class PageModelTests(TestCase):
@@ -41,3 +41,29 @@ class MenuItemTests(TestCase):
         ordered_text = [item.text for item in MenuItem.objects.filter(menu=menu)]
 
         self.assertEqual(ordered_text, [first.text, second.text, third.text])
+
+
+class RedirectMiddlewareTests(TestCase):
+    def test_permanent_redirects_to_target_path(self):
+        Redirect.objects.create(
+            from_path="/old/",
+            to_path="/new/",
+            redirect_type=Redirect.PERMANENTLY,
+        )
+
+        response = self.client.get("/old/")
+
+        self.assertEqual(response.status_code, 301)
+        self.assertEqual(response["Location"], "/new/")
+
+    def test_temporary_redirect_uses_307(self):
+        Redirect.objects.create(
+            from_path="/temp/",
+            to_path="/hot/",
+            redirect_type=Redirect.TEMPORARY,
+        )
+
+        response = self.client.get("/temp/")
+
+        self.assertEqual(response.status_code, 307)
+        self.assertEqual(response["Location"], "/hot/")

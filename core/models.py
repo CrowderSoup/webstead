@@ -73,6 +73,18 @@ class Elsewhere(models.Model):
         return self.text
 
 
+class Redirect(models.Model):
+    TEMPORARY = 'temporary'; PERMANENTLY = 'permanently';
+    REDIRECT_TYPE_CHOICES = [(TEMPORARY, "307 Temporary Redirect"), (PERMANENTLY, "301 Moved Permanently")]
+
+    from_path = models.CharField()
+    to_path = models.CharField()
+    redirect_type = models.CharField(max_length=16, choices=REDIRECT_TYPE_CHOICES, default=TEMPORARY)
+
+    def __str__(self):
+        return f"{self.from_path} ➡️ {self.to_path}"
+
+
 class SiteConfiguration(SingletonModel):
     title = models.CharField(max_length=255, default="", blank=True)
     tagline = models.CharField(max_length=1024, default="", blank=True)
