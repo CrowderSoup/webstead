@@ -1,0 +1,105 @@
+{% extends "admin/change_list.html" %} {% load i18n %} {% block content_title %}
+<h1>Visit dashboard</h1>
+{% endblock %} {% block result_list %}
+<div class="dashboard" style="margin: 2.5rem auto">
+  <div style="display: flex; gap: 1.5rem; flex-wrap: wrap">
+    <div class="stat-card">
+      <h2>Total page views</h2>
+      <p>{{ stats.total_page_views|default:"0" }}</p>
+    </div>
+    <div class="stat-card">
+      <h2>Unique sessions</h2>
+      <p>{{ stats.unique_sessions|default:"0" }}</p>
+    </div>
+    <div class="stat-card">
+      <h2>Unique users</h2>
+      <p>{{ stats.unique_users|default:"0" }}</p>
+    </div>
+    <div class="stat-card">
+      <h2>Unique IPs</h2>
+      <p>{{ stats.unique_ips|default:"0" }}</p>
+    </div>
+  </div>
+
+  <style>
+    .dashboard .stat-card {
+      border: 1px solid #ddd;
+      padding: 1rem 1.25rem;
+      border-radius: 4px;
+      min-width: 180px;
+    }
+    .dashboard .stat-card h2 {
+      margin: 0 0 0.5rem;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #666;
+    }
+    .dashboard .stat-card p {
+      margin: 0;
+      font-size: 1.5rem;
+      font-weight: bold;
+    }
+    .dashboard table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+    .dashboard table th,
+    .dashboard table td {
+      padding: 0.4rem 0.6rem;
+      border-bottom: 1px solid #eee;
+    }
+  </style>
+
+  <h2 style="margin-top: 2rem">Visitors by country</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Country</th>
+        <th>Visits</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in visitors_by_country %}
+      <tr>
+        <td>{{ row.country|default:"(unknown)" }}</td>
+        <td>{{ row.count }}</td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="2">No data yet.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2 style="margin-top: 2rem">Error responses (4xx / 5xx)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Started at</th>
+        <th>Path</th>
+        <th>Status</th>
+        <th>User</th>
+        <th>IP</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for visit in error_visits %}
+      <tr>
+        <td>{{ visit.started_at }}</td>
+        <td>{{ visit.path }}</td>
+        <td>{{ visit.response_status_code }}</td>
+        <td>{{ visit.user|default:"-" }}</td>
+        <td>{{ visit.ip_address|default:"-" }}</td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="5">No error responses recorded.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{{ block.super }} {% endblock %}
