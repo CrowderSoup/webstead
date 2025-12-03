@@ -51,28 +51,24 @@
   <div class="space-y-3">
     <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-50">Error responses (4xx / 5xx)</h2>
     <div class="overflow-hidden rounded-lg border border-gray-200 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-      <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">
+          <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">
         <thead class="text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-900 dark:text-gray-400">
           <tr>
-            <th scope="col" class="px-4 py-3">Started at</th>
             <th scope="col" class="px-4 py-3">Path</th>
             <th scope="col" class="px-4 py-3">Status</th>
-            <th scope="col" class="px-4 py-3">User</th>
-            <th scope="col" class="px-4 py-3">IP</th>
+            <th scope="col" class="px-4 py-3">Errors</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
           {% for visit in error_visits %}
           <tr class="">
-            <td class="px-4 py-3 text-gray-900 dark:text-gray-100">{{ visit.started_at }}</td>
-            <td class="px-4 py-3 text-gray-900 dark:text-gray-100">{{ visit.path }}</td>
-            <td class="px-4 py-3 text-gray-900 dark:text-gray-100">{{ visit.response_status_code }}</td>
-            <td class="px-4 py-3 text-gray-900 dark:text-gray-100">{{ visit.user|default:"-" }}</td>
-            <td class="px-4 py-3 text-gray-900 dark:text-gray-100">{{ visit.ip_address|default:"-" }}</td>
+            <td class="px-4 py-3 text-gray-900 dark:text-gray-100">{{ visit.path|default:"(unknown)" }}</td>
+            <td class="px-4 py-3 text-gray-900 dark:text-gray-100">{{ visit.response_status_code|default:"-" }}</td>
+            <td class="px-4 py-3 text-gray-900 dark:text-gray-100">{{ visit.count }}</td>
           </tr>
           {% empty %}
           <tr>
-            <td colspan="5" class="px-4 py-3 text-gray-500 dark:text-gray-300">No error responses recorded.</td>
+            <td colspan="3" class="px-4 py-3 text-gray-500 dark:text-gray-300">No error responses recorded.</td>
           </tr>
           {% endfor %}
         </tbody>

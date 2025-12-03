@@ -1,6 +1,6 @@
 from django.contrib import admin
 from unfold.admin import ModelAdmin
-from django.db.models import Count, Q
+from django.db.models import Count
 from .models import Visit
 
 
@@ -29,14 +29,15 @@ class VisitAdmin(ModelAdmin):
             qs.values("country")
             .exclude(country="")
             .annotate(count=Count("id"))
-            .order_by("-count")
+            .order_by("-count")[:10]
         )
 
         # Any error responses (4xx / 5xx)
         error_visits = (
             qs.filter(response_status_code__gte=400)
-            .select_related("user")
-            .order_by("-started_at")[:10]
+            .values("path", "response_status_code")
+            .annotate(count=Count("id"))
+            .order_by("-count")[:10]
         )
 
         extra_context = extra_context or {}
