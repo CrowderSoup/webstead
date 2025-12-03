@@ -90,6 +90,7 @@ class SiteConfiguration(SingletonModel):
     tagline = models.CharField(max_length=1024, default="", blank=True)
     intro = MDTextField(max_length=512, default="")
     bio = MDTextField(default="", blank=True)
+    robots_txt = models.TextField(default="", blank=True)
     main_menu = models.ForeignKey(Menu, null=True, on_delete=models.SET_NULL)
     footer_menu = models.ForeignKey(Menu, null=True, on_delete=models.SET_NULL, related_name="footer_siteconfigurations")
 

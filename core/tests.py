@@ -1,7 +1,9 @@
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 
-from .models import Menu, MenuItem, Page, Redirect
+from .models import Menu, MenuItem, Page, Redirect, SiteConfiguration
+from blog.models import Post, Tag
 
 
 class PageModelTests(TestCase):
@@ -67,3 +69,54 @@ class RedirectMiddlewareTests(TestCase):
 
         self.assertEqual(response.status_code, 307)
         self.assertEqual(response["Location"], "/hot/")
+
+
+class RobotsTxtTests(TestCase):
+    def test_returns_configured_content(self):
+        settings = SiteConfiguration.get_solo()
+        settings.robots_txt = "User-agent: *\nDisallow: /admin/"
+        settings.save()
+
+        response = self.client.get("/robots.txt")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response["Content-Type"].startswith("text/plain"))
+        self.assertEqual(response.content.decode(), settings.robots_txt)
+
+
+class SitemapTests(TestCase):
+    def test_includes_public_routes_and_excludes_admin(self):
+        page = Page.objects.create(
+            title="About",
+            slug="about",
+            content="text",
+            published_on=timezone.now(),
+        )
+        tag = Tag.objects.create(tag="news")
+        post = Post.objects.create(
+            title="Hello",
+            slug="hello",
+            content="text",
+            kind=Post.ARTICLE,
+            published_on=timezone.now(),
+        )
+        post.tags.add(tag)
+        Post.objects.create(
+            title="Draft",
+            slug="draft",
+            content="text",
+            kind=Post.ARTICLE,
+            published_on=None,
+        )
+
+        response = self.client.get("/sitemap.xml")
+
+        body = response.content.decode()
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response["Content-Type"].startswith("application/xml"))
+        self.assertIn("http://testserver/", body)
+        self.assertIn(f"http://testserver{reverse('posts')}", body)
+        self.assertIn(f"http://testserver{reverse('page', kwargs={'slug': page.slug})}", body)
+        self.assertIn(f"http://testserver{post.get_absolute_url()}", body)
+        self.assertIn(f"http://testserver{reverse('posts_by_tag', kwargs={'tag': tag.tag})}", body)
+        self.assertNotIn("/admin/", body)
