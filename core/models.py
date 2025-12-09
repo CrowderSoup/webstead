@@ -90,6 +90,7 @@ class SiteConfiguration(SingletonModel):
     tagline = models.CharField(max_length=1024, default="", blank=True)
     intro = MDTextField(max_length=512, default="")
     bio = MDTextField(default="", blank=True)
+    active_theme = models.CharField(max_length=255, default="", blank=True)
     robots_txt = models.TextField(default="", blank=True)
     main_menu = models.ForeignKey(Menu, null=True, on_delete=models.SET_NULL)
     footer_menu = models.ForeignKey(Menu, null=True, on_delete=models.SET_NULL, related_name="footer_siteconfigurations")
@@ -99,3 +100,21 @@ class SiteConfiguration(SingletonModel):
 
     class Meta:
         verbose_name = "Site Configuration"
+
+    def save(self, *args, **kwargs):
+        previous_theme = None
+        if self.pk:
+            previous_theme = (
+                SiteConfiguration.objects.filter(pk=self.pk)
+                .values_list("active_theme", flat=True)
+                .first()
+            )
+
+        result = super().save(*args, **kwargs)
+
+        if previous_theme != self.active_theme:
+            from core.themes import clear_template_caches
+
+            clear_template_caches()
+
+        return result
