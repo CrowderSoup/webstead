@@ -56,3 +56,6 @@ staticfiles/
 
 # media uploads
 uploads/
+
+# Themes
+/themes/

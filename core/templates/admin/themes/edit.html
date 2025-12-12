@@ -1,0 +1,565 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div class="p-6 shadow rounded">
+    <h1 class="text-xl font-semibold mb-4">Theme file editor</h1>
+    <p class="text-sm text-gray-600 mb-4">
+        Select any theme and file to edit. Changes are saved to the container and synced to the static bucket.
+    </p>
+
+    {% if not theme_choices %}
+        <p class="text-gray-700">No themes available to edit yet.</p>
+    {% else %}
+        <form method="post" class="space-y-4" novalidate>
+            {% csrf_token %}
+            <div class="grid md:grid-cols-2 gap-4 items-end mb-2 border rounded p-2">
+                <div>
+                    <label class="block text-sm font-medium mb-1" for="{{ form.theme.id_for_label }}">Theme</label>
+                    {{ form.theme }}
+                </div>
+                <div class="hidden">
+                    <label class="block text-sm font-medium mb-1" for="{{ form.path.id_for_label }}">File</label>
+                    {{ form.path }}
+                </div>
+            </div>
+            {% if not file_choices %}
+                <p class="text-sm text-red-600">No editable files found for this theme yet.</p>
+            {% endif %}
+
+            <div class="grid md:grid-cols-4 gap-4">
+                <div class="md:col-span-1">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm font-medium">Files</span>
+                    </div>
+                    <div id="file-tree" class="border border-gray-200 rounded p-2 overflow-auto bg-gray-50" style="height: 640px;"></div>
+                    <div class="flex gap-2 mt-3">
+                        <button type="button" id="new-file-btn" class="px-3 py-1.5 rounded border border-gray-300 text-sm">New File</button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-2">Includes HTML, CSS, JS, text, and JSON files.</p>
+                </div>
+                <div class="md:col-span-3 space-y-3">
+                    <div>
+                        <label class="block text-sm font-medium mb-1" for="{{ form.content.id_for_label }}">Content</label>
+                        {{ form.content }}
+                    </div>
+
+                    <div class="flex flex-wrap gap-3 mt-2">
+                        <button type="submit" name="save" value="1" class="px-4 py-2 rounded border border-gray-300">💾 Save file</button>
+                        <button type="button" id="delete-button" class="px-4 py-2 rounded border border-gray-300">🗑️ Delete</button>
+                    </div>
+                </div>
+            </div>
+            <input type="hidden" name="new_entry_name" id="new-entry-name" />
+        </form>
+    {% endif %}
+</div>
+
+<div id="unsaved-modal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center hidden z-50">
+    <div class="bg-white dark:bg-base-900 rounded shadow p-6">
+        <h2 class="text-lg font-semibold mb-2">Unsaved changes</h2>
+        <p class="text-sm text-gray-700 mb-4">You have unsaved changes. Save before loading a new file, or discard them.</p>
+        <div class="flex justify-end gap-3">
+            <button id="unsaved-cancel" class="px-4 py-2 rounded border border-gray-300">Cancel</button>
+            <button id="unsaved-discard" class="px-4 py-2 rounded border border-gray-300">Discard changes</button>
+            <button id="unsaved-save" class="px-4 py-2 rounded bg-blue-600 text-white">Save changes</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldgutter.min.css" />
+<style>
+    .CodeMirror {
+        border: 1px solid #e5e7eb;
+        border-radius: 0.375rem;
+        height: 600px;
+        font-size: 14px;
+    }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/markdown/markdown.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closetag.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldgutter.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/brace-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/comment-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/indent-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/xml-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/markdown-fold.min.js"></script>
+{{ file_choices|json_script:"file-choices-data" }}
+{{ directory_choices|json_script:"dir-choices-data" }}
+<script type="text/javascript">
+  window.addEventListener("load", (event) => {
+    const textarea = document.getElementById("{{ form.content.id_for_label }}");
+    if (!textarea) return;
+
+    const modeForPath = (path) => {
+      const lower = (path || "").toLowerCase();
+
+      if (lower.endsWith(".html") || lower.endsWith(".htm")) return "htmlmixed";
+      if (lower.endsWith(".xml")) return "xml";
+      if (lower.endsWith(".css")) return "css";
+      if (lower.endsWith(".js")) return "javascript";
+      if (lower.endsWith(".json")) return {name: "javascript", json: true};
+      if (lower.endsWith(".md") || lower.endsWith(".markdown")) return "markdown";
+      return "htmlmixed";
+    };
+
+    const editor = CodeMirror.fromTextArea(textarea, {
+      mode: modeForPath(document.getElementById("{{ form.path.id_for_label }}")?.value || ""),
+      theme: "material",
+      lineNumbers: true,
+      lineWrapping: true,
+      autoCloseTags: true,
+      matchBrackets: true,
+      foldGutter: true,
+      gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"],
+      tabSize: 2,
+      indentUnit: 2,
+    });
+    let lastSavedContent = editor.getValue();
+    const isDirty = () => editor.getValue() !== lastSavedContent;
+    const markPristine = () => {
+      lastSavedContent = editor.getValue();
+    };
+    const sanitizeName = (raw) => {
+      let name = (raw || "").trim();
+      if (!name) return "";
+      if (name.startsWith("/") || name.includes("\\") || name.includes("..")) return "";
+      name = name.replace(/\/+/g, "/").replace(/\/$/, "");
+      return name || "";
+    };
+    const currentDirectory = () => {
+      if (!currentPath) return "";
+      const parts = currentPath.split("/");
+      parts.pop();
+      return parts.join("/");
+    };
+    const joinRelative = (dir, name) => (dir ? `${dir}/${name}` : name);
+
+    const pathSelect = document.getElementById("{{ form.path.id_for_label }}");
+    const themeSelect = document.getElementById("{{ form.theme.id_for_label }}");
+    const form = textarea.closest("form");
+    const modal = document.getElementById("unsaved-modal");
+    const saveButton = document.getElementById("unsaved-save");
+    const discardButton = document.getElementById("unsaved-discard");
+    const cancelButton = document.getElementById("unsaved-cancel");
+    const fileTree = document.getElementById("file-tree");
+    const fileChoicesData = document.getElementById("file-choices-data");
+    const dirChoicesData = document.getElementById("dir-choices-data");
+    const newFileButton = document.getElementById("new-file-btn");
+    const deleteButton = document.getElementById("delete-button");
+    const newEntryNameInput = document.getElementById("new-entry-name");
+    let currentPath = pathSelect?.value || "";
+    let currentTheme = themeSelect?.value || "";
+    let pendingChange = null;
+
+    const submitWithAction = (actionName) => {
+      if (!form) return;
+      form.querySelectorAll("input[data-auto-submit]").forEach((input) => input.remove());
+      const hidden = document.createElement("input");
+      hidden.type = "hidden";
+      hidden.name = actionName;
+      hidden.value = "1";
+      hidden.dataset.autoSubmit = "1";
+      form.appendChild(hidden);
+      form.submit();
+    };
+
+    const openModal = () => {
+      if (modal) modal.classList.remove("hidden");
+    };
+
+    const closeModal = () => {
+      if (modal) modal.classList.add("hidden");
+      pendingChange = null;
+    };
+
+    const setActiveFile = (path) => {
+      if (!fileTree) return;
+      fileTree.querySelectorAll("[data-file-path]").forEach((node) => {
+        const isActive = node.dataset.filePath === path;
+        // node.classList.toggle("bg-blue-50", isActive);
+        node.classList.toggle("border", isActive);
+        node.classList.toggle("rounded");
+        node.classList.toggle("border-blue-400", isActive);
+      });
+    };
+
+    const loadPendingChange = () => {
+      if (!pendingChange) return;
+      if (pendingChange.type === "path") {
+        currentPath = pendingChange.value;
+        if (pathSelect) {
+          pathSelect.value = pendingChange.value;
+        }
+        setActiveFile(currentPath);
+        const mode = modeForPath(currentPath);
+        editor.setOption("mode", mode);
+        markPristine();
+        submitWithAction("load");
+      } else if (pendingChange.type === "theme") {
+        currentTheme = pendingChange.value;
+        if (themeSelect) {
+          themeSelect.value = pendingChange.value;
+        }
+        markPristine();
+        submitWithAction("load");
+      }
+      closeModal();
+    };
+
+    const handleNavigation = (change) => {
+      if (change.type === "path") {
+        const newPath = change.value;
+        const mode = modeForPath(newPath);
+        editor.setOption("mode", mode);
+        if (!isDirty()) {
+          currentPath = newPath;
+          if (pathSelect) {
+            pathSelect.value = newPath;
+          }
+          setActiveFile(newPath);
+          submitWithAction("load");
+          return;
+        }
+        pendingChange = change;
+        if (pathSelect) {
+          pathSelect.value = currentPath;
+        }
+        setActiveFile(currentPath);
+      } else if (change.type === "theme") {
+        if (!isDirty()) {
+          currentTheme = change.value;
+          if (themeSelect) {
+            themeSelect.value = change.value;
+          }
+          submitWithAction("load");
+          return;
+        }
+        pendingChange = change;
+        if (themeSelect) {
+          themeSelect.value = currentTheme;
+        }
+      }
+      openModal();
+    };
+
+    const renderFileTree = () => {
+      if (!fileTree || !fileChoicesData) return;
+
+      const storageKey = (theme) => `theme-file-tree:${theme || "default"}`;
+      const loadExpanded = () => {
+        try {
+          const raw = localStorage.getItem(storageKey(currentTheme));
+          const parsed = raw ? JSON.parse(raw) : [];
+          return new Set(Array.isArray(parsed) ? parsed : []);
+        } catch (_) {
+          return new Set();
+        }
+      };
+      const persistExpanded = (set) => {
+        try {
+          localStorage.setItem(storageKey(currentTheme), JSON.stringify(Array.from(set)));
+        } catch (_) {
+          // ignore
+        }
+      };
+      const expandedSet = loadExpanded();
+
+      const normalizePaths = (raw) => {
+        if (!Array.isArray(raw)) return [];
+        return raw
+          .map((entry) => {
+            if (Array.isArray(entry)) return entry[0];
+            if (typeof entry === "string") return entry;
+            return null;
+          })
+          .filter(Boolean);
+      };
+
+      const buildTree = (files, dirs) => {
+        const root = {name: "", type: "dir", path: "", children: new Map(), expanded: true};
+
+        const addPath = (path, isFile) => {
+          const parts = path.split("/");
+          let node = root;
+          let traversed = "";
+          parts.forEach((part, idx) => {
+            const atLeaf = idx === parts.length - 1;
+            traversed = traversed ? `${traversed}/${part}` : part;
+            const key = `${atLeaf && isFile ? "file" : "dir"}:${part}`;
+            if (!node.children.has(key)) {
+              const defaultExpanded = currentPath ? currentPath.startsWith(traversed) : true;
+              const shouldExpand = expandedSet.has(traversed) || defaultExpanded;
+              if (shouldExpand && traversed) {
+                expandedSet.add(traversed);
+              }
+              node.children.set(
+                key,
+                atLeaf && isFile
+                  ? {name: part, type: "file", path, children: null}
+                  : {
+                      name: part,
+                      type: "dir",
+                      path: traversed,
+                      children: new Map(),
+                      expanded: shouldExpand,
+                    }
+              );
+            }
+            node = node.children.get(key);
+          });
+        };
+
+        dirs.forEach((dir) => addPath(dir, false));
+        files.forEach((file) => addPath(file, true));
+
+        return root;
+      };
+
+      const renderNodes = (nodesMap, container, depth) => {
+        const nodes = Array.from(nodesMap.values()).sort((a, b) => {
+          if (a.type === b.type) return a.name.localeCompare(b.name);
+          return a.type === "dir" ? -1 : 1;
+        });
+
+        nodes.forEach((node) => {
+          if (node.type === "dir") {
+            const wrapper = document.createElement("div");
+            const header = document.createElement("div");
+            header.className =
+              "w-full px-2 py-1 rounded flex items-center gap-2 text-sm font-semibold text-gray-700 hover:bg-gray-100";
+            header.style.paddingLeft = `${depth * 12}px`;
+
+            const caret = document.createElement("button");
+            caret.type = "button";
+            caret.className = "inline-flex w-4 justify-center text-gray-500 focus:outline-none";
+            caret.textContent = node.expanded ? "v" : ">";
+
+            const label = document.createElement("span");
+            label.textContent = node.name || "/";
+            label.className = "flex-1 text-left";
+
+            const isEmpty = !node.children || node.children.size === 0;
+            const deleteBtn = document.createElement("button");
+            deleteBtn.type = "button";
+            deleteBtn.className =
+              "text-xs px-1 py-0.5 rounded border border-gray-200 text-gray-500 hover:text-red-600 hover:border-red-200";
+            deleteBtn.textContent = "✕";
+            deleteBtn.title = "Delete empty folder";
+            deleteBtn.disabled = !isEmpty || !node.path;
+            if (!isEmpty) {
+              deleteBtn.classList.add("opacity-30", "cursor-not-allowed");
+            }
+
+            header.appendChild(caret);
+            header.appendChild(label);
+            header.appendChild(deleteBtn);
+            wrapper.appendChild(header);
+
+            const childrenContainer = document.createElement("div");
+            childrenContainer.className = node.expanded ? "mt-1" : "mt-1 hidden";
+            wrapper.appendChild(childrenContainer);
+
+            const toggleDir = () => {
+              node.expanded = !node.expanded;
+              caret.textContent = node.expanded ? "v" : ">";
+              childrenContainer.classList.toggle("hidden", !node.expanded);
+              if (node.expanded) {
+                expandedSet.add(node.path);
+              } else {
+                expandedSet.delete(node.path);
+              }
+              persistExpanded(expandedSet);
+            };
+
+            caret.addEventListener("click", (evt) => {
+              evt.preventDefault();
+              toggleDir();
+            });
+            label.addEventListener("click", (evt) => {
+              evt.preventDefault();
+              toggleDir();
+            });
+
+            deleteBtn.addEventListener("click", (evt) => {
+              evt.stopPropagation();
+              evt.preventDefault();
+              if (!node.path || !isEmpty) return;
+              requestDelete(node.path, true);
+            });
+
+            renderNodes(node.children, childrenContainer, depth + 1);
+            container.appendChild(wrapper);
+            return;
+          }
+
+          const button = document.createElement("button");
+          button.type = "button";
+          button.dataset.filePath = node.path;
+          button.className =
+            "w-full text-left px-2 py-1 flex items-center gap-2 text-sm transition hover:border-blue-200 hover:bg-blue-50";
+          button.style.paddingLeft = `${depth * 12 + 16}px`;
+
+          const bullet = document.createElement("span");
+          bullet.className = "inline-block w-3 text-gray-400";
+          bullet.textContent = "-";
+          const label = document.createElement("span");
+          label.textContent = node.name;
+
+          button.appendChild(bullet);
+          button.appendChild(label);
+          button.addEventListener("click", () => handleNavigation({type: "path", value: node.path}));
+          container.appendChild(button);
+        });
+      };
+
+      let fileChoices = [];
+      let dirChoices = [];
+      try {
+        fileChoices = normalizePaths(JSON.parse(fileChoicesData.textContent || "[]"));
+      } catch (_) {
+        fileChoices = [];
+      }
+      try {
+        dirChoices = normalizePaths(JSON.parse(dirChoicesData?.textContent || "[]"));
+      } catch (_) {
+        dirChoices = [];
+      }
+
+      fileTree.innerHTML = "";
+      if (!fileChoices.length && !dirChoices.length) {
+        fileTree.textContent = "No editable files found for this theme yet.";
+        return;
+      }
+
+      const tree = buildTree(fileChoices, dirChoices);
+      renderNodes(tree.children, fileTree, 0);
+      persistExpanded(expandedSet);
+      setActiveFile(currentPath);
+    };
+
+    renderFileTree();
+
+    if (pathSelect) {
+      pathSelect.addEventListener("change", (evt) => {
+        const newPath = evt.target.value;
+        const mode = modeForPath(newPath);
+        editor.setOption("mode", mode);
+
+        if (!isDirty()) {
+          currentPath = newPath;
+          submitWithAction("load");
+          return;
+        }
+
+        pendingChange = {type: "path", value: newPath};
+        evt.target.value = currentPath;
+        openModal();
+      });
+    }
+
+    if (themeSelect) {
+      themeSelect.addEventListener("change", (evt) => {
+        const newTheme = evt.target.value;
+        handleNavigation({type: "theme", value: newTheme});
+      });
+    }
+
+    const promptForName = (label) => {
+      const result = sanitizeName(window.prompt(label) || "");
+      if (!result) {
+        window.alert("Enter a valid path (no leading '/', no '..', no backslashes).");
+        return null;
+      }
+      return result;
+    };
+
+    if (newFileButton && newEntryNameInput) {
+      newFileButton.addEventListener("click", () => {
+        const name = promptForName("New file path (relative to current folder is allowed):");
+        if (!name) return;
+        const target = joinRelative(currentDirectory(), name);
+        if (!window.confirm(`Create file "${target}"?`)) return;
+        newEntryNameInput.value = name;
+        if (pathSelect) {
+          pathSelect.value = currentPath;
+        }
+        submitWithAction("new_file");
+      });
+    }
+
+    const requestDelete = (path, skipDirtyCheck = false) => {
+      if (!path) {
+        window.alert("Select a file or folder to delete.");
+        return;
+      }
+      if (!skipDirtyCheck && isDirty() && !window.confirm("You have unsaved changes. Delete anyway?")) return;
+      if (!window.confirm(`Delete "${path}"? This cannot be undone.`)) return;
+      if (pathSelect) {
+        pathSelect.value = path;
+      }
+      submitWithAction("delete");
+    };
+
+    if (deleteButton) {
+      deleteButton.addEventListener("click", (evt) => {
+        evt.preventDefault();
+        requestDelete(currentPath);
+      });
+    }
+
+    if (form) {
+      form.addEventListener("submit", () => {
+        editor.save(); // writes back to the textarea so Django sees it
+      });
+    }
+
+    if (saveButton) {
+      saveButton.addEventListener("click", (evt) => {
+        evt.preventDefault();
+        closeModal();
+        if (pathSelect) {
+          pathSelect.value = currentPath;
+        }
+        if (themeSelect) {
+          themeSelect.value = currentTheme;
+        }
+        submitWithAction("save");
+      });
+    }
+
+    if (discardButton) {
+      discardButton.addEventListener("click", (evt) => {
+        evt.preventDefault();
+        loadPendingChange();
+      });
+    }
+
+    if (cancelButton) {
+      cancelButton.addEventListener("click", (evt) => {
+        evt.preventDefault();
+        closeModal();
+        if (pathSelect) {
+          pathSelect.value = currentPath;
+        }
+        if (themeSelect) {
+          themeSelect.value = currentTheme;
+        }
+        const mode = modeForPath(currentPath);
+        editor.setOption("mode", mode);
+      });
+    }
+  });
+</script>
+{% endblock %}

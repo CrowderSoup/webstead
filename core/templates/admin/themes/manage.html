@@ -1,0 +1,61 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div class="flex flex-col gap-8">
+    <div class="p-6 shadow rounded">
+        <h1 class="text-xl font-semibold mb-4">Upload theme</h1>
+        <p class="text-sm text-gray-600 mb-4">
+            Upload a .zip file that contains <code>theme.json</code>, a <code>templates/</code> folder, and (optionally) a <code>static/</code> folder.
+            Files are unpacked to the container and synced to the static bucket.
+        </p>
+        <form method="post" enctype="multipart/form-data" class="space-y-4">
+            {% csrf_token %}
+            {{ upload_form.non_field_errors }}
+            <div>
+                {{ upload_form.archive.errors }}
+                {{ upload_form.archive }}
+                {% if upload_form.archive.help_text %}
+                    <p class="text-xs text-gray-500 mt-1">{{ upload_form.archive.help_text }}</p>
+                {% endif %}
+            </div>
+            <button type="submit" class="px-4 py-2 rounded border border-gray-300">Upload theme</button>
+        </form>
+    </div>
+
+    <div class="p-6 shadow rounded">
+        <h2 class="text-lg font-semibold mb-3">Available themes</h2>
+        {% if theme_rows %}
+            <div class="overflow-x-auto">
+                <table class="min-w-full border border-gray-200">
+                    <thead>
+                        <tr class="bg-gray-50 text-left">
+                            <th class="p-2 border-b text-sm font-semibold">Label</th>
+                            <th class="p-2 border-b text-sm font-semibold">Slug</th>
+                            <th class="p-2 border-b text-sm font-semibold">Version</th>
+                            <th class="p-2 border-b text-sm font-semibold">Author</th>
+                            <th class="p-2 border-b text-sm font-semibold">Editable files</th>
+                            <th class="p-2 border-b text-sm font-semibold">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for theme, file_count in theme_rows %}
+                            <tr class="border-b">
+                                <td class="p-2">{{ theme.label }}</td>
+                                <td class="p-2 font-mono text-xs">{{ theme.slug }}</td>
+                                <td class="p-2">{{ theme.version|default:"—" }}</td>
+                                <td class="p-2">{{ theme.author|default:"—" }}</td>
+                                <td class="p-2">{{ file_count }}</td>
+                                <td class="p-2">
+                                    <a href="{% url 'admin:core_theme_edit' slug=theme.slug %}" class="text-indigo-600 hover:underline">Manage files</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="text-gray-600">No themes found yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

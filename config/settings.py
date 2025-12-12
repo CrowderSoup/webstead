@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import environ
+from core.themes import get_theme_static_dirs
 
 # ---------------------------------------------------------------------------
 # Paths and environment
@@ -16,6 +17,10 @@ environ.Env.read_env(BASE_DIR / ".env")
 
 DEBUG = env.bool("DEBUG", default=False)
 SECRET_KEY = env("SECRET_KEY")
+
+# Themes
+THEMES_ROOT = env("THEMES_ROOT", default=str(BASE_DIR / "themes"))
+THEME_STORAGE_PREFIX = env("THEME_STORAGE_PREFIX", default="themes")
 
 # ---------------------------------------------------------------------------
 # Hosts and security
@@ -95,13 +100,19 @@ TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
         "DIRS": [],
-        "APP_DIRS": True,
+        "APP_DIRS": False,
         "OPTIONS": {
+            "loaders": [
+                "core.template_loaders.ThemeTemplateLoader",
+                "django.template.loaders.filesystem.Loader",
+                "django.template.loaders.app_directories.Loader",
+            ],
             "context_processors": [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "core.context_processors.site_configuration",
+                "core.context_processors.theme",
             ],
         },
     },
@@ -204,7 +215,7 @@ if not DEBUG:
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STATICFILES_DIRS = [BASE_DIR / "static"]
+STATICFILES_DIRS = [BASE_DIR / "static", *get_theme_static_dirs(BASE_DIR)]
 
 MEDIA_URL = f"{AWS_S3_ENDPOINT_URL}/{AWS_STORAGE_BUCKET_NAME}/"
 

@@ -4,6 +4,7 @@ from django.urls import NoReverseMatch, reverse
 from django.utils.safestring import mark_safe
 
 from .models import SiteConfiguration
+from .themes import get_active_theme
 
 def site_configuration(request):
     settings = SiteConfiguration.get_solo()
@@ -29,4 +30,18 @@ def site_configuration(request):
         "menu_items": menu_items,
         "footer_menu_items": footer_menu_items,
         "feed_url": feed_url,
+    }
+
+
+def theme(request):
+    active_theme = get_active_theme()
+    return {
+        "active_theme": active_theme,
+        "theme": {
+            "slug": active_theme.slug if active_theme else "",
+            "label": active_theme.label if active_theme else "Default",
+            "metadata": active_theme.metadata if active_theme else {},
+            "template_prefix": active_theme.template_prefix if active_theme else "",
+            "static_prefix": active_theme.static_prefix if active_theme else "",
+        },
     }
