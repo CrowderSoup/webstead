@@ -7,8 +7,6 @@ from django.utils.safestring import mark_safe
 from django.contrib.contenttypes.fields import GenericRelation
 
 from solo.models import SingletonModel
-from mdeditor.fields import MDTextField
-
 from files.models import Attachment
 
 
@@ -16,7 +14,7 @@ class Page(models.Model):
     title = models.CharField(max_length=512)
     slug = models.SlugField(max_length=255, unique=True)
     author = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
-    content = MDTextField()
+    content = models.TextField()
     published_on = models.DateTimeField("date published")
     attachments = GenericRelation(Attachment, related_query_name="pages")
 
@@ -88,8 +86,8 @@ class Redirect(models.Model):
 class SiteConfiguration(SingletonModel):
     title = models.CharField(max_length=255, default="", blank=True)
     tagline = models.CharField(max_length=1024, default="", blank=True)
-    intro = MDTextField(max_length=512, default="")
-    bio = MDTextField(default="", blank=True)
+    intro = models.TextField(max_length=512, default="")
+    bio = models.TextField(default="", blank=True)
     active_theme = models.CharField(max_length=255, default="", blank=True)
     robots_txt = models.TextField(default="", blank=True)
     main_menu = models.ForeignKey(Menu, null=True, on_delete=models.SET_NULL)

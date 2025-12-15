@@ -64,7 +64,6 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
 
     # Third party apps
-    "mdeditor",
     "solo",
     "storages",
 ]
@@ -249,56 +248,3 @@ WHITENOISE_MAX_AGE = 31536000
 # ---------------------------------------------------------------------------
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
-# Frame settings for mdeditor
-X_FRAME_OPTIONS = "SAMEORIGIN"
-
-MDEDITOR_CONFIGS = {
-    "default": {
-        "width": "100% ",
-        "height": 400,
-        "toolbar": [
-            "undo",
-            "redo",
-            "|",
-            "bold",
-            "del",
-            "italic",
-            "quote",
-            "|",
-            "h1",
-            "h2",
-            "h3",
-            "h5",
-            "h6",
-            "|",
-            "list-ul",
-            "list-ol",
-            "hr",
-            "|",
-            "link",
-            "code",
-            "preformatted-text",
-            "code-block",
-            "||",
-            "preview",
-            "watch",
-            "fullscreen",
-        ],
-        "upload_image_formats": ["jpg", "jpeg", "gif", "png", "bmp", "webp", "svg"],
-        "image_folder": "editor",
-        "theme": "default",
-        "preview_theme": "default",
-        "editor_theme": "default",
-        "toolbar_autofixed": False,
-        "search_replace": True,
-        "emoji": True,
-        "tex": True,
-        "flow_chart": True,
-        "sequence": True,
-        "watch": True,
-        "lineWrapping": True,
-        "lineNumbers": True,
-        "language": "en",
-    }
-}

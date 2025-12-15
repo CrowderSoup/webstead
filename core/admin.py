@@ -7,6 +7,7 @@ from solo.admin import SingletonModelAdmin
 from files.admin import AttachmentInline
 from .models import Page, Menu, MenuItem, SiteConfiguration, Elsewhere, Redirect
 from .themes import discover_themes
+from .widgets import CodeMirrorTextarea
 
 
 class SiteConfigurationAdminForm(forms.ModelForm):
@@ -15,6 +16,11 @@ class SiteConfigurationAdminForm(forms.ModelForm):
     class Meta:
         model = SiteConfiguration
         fields = "__all__"
+        widgets = {
+            "intro": CodeMirrorTextarea(),
+            "bio": CodeMirrorTextarea(),
+            "robots_txt": CodeMirrorTextarea(mode="text/plain"),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -66,7 +72,16 @@ admin.site.register(MenuItem)
 admin.site.register(Elsewhere)
 admin.site.register(Redirect)
 
+
+class PageAdminForm(forms.ModelForm):
+    class Meta:
+        model = Page
+        fields = "__all__"
+        widgets = {"content": CodeMirrorTextarea()}
+
+
 @admin.register(Page)
 class PageAdmin(ModelAdmin):
+    form = PageAdminForm
     prepopulated_fields = {"slug": ("title",)}
     inlines = [AttachmentInline]

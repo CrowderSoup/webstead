@@ -10,8 +10,6 @@ from django.utils import timezone
 from django.urls import reverse
 from django.contrib.contenttypes.fields import GenericRelation
 
-from mdeditor.fields import MDTextField
-
 from files.models import Attachment
 
 
@@ -39,7 +37,7 @@ class Post(models.Model):
     slug = models.SlugField(max_length=255, unique=True)
     kind = models.CharField(max_length=16, choices=KIND_CHOICES, default=ARTICLE)
     author = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
-    content = MDTextField()
+    content = models.TextField()
     mf2 = models.JSONField(default=dict, blank=True)
     deleted = models.BooleanField(default=False)
     published_on = models.DateTimeField("date published", null=True, blank=True)

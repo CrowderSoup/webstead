@@ -32,7 +32,6 @@ dependencies = [
     { name = "boto3" },
     { name = "django" },
     { name = "django-environ" },
-    { name = "django-mdeditor" },
     { name = "django-solo" },
     { name = "django-storages", extra = ["s3"] },
     { name = "django-taggit" },
@@ -58,7 +57,6 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.40.71" },
     { name = "django", specifier = ">=5.2.7" },
     { name = "django-environ", specifier = ">=0.12.0" },
-    { name = "django-mdeditor", specifier = ">=0.1.20" },
     { name = "django-solo", specifier = ">=2.4.0" },
     { name = "django-storages", extras = ["s3"], specifier = ">=1.14.6" },
     { name = "django-taggit", specifier = ">=6.1.0" },
@@ -220,12 +218,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/d6/04/65d2521842c42f471
 wheels = [
     { url = "https://files.pythonhosted.org/packages/83/b3/0a3bec4ecbfee960f39b1842c2f91e4754251e0a6ed443db9fe3f666ba8f/django_environ-0.12.0-py2.py3-none-any.whl", hash = "sha256:92fb346a158abda07ffe6eb23135ce92843af06ecf8753f43adf9d2366dcc0ca", size = 19957, upload-time = "2025-01-13T17:03:32.918Z" },
 ]
-
-[[package]]
-name = "django-mdeditor"
-version = "0.1.20"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/6b/57/407196a6f3bfe2c07bc710afb312bc47395823de55393068b5acf113ee2b/django-mdeditor-0.1.20.tar.gz", hash = "sha256:d1f3b735b6202b8820f10e024a5aa28c5b948897ee7a8dbb84558df75339827e", size = 1544940, upload-time = "2022-01-05T04:40:11.806Z" }
 
 [[package]]
 name = "django-solo"
