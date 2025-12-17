@@ -1,4 +1,4 @@
-{% load static %}
+{% load static author %}
 <!doctype html>
 <html lang="en">
   <head>
@@ -40,7 +40,7 @@
     </header>
     <main>{% block content %}{% endblock %}</main>
     <footer>
-      <span>© {{ now|date:"Y" }} <a href="{% static 'pubkey.txt' %}" rel="me pgpkey">Aaron Crowder.</a></span>
+      <span>© {{ now|date:"Y" }} <a href="{% static 'pubkey.txt' %}" rel="me pgpkey">{% author_hcard_name %}.</a></span>
       {% block footer_extra %}
       {% if user.is_authenticated and user.is_staff %}
       <span> · </span><a href="{% url 'post_editor' %}">Post editor</a>

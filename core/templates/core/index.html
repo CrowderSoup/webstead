@@ -5,7 +5,7 @@
       <figure class="author-image-container">
         <img
           class="u-photo"
-          alt="Aaron Crowder avatar"
+          alt="{{ site_author_display_name|default:settings.title|default:'Site author' }} avatar"
           src="{% static 'space.jpeg' %}"
           height="90"
           width="90"
@@ -13,34 +13,39 @@
       </figure>
     </aside>
     <div class="author-box">
-      <div class="author-intro">{{ settings.intro }}</div>
-      <div class="author-bio p-note">{{ settings.bio }}</div>
+      {% if site_author_hcard and site_author_hcard.note_html %}
+      <div class="author-bio p-note">{{ site_author_hcard.note_html }}</div>
+      {% endif %}
     </div>
+		{% if site_author_hcard %}
 		<div class="elsewhere">
-		{% for profile in elsewhere %}
+		{% for profile in site_author_hcard.urls.all %}
 			<a
 				class="elsewhere-link"
 				target="_blank"
-        rel="me {% if profile.place == 'bsky' %}atproto{% endif %}"
-				href="{% if profile.place == 'email' %}mailto:{{ profile.profile_url }}{% else %}{{ profile.profile_url }}{% endif %}">
-        {% if profile.place == 'x' %}
+        rel="me {% if profile.kind == 'bsky' %}atproto{% endif %}"
+				href="{{ profile.href }}">
+        {% if profile.kind == 'x' %}
           {% include 'core/svg/twitter.svg' %}
-        {% elif profile.place == 'bsky' %}
+        {% elif profile.kind == 'bsky' %}
           {% include 'core/svg/bluesky.svg' %}
-        {% elif profile.place == 'email' %}
+        {% elif profile.kind == 'email' %}
           {% include 'core/svg/email.svg' %}
-        {% elif profile.place == 'mastodon' %}
+        {% elif profile.kind == 'mastodon' %}
           {% include 'core/svg/mastodon.svg' %}
-        {% elif profile.place == 'github' %}
+        {% elif profile.kind == 'github' %}
           {% include 'core/svg/github.svg' %}
-        {% elif profile.place == 'instagram' %}
+        {% elif profile.kind == 'instagram' %}
           {% include 'core/svg/instagram.svg' %}
+        {% elif profile.kind == 'other' %}
+          {% include 'core/svg/globe.svg' %}
         {% else %}
-          {{ profile.place }}
+          {{ profile.kind }}
         {% endif %}
 			</a>
 		{% endfor %}
 		</div>
+		{% endif %}
   </section>
 </div>
 <div class="h-feed">

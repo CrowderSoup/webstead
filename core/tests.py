@@ -1,8 +1,18 @@
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Menu, MenuItem, Page, Redirect, SiteConfiguration
+from .models import (
+    Menu,
+    MenuItem,
+    Page,
+    Redirect,
+    SiteConfiguration,
+    HCard,
+    HCardEmail,
+    HCardUrl,
+)
 from blog.models import Post, Tag
 
 
@@ -120,3 +130,36 @@ class SitemapTests(TestCase):
         self.assertIn(f"http://testserver{post.get_absolute_url()}", body)
         self.assertIn(f"http://testserver{reverse('posts_by_tag', kwargs={'tag': tag.tag})}", body)
         self.assertNotIn("/admin/", body)
+
+
+class HCardTests(TestCase):
+    def test_can_create_empty_hcard(self):
+        hcard = HCard.objects.create()
+
+        self.assertIsNotNone(hcard.pk)
+
+    def test_can_attach_multiple_related_values(self):
+        hcard = HCard.objects.create(name="Example")
+        HCardEmail.objects.create(hcard=hcard, value="one@example.com")
+        HCardEmail.objects.create(hcard=hcard, value="two@example.com")
+        HCardUrl.objects.create(hcard=hcard, value="https://example.com")
+        HCardUrl.objects.create(hcard=hcard, value="https://example.org")
+
+        self.assertEqual(hcard.emails.count(), 2)
+        self.assertEqual(hcard.urls.count(), 2)
+
+    def test_can_assign_and_unassign_user(self):
+        user = get_user_model().objects.create_user(
+            username="person",
+            email="person@example.com",
+            password="password",
+        )
+        hcard = HCard.objects.create(user=user)
+
+        self.assertEqual(hcard.user, user)
+
+        hcard.user = None
+        hcard.save()
+
+        hcard.refresh_from_db()
+        self.assertIsNone(hcard.user)

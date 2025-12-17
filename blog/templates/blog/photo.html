@@ -1,3 +1,4 @@
+{% load author %}
 <article class="h-entry">
   <section class="photo-slider" aria-labelledby="gallery-title" role="region">
     <ol class="slides" tabindex="0">
@@ -43,5 +44,5 @@
     </time>
   </a>
   by
-  <a class="p-author h-card" href="#">Aaron Crowder</a>
+  <a class="p-author h-card" href="#">{% author_hcard_name post.author %}</a>
 </article>

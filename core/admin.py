@@ -5,7 +5,22 @@ from unfold.admin import ModelAdmin
 from solo.admin import SingletonModelAdmin
 
 from files.admin import AttachmentInline
-from .models import Page, Menu, MenuItem, SiteConfiguration, Elsewhere, Redirect
+from .models import (
+    Page,
+    Menu,
+    MenuItem,
+    SiteConfiguration,
+    Redirect,
+    HCard,
+    HCardEmail,
+    HCardUrl,
+    HCardPhoto,
+    HCardLogo,
+    HCardTel,
+    HCardCategory,
+    HCardImpp,
+    HCardKey,
+)
 from .themes import discover_themes
 from .widgets import CodeMirrorTextarea
 
@@ -17,8 +32,6 @@ class SiteConfigurationAdminForm(forms.ModelForm):
         model = SiteConfiguration
         fields = "__all__"
         widgets = {
-            "intro": CodeMirrorTextarea(),
-            "bio": CodeMirrorTextarea(),
             "robots_txt": CodeMirrorTextarea(mode="text/plain"),
         }
 
@@ -44,8 +57,7 @@ class SiteConfigurationAdmin(SingletonModelAdmin):
                 "fields": (
                     "title",
                     "tagline",
-                    "intro",
-                    "bio",
+                    "site_author",
                     "active_theme",
                 )
             },
@@ -69,7 +81,6 @@ class SiteConfigurationAdmin(SingletonModelAdmin):
 
 admin.site.register(Menu)
 admin.site.register(MenuItem)
-admin.site.register(Elsewhere)
 admin.site.register(Redirect)
 
 
@@ -85,3 +96,78 @@ class PageAdmin(ModelAdmin):
     form = PageAdminForm
     prepopulated_fields = {"slug": ("title",)}
     inlines = [AttachmentInline]
+
+
+class HCardEmailInline(admin.TabularInline):
+    model = HCardEmail
+    extra = 1
+
+
+class HCardUrlInline(admin.TabularInline):
+    model = HCardUrl
+    extra = 1
+    fields = ("value", "kind")
+
+
+class HCardPhotoInline(admin.TabularInline):
+    model = HCardPhoto
+    extra = 1
+
+
+class HCardLogoInline(admin.TabularInline):
+    model = HCardLogo
+    extra = 1
+
+
+class HCardTelInline(admin.TabularInline):
+    model = HCardTel
+    extra = 1
+
+
+class HCardCategoryInline(admin.TabularInline):
+    model = HCardCategory
+    extra = 1
+
+
+class HCardImppInline(admin.TabularInline):
+    model = HCardImpp
+    extra = 1
+
+
+class HCardKeyInline(admin.TabularInline):
+    model = HCardKey
+    extra = 1
+
+
+class HCardAdminForm(forms.ModelForm):
+    class Meta:
+        model = HCard
+        fields = "__all__"
+        widgets = {
+            "note": CodeMirrorTextarea(),
+        }
+
+
+@admin.register(HCard)
+class HCardAdmin(ModelAdmin):
+    form = HCardAdminForm
+    list_display = ("name", "user", "org_name", "updated_at")
+    search_fields = (
+        "name",
+        "given_name",
+        "family_name",
+        "nickname",
+        "emails__value",
+        "urls__value",
+    )
+    list_filter = ("user", "org_name")
+    inlines = [
+        HCardEmailInline,
+        HCardUrlInline,
+        HCardPhotoInline,
+        HCardLogoInline,
+        HCardTelInline,
+        HCardCategoryInline,
+        HCardImppInline,
+        HCardKeyInline,
+    ]

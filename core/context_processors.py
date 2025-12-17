@@ -15,9 +15,22 @@ def site_configuration(request):
     if settings.footer_menu is not None:
         footer_menu_items = settings.footer_menu.menuitem_set.all()
 
-    md = markdown.Markdown(extensions=["fenced_code"])
-    settings.intro = mark_safe(md.convert(settings.intro))
-    settings.bio = mark_safe(md.convert(settings.bio))
+    site_author_hcard = None
+    site_author_display_name = ""
+    if settings.site_author_id:
+        site_author_display_name = (
+            settings.site_author.get_full_name()
+            or settings.site_author.get_username()
+            or ""
+        )
+        site_author_hcard = settings.site_author.hcards.order_by("pk").first()
+
+    if site_author_hcard and site_author_hcard.name:
+        site_author_display_name = site_author_hcard.name
+
+    if site_author_hcard:
+        md = markdown.Markdown(extensions=["fenced_code"])
+        site_author_hcard.note_html = mark_safe(md.convert(site_author_hcard.note or ""))
 
     feed_url = None
     try:
@@ -30,6 +43,8 @@ def site_configuration(request):
         "menu_items": menu_items,
         "footer_menu_items": footer_menu_items,
         "feed_url": feed_url,
+        "site_author_hcard": site_author_hcard,
+        "site_author_display_name": site_author_display_name,
     }
 
 

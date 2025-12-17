@@ -1,4 +1,4 @@
-{% extends "base.html" %} {% block content %}
+{% extends "base.html" %} {% load author %} {% block content %}
 <article class="h-entry">
   <header>
     <a class="u-url" href="/page/{{ page.slug }}">
@@ -7,7 +7,7 @@
     <p>
       by
       <a class="p-author h-card" href="./">
-        Aaron Crowder
+        {% author_hcard_name page.author %}
       </a>
       on
       <time class="dt-published" datetime="{{ page.published_on }}">

@@ -1,3 +1,4 @@
+{% load author %}
 <article class="h-entry note">
   <div class="p-content">{{ post.html }}</div>
   {% include 'blog/tags.html' %}
@@ -7,5 +8,5 @@
     </time>
   </a>
   by
-  <a class="p-author h-card" href="#">Aaron Crowder</a>
+  <a class="p-author h-card" href="#">{% author_hcard_name post.author %}</a>
 </article>
