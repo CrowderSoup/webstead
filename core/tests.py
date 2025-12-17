@@ -1,7 +1,14 @@
+import importlib
+import tempfile
+from pathlib import Path
+from unittest import mock
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.test.utils import override_settings
 from django.urls import reverse
 from django.utils import timezone
+from django.core.files.storage import FileSystemStorage
 
 from .models import (
     Menu,
@@ -13,6 +20,8 @@ from .models import (
     HCardEmail,
     HCardUrl,
 )
+from .apps import CoreConfig
+from .themes import get_theme
 from blog.models import Post, Tag
 
 
@@ -163,3 +172,39 @@ class HCardTests(TestCase):
 
         hcard.refresh_from_db()
         self.assertIsNone(hcard.user)
+
+
+class ThemeStartupSyncTests(TestCase):
+    def test_ready_syncs_themes_from_storage(self):
+        with tempfile.TemporaryDirectory() as storage_root, tempfile.TemporaryDirectory() as themes_root:
+            storage = FileSystemStorage(location=storage_root)
+            slug = "sample"
+            storage_theme_dir = Path(storage_root) / "themes" / slug
+            (storage_theme_dir / "templates").mkdir(parents=True)
+            (storage_theme_dir / "static").mkdir(exist_ok=True)
+            (storage_theme_dir / "theme.json").write_text('{"label": "Sample"}')
+            (storage_theme_dir / "templates" / "base.html").write_text("hello")
+            (storage_theme_dir / "static" / "style.css").write_text("body{}")
+
+            with override_settings(
+                THEMES_ROOT=themes_root,
+                THEME_STORAGE_PREFIX="themes",
+                THEME_STARTUP_SYNC_ENABLED=True,
+            ), mock.patch("core.themes.get_theme_storage", return_value=storage):
+                with self.assertLogs("core.apps", level="INFO") as logs:
+                    CoreConfig("core", importlib.import_module("core")).ready()
+
+                local_theme_dir = Path(themes_root) / slug
+                self.assertTrue((local_theme_dir / "theme.json").exists())
+                self.assertTrue((local_theme_dir / "templates" / "base.html").exists())
+                theme = get_theme(slug)
+                self.assertIsNotNone(theme)
+                self.assertIn("Synced 1 theme(s) from storage on startup", "\n".join(logs.output))
+
+    def test_ready_logs_warning_when_storage_unavailable(self):
+        with override_settings(THEME_STARTUP_SYNC_ENABLED=True):
+            with mock.patch("core.apps.sync_themes_from_storage", side_effect=Exception("boom")):
+                with self.assertLogs("core.apps", level="WARNING") as logs:
+                    CoreConfig("core", importlib.import_module("core")).ready()
+
+        self.assertIn("Skipping theme sync on startup", "\n".join(logs.output))

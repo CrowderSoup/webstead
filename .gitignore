@@ -57,5 +57,8 @@ staticfiles/
 # media uploads
 uploads/
 
+# Local tickets
+/tickets
+
 # Themes
 /themes/

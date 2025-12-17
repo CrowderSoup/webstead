@@ -128,7 +128,7 @@ def download_theme_from_storage(slug: str, *, base_dir: Optional[Path] = None) -
     return found
 
 
-def sync_themes_from_storage(base_dir: Optional[Path] = None) -> list[str]:
+def sync_themes_from_storage(base_dir: Optional[Path] = None, *, raise_errors: bool = False) -> list[str]:
     """
     Sync all remote theme directories into the local themes root.
     Returns the list of slugs that were found in storage.
@@ -140,7 +140,9 @@ def sync_themes_from_storage(base_dir: Optional[Path] = None) -> list[str]:
     try:
         slugs, _files = storage.listdir(prefix)
     except Exception as exc:
-        logger.info("Theme storage not reachable, skipping sync: %s", exc)
+        if raise_errors:
+            raise
+        logger.warning("Theme storage not reachable, skipping sync: %s", exc)
         return downloaded
 
     for slug in slugs:

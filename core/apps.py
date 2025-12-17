@@ -14,10 +14,18 @@ class CoreConfig(AppConfig):
     name = 'core'
 
     def ready(self):
-        try:
-            sync_themes_from_storage()
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.info("Skipping theme sync on startup: %s", exc)
+        startup_sync_enabled = getattr(settings, "THEME_STARTUP_SYNC_ENABLED", True)
+        if startup_sync_enabled:
+            try:
+                slugs = sync_themes_from_storage(raise_errors=True)
+                if slugs:
+                    logger.info("Synced %d theme(s) from storage on startup: %s", len(slugs), ", ".join(sorted(slugs)))
+                else:
+                    logger.info("Theme storage reachable but no themes found to sync on startup.")
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("Skipping theme sync on startup: %s", exc)
+        else:  # pragma: no cover - defensive
+            logger.info("Theme startup sync disabled via THEME_STARTUP_SYNC_ENABLED.")
 
         try:
             static_dirs = list(getattr(settings, "STATICFILES_DIRS", []))
