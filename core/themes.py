@@ -174,6 +174,14 @@ def _write_theme_to_storage(slug: str, source_dir: Path) -> None:
             storage.save(storage_path, File(handle))
 
 
+def upload_theme_to_storage(slug: str, *, base_dir: Optional[Path] = None) -> None:
+    """Persist a local theme directory to the configured storage backend."""
+    theme_root = get_themes_root(base_dir) / slug
+    if not theme_root.exists() or not (theme_root / THEME_META_FILENAME).exists():
+        raise ThemeUploadError(f"Theme {slug} is not available on disk to upload.")
+    _write_theme_to_storage(slug, theme_root)
+
+
 def _write_theme_to_disk(slug: str, source_dir: Path, *, base_dir: Optional[Path] = None) -> Path:
     target_dir = get_themes_root(base_dir) / slug
     if target_dir.exists():
@@ -186,6 +194,23 @@ def _write_theme_to_disk(slug: str, source_dir: Path, *, base_dir: Optional[Path
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(item, destination)
     return target_dir
+
+
+def theme_exists_on_disk(slug: str, *, base_dir: Optional[Path] = None) -> bool:
+    """Return True when the theme directory and theme.json are present locally."""
+    theme_root = get_themes_root(base_dir) / slug
+    return theme_root.exists() and (theme_root / THEME_META_FILENAME).exists()
+
+
+def theme_exists_in_storage(slug: str) -> bool:
+    """Check whether a theme prefix exists in the configured storage backend."""
+    storage = get_theme_storage()
+    prefix = f"{get_theme_storage_prefix().rstrip('/')}/{slug}/"
+    try:
+        dirs, files = storage.listdir(prefix)
+    except FileNotFoundError:
+        return False
+    return bool(dirs or files)
 
 
 def ensure_theme_on_disk(slug: str, *, base_dir: Optional[Path] = None) -> Optional[Path]:

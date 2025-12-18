@@ -28,6 +28,7 @@ from .models import (
     ThemeInstall,
 )
 from .apps import CoreConfig
+from .theme_sync import reconcile_installed_themes
 from .themes import ThemeUploadError, get_theme, ingest_theme_archive
 from .theme_validation import validate_theme_dir
 from blog.models import Post, Tag
@@ -182,8 +183,8 @@ class HCardTests(TestCase):
         self.assertIsNone(hcard.user)
 
 
-class ThemeStartupSyncTests(TestCase):
-    def test_ready_syncs_themes_from_storage(self):
+class ThemeStartupReconcileTests(TestCase):
+    def test_ready_reconciles_themes_from_installed_records(self):
         with tempfile.TemporaryDirectory() as storage_root, tempfile.TemporaryDirectory() as themes_root:
             storage = FileSystemStorage(location=storage_root)
             slug = "sample"
@@ -193,29 +194,123 @@ class ThemeStartupSyncTests(TestCase):
             (storage_theme_dir / "theme.json").write_text('{"label": "Sample"}')
             (storage_theme_dir / "templates" / "base.html").write_text("hello")
             (storage_theme_dir / "static" / "style.css").write_text("body{}")
+            ThemeInstall.objects.create(slug=slug, source_type=ThemeInstall.SOURCE_STORAGE)
 
             with override_settings(
                 THEMES_ROOT=themes_root,
                 THEME_STORAGE_PREFIX="themes",
-                THEME_STARTUP_SYNC_ENABLED=True,
+                THEMES_STARTUP_RECONCILE=True,
             ), mock.patch("core.themes.get_theme_storage", return_value=storage):
                 with self.assertLogs("core.apps", level="INFO") as logs:
                     CoreConfig("core", importlib.import_module("core")).ready()
 
-                local_theme_dir = Path(themes_root) / slug
-                self.assertTrue((local_theme_dir / "theme.json").exists())
-                self.assertTrue((local_theme_dir / "templates" / "base.html").exists())
-                theme = get_theme(slug)
-                self.assertIsNotNone(theme)
-                self.assertIn("Synced 1 theme(s) from storage on startup", "\n".join(logs.output))
+            local_theme_dir = Path(themes_root) / slug
+            self.assertTrue((local_theme_dir / "theme.json").exists())
+            self.assertTrue((local_theme_dir / "templates" / "base.html").exists())
+            record = ThemeInstall.objects.get(slug=slug)
+            self.assertEqual(record.last_sync_status, ThemeInstall.STATUS_SUCCESS)
+            self.assertIn("Reconciled 1 theme(s) on startup", "\n".join(logs.output))
 
-    def test_ready_logs_warning_when_storage_unavailable(self):
-        with override_settings(THEME_STARTUP_SYNC_ENABLED=True):
-            with mock.patch("core.apps.sync_themes_from_storage", side_effect=Exception("boom")):
+    def test_ready_logs_warning_when_reconcile_unavailable(self):
+        with override_settings(THEMES_STARTUP_RECONCILE=True):
+            with mock.patch("core.apps.reconcile_installed_themes", side_effect=Exception("boom")):
                 with self.assertLogs("core.apps", level="WARNING") as logs:
                     CoreConfig("core", importlib.import_module("core")).ready()
 
-        self.assertIn("Skipping theme sync on startup", "\n".join(logs.output))
+        self.assertIn("Skipping theme reconciliation on startup", "\n".join(logs.output))
+
+
+class ThemeReconciliationTests(TestCase):
+    def _create_local_theme(self, root: Path, slug: str = "sample") -> Path:
+        theme_dir = root / slug
+        (theme_dir / "templates").mkdir(parents=True, exist_ok=True)
+        (theme_dir / "static").mkdir(parents=True, exist_ok=True)
+        (theme_dir / "theme.json").write_text(json.dumps({"slug": slug, "label": "Sample"}))
+        return theme_dir
+
+    def test_restores_missing_local_from_storage(self):
+        with tempfile.TemporaryDirectory() as storage_root, tempfile.TemporaryDirectory() as themes_root:
+            storage = FileSystemStorage(location=storage_root)
+            slug = "sample"
+            storage_theme_dir = Path(storage_root) / "themes" / slug
+            (storage_theme_dir / "templates").mkdir(parents=True)
+            (storage_theme_dir / "static").mkdir(exist_ok=True)
+            (storage_theme_dir / "theme.json").write_text('{"label": "Sample"}')
+            ThemeInstall.objects.create(slug=slug, source_type=ThemeInstall.SOURCE_STORAGE)
+
+            with override_settings(
+                THEMES_ROOT=themes_root,
+                THEME_STORAGE_PREFIX="themes",
+            ), mock.patch("core.themes.get_theme_storage", return_value=storage):
+                results = reconcile_installed_themes()
+
+            record = ThemeInstall.objects.get(slug=slug)
+            local_theme_dir = Path(themes_root) / slug
+            self.assertTrue((local_theme_dir / "theme.json").exists())
+            self.assertEqual(record.last_sync_status, ThemeInstall.STATUS_SUCCESS)
+            self.assertTrue(any(result.restored for result in results))
+
+    def test_warns_when_storage_missing_and_upload_disabled(self):
+        with tempfile.TemporaryDirectory() as storage_root, tempfile.TemporaryDirectory() as themes_root:
+            storage = FileSystemStorage(location=storage_root)
+            slug = "sample"
+            ThemeInstall.objects.create(slug=slug, source_type=ThemeInstall.SOURCE_UPLOAD)
+            self._create_local_theme(Path(themes_root), slug=slug)
+
+            with override_settings(
+                THEMES_ROOT=themes_root,
+                THEME_STORAGE_PREFIX="themes",
+                THEMES_STARTUP_UPLOAD_MISSING=False,
+            ), mock.patch("core.themes.get_theme_storage", return_value=storage):
+                with self.assertLogs("core.theme_sync", level="WARNING") as logs:
+                    results = reconcile_installed_themes()
+
+                record = ThemeInstall.objects.get(slug=slug)
+                self.assertEqual(record.last_sync_status, ThemeInstall.STATUS_FAILED)
+                self.assertIn("missing from storage", "\n".join(logs.output).lower())
+                self.assertFalse(any(result.restored for result in results))
+
+    def test_rehydrates_missing_git_theme(self):
+        with tempfile.TemporaryDirectory() as themes_root:
+            slug = "sample"
+            install = ThemeInstall.objects.create(
+                slug=slug,
+                source_type=ThemeInstall.SOURCE_GIT,
+                source_url="https://example.com/themes.git",
+                source_ref="main",
+            )
+
+            def _fake_rehydrate(target_install, *, base_dir=None):
+                theme_dir = Path(base_dir or themes_root) / target_install.slug
+                (theme_dir / "templates").mkdir(parents=True, exist_ok=True)
+                (theme_dir / "static").mkdir(parents=True, exist_ok=True)
+                (theme_dir / "theme.json").write_text(json.dumps({"slug": slug, "label": "Sample"}))
+                return True
+
+            with override_settings(THEMES_ROOT=themes_root):
+                with mock.patch("core.theme_sync.rehydrate_theme_from_git", side_effect=_fake_rehydrate) as rehydrate:
+                    results = reconcile_installed_themes()
+
+            install.refresh_from_db()
+            rehydrate.assert_called_once()
+            self.assertEqual(install.last_sync_status, ThemeInstall.STATUS_SUCCESS)
+            self.assertTrue(any(result.restored for result in results))
+            self.assertTrue((Path(themes_root) / slug / "theme.json").exists())
+
+    def test_storage_unavailable_sets_failure_status(self):
+        with tempfile.TemporaryDirectory() as themes_root:
+            slug = "sample"
+            ThemeInstall.objects.create(slug=slug, source_type=ThemeInstall.SOURCE_UPLOAD)
+            self._create_local_theme(Path(themes_root), slug=slug)
+
+            with override_settings(THEMES_ROOT=themes_root):
+                with mock.patch("core.theme_sync.theme_exists_in_storage", side_effect=Exception("boom")):
+                    with self.assertLogs("core.theme_sync", level="WARNING") as logs:
+                        reconcile_installed_themes()
+
+            record = ThemeInstall.objects.get(slug=slug)
+            self.assertEqual(record.last_sync_status, ThemeInstall.STATUS_FAILED)
+            self.assertIn("storage unavailable", "\n".join(logs.output).lower())
 
 
 class ThemeValidationTests(TestCase):

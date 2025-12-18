@@ -3,6 +3,7 @@ import logging
 from django.apps import AppConfig
 from django.conf import settings
 
+from core.theme_sync import reconcile_installed_themes
 from core.themes import get_theme_static_dirs, sync_themes_from_storage
 
 
@@ -14,8 +15,26 @@ class CoreConfig(AppConfig):
     name = 'core'
 
     def ready(self):
+        reconcile_enabled = getattr(settings, "THEMES_STARTUP_RECONCILE", True)
         startup_sync_enabled = getattr(settings, "THEME_STARTUP_SYNC_ENABLED", True)
-        if startup_sync_enabled:
+
+        if reconcile_enabled:
+            try:
+                from core.models import ThemeInstall
+
+                results = reconcile_installed_themes()
+                restored = [result.slug for result in results if result.restored]
+                failures = [result.slug for result in results if result.status == ThemeInstall.STATUS_FAILED]
+
+                if restored:
+                    logger.info("Reconciled %d theme(s) on startup: %s", len(restored), ", ".join(sorted(restored)))
+                if failures:
+                    logger.warning(
+                        "Theme reconciliation completed with failures for: %s", ", ".join(sorted(set(failures)))
+                    )
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("Skipping theme reconciliation on startup: %s", exc)
+        elif startup_sync_enabled:
             try:
                 slugs = sync_themes_from_storage(raise_errors=True)
                 if slugs:

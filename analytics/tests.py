@@ -35,14 +35,16 @@ class AnalyticsMiddlewareTests(TestCase):
         self.assertEqual(response.status_code, 204)
         self.assertSetEqual(set(post.tags.values_list("tag", flat=True)), {"added"})
 
+    @patch("analytics.middleware.Visit.objects.create")
     @patch("analytics.middleware.enqueue_user_agent_lookup")
-    def test_user_agent_lookup_is_enqueued_off_thread(self, enqueue_lookup):
+    def test_user_agent_lookup_is_enqueued_off_thread(self, enqueue_lookup, create_visit):
         user_agent = "Test User Agent"
+        create_visit.return_value.id = 123
+        create_visit.return_value.user_agent = user_agent
+
         response = self.client.get("/missing-path/", HTTP_USER_AGENT=user_agent)
 
         self.assertEqual(response.status_code, 404)
         enqueue_lookup.assert_called_once()
-
-        visit_id, enqueued_user_agent = enqueue_lookup.call_args[0]
-        self.assertTrue(Visit.objects.filter(id=visit_id, user_agent=user_agent).exists())
-        self.assertEqual(enqueued_user_agent, user_agent)
+        self.assertEqual(enqueue_lookup.call_args[0], (123, user_agent))
+        create_visit.assert_called_once()

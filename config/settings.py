@@ -24,6 +24,8 @@ SECRET_KEY = env("SECRET_KEY")
 THEMES_ROOT = env("THEMES_ROOT", default=str(BASE_DIR / "themes"))
 THEME_STORAGE_PREFIX = env("THEME_STORAGE_PREFIX", default="themes")
 THEME_STARTUP_SYNC_ENABLED = env.bool("THEME_STARTUP_SYNC_ENABLED", default=True)
+THEMES_STARTUP_RECONCILE = env.bool("THEMES_STARTUP_RECONCILE", default=True)
+THEMES_STARTUP_UPLOAD_MISSING = env.bool("THEMES_STARTUP_UPLOAD_MISSING", default=False)
 
 # ---------------------------------------------------------------------------
 # Hosts and security
