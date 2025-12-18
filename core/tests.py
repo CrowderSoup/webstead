@@ -29,7 +29,7 @@ from .models import (
 )
 from .apps import CoreConfig
 from .theme_sync import reconcile_installed_themes
-from .themes import ThemeUploadError, get_theme, ingest_theme_archive
+from .themes import ThemeUploadError, get_theme, ingest_theme_archive, theme_exists_in_storage
 from .theme_validation import validate_theme_dir
 from blog.models import Post, Tag
 
@@ -311,6 +311,23 @@ class ThemeReconciliationTests(TestCase):
             record = ThemeInstall.objects.get(slug=slug)
             self.assertEqual(record.last_sync_status, ThemeInstall.STATUS_FAILED)
             self.assertIn("storage unavailable", "\n".join(logs.output).lower())
+
+
+class ThemeStorageTests(TestCase):
+    def test_theme_exists_in_storage_handles_missing_key_error(self):
+        class MissingKeyError(Exception):
+            def __init__(self, message="NoSuchKey"):
+                super().__init__(message)
+                self.response = {"Error": {"Code": "NoSuchKey"}}
+
+        class FakeStorage:
+            def listdir(self, prefix):
+                raise MissingKeyError("An error occurred (NoSuchKey) when calling the ListObjects operation: None")
+
+        with mock.patch("core.themes.get_theme_storage", return_value=FakeStorage()):
+            exists = theme_exists_in_storage("sample")
+
+        self.assertFalse(exists)
 
 
 class ThemeValidationTests(TestCase):

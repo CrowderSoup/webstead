@@ -104,6 +104,19 @@ def _iter_storage_files(storage: Storage, prefix: str) -> Iterable[str]:
         yield from _iter_storage_files(storage, next_prefix)
 
 
+def _is_missing_storage_key_error(exc: Exception) -> bool:
+    """
+    Return True when an exception from storage represents a missing key/prefix.
+    Handles S3 ClientError NoSuchKey responses which don't raise FileNotFoundError.
+    """
+    response = getattr(exc, "response", None)
+    if isinstance(response, dict):
+        code = response.get("Error", {}).get("Code")
+        if code == "NoSuchKey":
+            return True
+    return "NoSuchKey" in str(exc)
+
+
 def download_theme_from_storage(slug: str, *, base_dir: Optional[Path] = None) -> bool:
     """Pull a theme from storage onto the local filesystem."""
     storage = get_theme_storage()
@@ -210,6 +223,10 @@ def theme_exists_in_storage(slug: str) -> bool:
         dirs, files = storage.listdir(prefix)
     except FileNotFoundError:
         return False
+    except Exception as exc:
+        if _is_missing_storage_key_error(exc):
+            return False
+        raise
     return bool(dirs or files)
 
 
