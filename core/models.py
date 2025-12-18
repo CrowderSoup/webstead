@@ -71,6 +71,50 @@ class Redirect(models.Model):
         return f"{self.from_path} ➡️ {self.to_path}"
 
 
+class ThemeInstallManager(models.Manager):
+    def expected_slugs(self) -> list[str]:
+        """Return the ordered list of slugs this site expects to exist."""
+        return list(self.get_queryset().order_by("slug").values_list("slug", flat=True))
+
+
+class ThemeInstall(models.Model):
+    SOURCE_UPLOAD = "upload"
+    SOURCE_GIT = "git"
+    SOURCE_STORAGE = "storage"
+    SOURCE_CHOICES = [
+        (SOURCE_UPLOAD, "Upload"),
+        (SOURCE_GIT, "Git"),
+        (SOURCE_STORAGE, "Storage"),
+    ]
+
+    STATUS_PENDING = "pending"
+    STATUS_SUCCESS = "success"
+    STATUS_FAILED = "failed"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_SUCCESS, "Success"),
+        (STATUS_FAILED, "Failed"),
+    ]
+
+    slug = models.SlugField(max_length=255, unique=True)
+    source_type = models.CharField(max_length=16, choices=SOURCE_CHOICES)
+    source_url = models.URLField(max_length=2000, blank=True, default="")
+    source_ref = models.CharField(max_length=255, blank=True, default="")
+    version = models.CharField(max_length=255, blank=True, default="")
+    checksum = models.CharField(max_length=255, blank=True, default="")
+    installed_at = models.DateTimeField(auto_now_add=True)
+    last_synced_at = models.DateTimeField(null=True, blank=True)
+    last_sync_status = models.CharField(max_length=16, choices=STATUS_CHOICES, blank=True, default="")
+
+    objects = ThemeInstallManager()
+
+    class Meta:
+        ordering = ("slug",)
+
+    def __str__(self) -> str:
+        return self.slug
+
+
 class SiteConfiguration(SingletonModel):
     title = models.CharField(max_length=255, default="", blank=True)
     tagline = models.CharField(max_length=1024, default="", blank=True)

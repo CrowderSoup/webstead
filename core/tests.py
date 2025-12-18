@@ -1,9 +1,14 @@
 import importlib
+import io
+import json
 import tempfile
+import zipfile
+from datetime import timedelta
 from pathlib import Path
 from unittest import mock
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.test.utils import override_settings
 from django.urls import reverse
@@ -19,9 +24,10 @@ from .models import (
     HCard,
     HCardEmail,
     HCardUrl,
+    ThemeInstall,
 )
 from .apps import CoreConfig
-from .themes import get_theme
+from .themes import get_theme, ingest_theme_archive
 from blog.models import Post, Tag
 
 
@@ -208,3 +214,73 @@ class ThemeStartupSyncTests(TestCase):
                     CoreConfig("core", importlib.import_module("core")).ready()
 
         self.assertIn("Skipping theme sync on startup", "\n".join(logs.output))
+
+
+class ThemeInstallTests(TestCase):
+    def _theme_archive(self, *, slug: str = "sample", version: str = "1.0") -> SimpleUploadedFile:
+        buffer = io.BytesIO()
+        metadata = {"label": "Sample"}
+        if slug:
+            metadata["slug"] = slug
+        if version:
+            metadata["version"] = version
+        with zipfile.ZipFile(buffer, "w") as archive:
+            archive.writestr("theme.json", json.dumps(metadata))
+            archive.writestr("templates/base.html", "hello")
+            archive.writestr("static/style.css", "body{}")
+        buffer.seek(0)
+        return SimpleUploadedFile("theme.zip", buffer.read(), content_type="application/zip")
+
+    def test_upload_creates_theme_install_record(self):
+        with tempfile.TemporaryDirectory() as storage_root, tempfile.TemporaryDirectory() as themes_root:
+            storage = FileSystemStorage(location=storage_root)
+            upload = self._theme_archive()
+
+            with override_settings(THEMES_ROOT=themes_root, THEME_STORAGE_PREFIX="themes"):
+                with mock.patch("core.themes.get_theme_storage", return_value=storage):
+                    theme = ingest_theme_archive(upload)
+
+        record = ThemeInstall.objects.get(slug="sample")
+
+        self.assertEqual(record.source_type, ThemeInstall.SOURCE_UPLOAD)
+        self.assertEqual(record.version, "1.0")
+        self.assertEqual(record.last_sync_status, ThemeInstall.STATUS_SUCCESS)
+        self.assertIsNotNone(record.last_synced_at)
+        self.assertEqual(theme.slug, record.slug)
+
+    def test_upload_updates_existing_install_record(self):
+        with tempfile.TemporaryDirectory() as storage_root, tempfile.TemporaryDirectory() as themes_root:
+            storage = FileSystemStorage(location=storage_root)
+            previous = ThemeInstall.objects.create(
+                slug="sample",
+                source_type=ThemeInstall.SOURCE_GIT,
+                source_url="https://example.com/themes.git",
+                source_ref="main",
+                version="0.1",
+                checksum="abc123",
+                last_synced_at=timezone.now() - timedelta(days=1),
+                last_sync_status=ThemeInstall.STATUS_FAILED,
+            )
+            installed_at = previous.installed_at
+            upload = self._theme_archive(version="2.0")
+
+            with override_settings(THEMES_ROOT=themes_root, THEME_STORAGE_PREFIX="themes"):
+                with mock.patch("core.themes.get_theme_storage", return_value=storage):
+                    ingest_theme_archive(upload)
+
+        previous.refresh_from_db()
+
+        self.assertEqual(previous.installed_at, installed_at)
+        self.assertEqual(previous.source_type, ThemeInstall.SOURCE_UPLOAD)
+        self.assertEqual(previous.source_url, "")
+        self.assertEqual(previous.source_ref, "")
+        self.assertEqual(previous.version, "2.0")
+        self.assertEqual(previous.checksum, "")
+        self.assertEqual(previous.last_sync_status, ThemeInstall.STATUS_SUCCESS)
+        self.assertGreater(previous.last_synced_at, installed_at)
+
+    def test_expected_slugs_returns_sorted_list(self):
+        ThemeInstall.objects.create(slug="beta", source_type=ThemeInstall.SOURCE_UPLOAD)
+        ThemeInstall.objects.create(slug="alpha", source_type=ThemeInstall.SOURCE_UPLOAD)
+
+        self.assertEqual(ThemeInstall.objects.expected_slugs(), ["alpha", "beta"])

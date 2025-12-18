@@ -20,6 +20,7 @@ from .models import (
     HCardCategory,
     HCardImpp,
     HCardKey,
+    ThemeInstall,
 )
 from .themes import discover_themes
 from .widgets import CodeMirrorTextarea
@@ -171,3 +172,10 @@ class HCardAdmin(ModelAdmin):
         HCardImppInline,
         HCardKeyInline,
     ]
+
+
+@admin.register(ThemeInstall)
+class ThemeInstallAdmin(ModelAdmin):
+    list_display = ("slug", "source_type", "version", "last_synced_at", "last_sync_status")
+    search_fields = ("slug", "source_url")
+    list_filter = ("source_type", "last_sync_status")

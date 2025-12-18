@@ -12,6 +12,7 @@ from typing import Iterable, Optional, Sequence
 from django.core.files import File
 from django.core.files.base import ContentFile
 from django.core.files.storage import Storage, default_storage
+from django.utils import timezone
 from django.utils.text import slugify
 
 THEME_META_FILENAME = "theme.json"
@@ -275,6 +276,23 @@ def ingest_theme_archive(uploaded_file, *, base_dir: Optional[Path] = None) -> T
         _write_theme_to_storage(slug, extracted_dir)
         local_path = _write_theme_to_disk(slug, extracted_dir, base_dir=base_dir)
         logger.info("Uploaded theme %s written to %s and storage", slug, local_path)
+        try:
+            from core.models import ThemeInstall
+
+            ThemeInstall.objects.update_or_create(
+                slug=slug,
+                defaults={
+                    "source_type": ThemeInstall.SOURCE_UPLOAD,
+                    "source_url": "",
+                    "source_ref": "",
+                    "version": metadata.get("version") or "",
+                    "checksum": "",
+                    "last_synced_at": timezone.now(),
+                    "last_sync_status": ThemeInstall.STATUS_SUCCESS,
+                },
+            )
+        except Exception:
+            logger.warning("Unable to persist theme install record for %s", slug, exc_info=True)
     finally:
         try:
             tmp_path.unlink(missing_ok=True)
