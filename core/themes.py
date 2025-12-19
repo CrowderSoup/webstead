@@ -152,15 +152,12 @@ def sync_themes_from_storage(base_dir: Optional[Path] = None, *, raise_errors: b
     prefix = get_theme_storage_prefix().rstrip("/") + "/"
     downloaded: list[str] = []
 
-    print(f"the prefix is {prefix}")
-    print(storage)
-
     try:
         slugs, _files = storage.listdir(prefix)
     except Exception as exc:
         if raise_errors:
             raise
-        logger.warning("Theme storage not reachable for %s, skipping sync: %s", prefix, exc)
+        logger.warning(f"Theme storage not reachable for {prefix}, skipping sync: {exc}")
         return downloaded
 
     for slug in slugs:
@@ -179,7 +176,8 @@ def _write_theme_to_storage(slug: str, source_dir: Path) -> None:
         for key in _iter_storage_files(storage, prefix + "/"):
             storage.delete(key)
     except Exception as exc:
-        logger.warning("Unable to clear existing theme %s from storage: %s", slug, exc)
+        if not (isinstance(exc, FileNotFoundError) or _is_missing_storage_key_error(exc)):
+            logger.warning("Unable to clear existing theme %s from storage: %s", slug, exc)
 
     for path in source_dir.rglob("*"):
         if path.is_dir():

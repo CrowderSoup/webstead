@@ -27,10 +27,11 @@ from .models import (
     HCardUrl,
     ThemeInstall,
 )
-from .apps import CoreConfig
+from .apps import CoreConfig, _reset_startup_state, _run_startup_reconcile
 from .theme_sync import reconcile_installed_themes
 from .themes import ThemeUploadError, get_theme, ingest_theme_archive, theme_exists_in_storage
 from .theme_validation import validate_theme_dir
+from .test_utils import build_test_theme
 from blog.models import Post, Tag
 
 
@@ -184,16 +185,15 @@ class HCardTests(TestCase):
 
 
 class ThemeStartupReconcileTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        _reset_startup_state()
+
     def test_ready_reconciles_themes_from_installed_records(self):
         with tempfile.TemporaryDirectory() as storage_root, tempfile.TemporaryDirectory() as themes_root:
             storage = FileSystemStorage(location=storage_root)
             slug = "sample"
-            storage_theme_dir = Path(storage_root) / "themes" / slug
-            (storage_theme_dir / "templates").mkdir(parents=True)
-            (storage_theme_dir / "static").mkdir(exist_ok=True)
-            (storage_theme_dir / "theme.json").write_text('{"label": "Sample"}')
-            (storage_theme_dir / "templates" / "base.html").write_text("hello")
-            (storage_theme_dir / "static" / "style.css").write_text("body{}")
+            build_test_theme(slug, Path(storage_root) / "themes")
             ThemeInstall.objects.create(slug=slug, source_type=ThemeInstall.SOURCE_STORAGE)
 
             with override_settings(
@@ -203,6 +203,7 @@ class ThemeStartupReconcileTests(TestCase):
             ), mock.patch("core.themes.get_theme_storage", return_value=storage):
                 with self.assertLogs("core.apps", level="INFO") as logs:
                     CoreConfig("core", importlib.import_module("core")).ready()
+                    _run_startup_reconcile()
 
             local_theme_dir = Path(themes_root) / slug
             self.assertTrue((local_theme_dir / "theme.json").exists())
@@ -216,26 +217,17 @@ class ThemeStartupReconcileTests(TestCase):
             with mock.patch("core.apps.reconcile_installed_themes", side_effect=Exception("boom")):
                 with self.assertLogs("core.apps", level="WARNING") as logs:
                     CoreConfig("core", importlib.import_module("core")).ready()
+                    _run_startup_reconcile()
 
         self.assertIn("Skipping theme reconciliation on startup", "\n".join(logs.output))
 
 
 class ThemeReconciliationTests(TestCase):
-    def _create_local_theme(self, root: Path, slug: str = "sample") -> Path:
-        theme_dir = root / slug
-        (theme_dir / "templates").mkdir(parents=True, exist_ok=True)
-        (theme_dir / "static").mkdir(parents=True, exist_ok=True)
-        (theme_dir / "theme.json").write_text(json.dumps({"slug": slug, "label": "Sample"}))
-        return theme_dir
-
     def test_restores_missing_local_from_storage(self):
         with tempfile.TemporaryDirectory() as storage_root, tempfile.TemporaryDirectory() as themes_root:
             storage = FileSystemStorage(location=storage_root)
             slug = "sample"
-            storage_theme_dir = Path(storage_root) / "themes" / slug
-            (storage_theme_dir / "templates").mkdir(parents=True)
-            (storage_theme_dir / "static").mkdir(exist_ok=True)
-            (storage_theme_dir / "theme.json").write_text('{"label": "Sample"}')
+            build_test_theme(slug, Path(storage_root) / "themes")
             ThemeInstall.objects.create(slug=slug, source_type=ThemeInstall.SOURCE_STORAGE)
 
             with override_settings(
@@ -255,7 +247,7 @@ class ThemeReconciliationTests(TestCase):
             storage = FileSystemStorage(location=storage_root)
             slug = "sample"
             ThemeInstall.objects.create(slug=slug, source_type=ThemeInstall.SOURCE_UPLOAD)
-            self._create_local_theme(Path(themes_root), slug=slug)
+            build_test_theme(slug, Path(themes_root))
 
             with override_settings(
                 THEMES_ROOT=themes_root,
@@ -281,10 +273,7 @@ class ThemeReconciliationTests(TestCase):
             )
 
             def _fake_rehydrate(target_install, *, base_dir=None):
-                theme_dir = Path(base_dir or themes_root) / target_install.slug
-                (theme_dir / "templates").mkdir(parents=True, exist_ok=True)
-                (theme_dir / "static").mkdir(parents=True, exist_ok=True)
-                (theme_dir / "theme.json").write_text(json.dumps({"slug": slug, "label": "Sample"}))
+                build_test_theme(target_install.slug, base_dir or themes_root)
                 return True
 
             with override_settings(THEMES_ROOT=themes_root):
@@ -301,7 +290,7 @@ class ThemeReconciliationTests(TestCase):
         with tempfile.TemporaryDirectory() as themes_root:
             slug = "sample"
             ThemeInstall.objects.create(slug=slug, source_type=ThemeInstall.SOURCE_UPLOAD)
-            self._create_local_theme(Path(themes_root), slug=slug)
+            build_test_theme(slug, Path(themes_root))
 
             with override_settings(THEMES_ROOT=themes_root):
                 with mock.patch("core.theme_sync.theme_exists_in_storage", side_effect=Exception("boom")):
@@ -352,7 +341,7 @@ class ThemeValidationTests(TestCase):
 
     def test_validate_theme_dir_passes_valid_theme(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
-            theme_dir = self._build_theme_dir(Path(tmp_dir))
+            theme_dir = build_test_theme("sample", tmp_dir)
 
             result = validate_theme_dir(theme_dir)
 
@@ -393,6 +382,30 @@ class ThemeValidationTests(TestCase):
         self.assertIn("missing_meta", codes)
         self.assertIn("missing_templates", codes)
         self.assertIn("missing_static", codes)
+
+    def test_fixture_theme_is_valid(self):
+        fixture_dir = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "themes" / "example"
+
+        result = validate_theme_dir(fixture_dir)
+
+        self.assertTrue(result.is_valid)
+
+
+class ThemeTestHelperTests(TestCase):
+    def test_build_test_theme_creates_minimal_structure(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            theme_dir = build_test_theme(
+                "sample",
+                tmp_dir,
+                extra_files=[("templates/post.html", "<article></article>")],
+            )
+
+            result = validate_theme_dir(theme_dir)
+            metadata = json.loads((theme_dir / "theme.json").read_text())
+
+            self.assertTrue(result.is_valid)
+            self.assertEqual(metadata["slug"], "sample")
+            self.assertTrue((theme_dir / "templates" / "post.html").exists())
 
 
 class ThemeInstallTests(TestCase):
