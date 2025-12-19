@@ -152,12 +152,15 @@ def sync_themes_from_storage(base_dir: Optional[Path] = None, *, raise_errors: b
     prefix = get_theme_storage_prefix().rstrip("/") + "/"
     downloaded: list[str] = []
 
+    print(f"the prefix is {prefix}")
+    print(storage)
+
     try:
         slugs, _files = storage.listdir(prefix)
     except Exception as exc:
         if raise_errors:
             raise
-        logger.warning("Theme storage not reachable, skipping sync: %s", exc)
+        logger.warning("Theme storage not reachable for %s, skipping sync: %s", prefix, exc)
         return downloaded
 
     for slug in slugs:
