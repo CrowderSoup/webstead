@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 class ReconcileResult:
     slug: str
     status: str
+    action: str
     detail: str = ""
     restored: bool = False
 
@@ -63,14 +64,20 @@ def rehydrate_theme_from_git(install: ThemeInstall, *, base_dir: Optional[Path] 
         shutil.rmtree(clone_dir, ignore_errors=True)
 
 
-def _mark_status(install: ThemeInstall, status: str) -> None:
+def _mark_status(install: ThemeInstall, status: str, *, dry_run: bool = False) -> None:
+    if dry_run:
+        return
     install.last_synced_at = timezone.now()
     install.last_sync_status = status
     install.save(update_fields=["last_synced_at", "last_sync_status"])
 
 
 def _reconcile_install(
-    install: ThemeInstall, *, base_dir: Optional[Path] = None, upload_missing_to_storage: bool = False
+    install: ThemeInstall,
+    *,
+    base_dir: Optional[Path] = None,
+    upload_missing_to_storage: bool = False,
+    dry_run: bool = False,
 ) -> ReconcileResult:
     from core.models import ThemeInstall
 
@@ -88,64 +95,112 @@ def _reconcile_install(
     local_exists = theme_exists_on_disk(slug, base_dir=base_dir)
     if not local_exists:
         if install.source_type == ThemeInstall.SOURCE_GIT:
+            if dry_run:
+                if not install.source_url:
+                    _mark_status(install, ThemeInstall.STATUS_FAILED, dry_run=dry_run)
+                    return ReconcileResult(
+                        slug,
+                        ThemeInstall.STATUS_FAILED,
+                        "failed",
+                        "missing git source_url",
+                    )
+                return ReconcileResult(
+                    slug,
+                    ThemeInstall.STATUS_SUCCESS,
+                    "downloaded",
+                    "would restore from git",
+                    restored=True,
+                )
             try:
                 restored = rehydrate_theme_from_git(install, base_dir=base_dir)
             except Exception as exc:
                 logger.warning("Failed to restore git theme %s: %s", slug, exc)
-                _mark_status(install, ThemeInstall.STATUS_FAILED)
-                return ReconcileResult(slug, ThemeInstall.STATUS_FAILED, "git restore failed")
+                _mark_status(install, ThemeInstall.STATUS_FAILED, dry_run=dry_run)
+                return ReconcileResult(slug, ThemeInstall.STATUS_FAILED, "failed", "git restore failed")
 
             if restored:
-                _mark_status(install, ThemeInstall.STATUS_SUCCESS)
-                return ReconcileResult(slug, ThemeInstall.STATUS_SUCCESS, "restored from git", restored=True)
+                _mark_status(install, ThemeInstall.STATUS_SUCCESS, dry_run=dry_run)
+                return ReconcileResult(
+                    slug,
+                    ThemeInstall.STATUS_SUCCESS,
+                    "downloaded",
+                    "restored from git",
+                    restored=True,
+                )
 
         if storage_available and storage_exists:
+            if dry_run:
+                return ReconcileResult(
+                    slug,
+                    ThemeInstall.STATUS_SUCCESS,
+                    "downloaded",
+                    "would restore from storage",
+                    restored=True,
+                )
             try:
                 restored = download_theme_from_storage(slug, base_dir=base_dir)
             except Exception as exc:  # pragma: no cover - defensive
                 logger.warning("Unable to download missing theme %s from storage: %s", slug, exc)
-                _mark_status(install, ThemeInstall.STATUS_FAILED)
-                return ReconcileResult(slug, ThemeInstall.STATUS_FAILED, "storage restore failed")
+                _mark_status(install, ThemeInstall.STATUS_FAILED, dry_run=dry_run)
+                return ReconcileResult(slug, ThemeInstall.STATUS_FAILED, "failed", "storage restore failed")
 
             if restored:
-                _mark_status(install, ThemeInstall.STATUS_SUCCESS)
-                return ReconcileResult(slug, ThemeInstall.STATUS_SUCCESS, "restored from storage", restored=True)
+                _mark_status(install, ThemeInstall.STATUS_SUCCESS, dry_run=dry_run)
+                return ReconcileResult(
+                    slug,
+                    ThemeInstall.STATUS_SUCCESS,
+                    "downloaded",
+                    "restored from storage",
+                    restored=True,
+                )
 
         if not storage_available:
             logger.warning("Theme %s missing locally and storage unavailable: %s", slug, storage_error)
-            _mark_status(install, ThemeInstall.STATUS_FAILED)
-            return ReconcileResult(slug, ThemeInstall.STATUS_FAILED, "storage unavailable")
+            _mark_status(install, ThemeInstall.STATUS_FAILED, dry_run=dry_run)
+            return ReconcileResult(slug, ThemeInstall.STATUS_FAILED, "failed", "storage unavailable")
 
         logger.warning("Theme %s missing locally and no source available to restore.", slug)
-        _mark_status(install, ThemeInstall.STATUS_FAILED)
-        return ReconcileResult(slug, ThemeInstall.STATUS_FAILED, "missing locally")
+        _mark_status(install, ThemeInstall.STATUS_FAILED, dry_run=dry_run)
+        return ReconcileResult(slug, ThemeInstall.STATUS_FAILED, "failed", "missing locally")
 
     if storage_available:
         if not storage_exists:
             if upload_missing_to_storage:
+                if dry_run:
+                    return ReconcileResult(
+                        slug,
+                        ThemeInstall.STATUS_SUCCESS,
+                        "uploaded",
+                        "would upload to storage",
+                    )
                 try:
                     upload_theme_to_storage(slug, base_dir=base_dir)
-                    _mark_status(install, ThemeInstall.STATUS_SUCCESS)
-                    return ReconcileResult(slug, ThemeInstall.STATUS_SUCCESS, "uploaded to storage")
+                    _mark_status(install, ThemeInstall.STATUS_SUCCESS, dry_run=dry_run)
+                    return ReconcileResult(slug, ThemeInstall.STATUS_SUCCESS, "uploaded", "uploaded to storage")
                 except Exception as exc:
                     logger.warning("Unable to upload theme %s to storage: %s", slug, exc)
-                    _mark_status(install, ThemeInstall.STATUS_FAILED)
-                    return ReconcileResult(slug, ThemeInstall.STATUS_FAILED, "upload to storage failed")
+                    _mark_status(install, ThemeInstall.STATUS_FAILED, dry_run=dry_run)
+                    return ReconcileResult(slug, ThemeInstall.STATUS_FAILED, "failed", "upload to storage failed")
 
             logger.warning("Theme %s missing from storage; upload disabled.", slug)
-            _mark_status(install, ThemeInstall.STATUS_FAILED)
-            return ReconcileResult(slug, ThemeInstall.STATUS_FAILED, "missing in storage")
+            _mark_status(install, ThemeInstall.STATUS_FAILED, dry_run=dry_run)
+            return ReconcileResult(slug, ThemeInstall.STATUS_FAILED, "failed", "missing in storage")
     else:
         logger.warning("Storage unavailable while reconciling theme %s: %s", slug, storage_error)
-        _mark_status(install, ThemeInstall.STATUS_FAILED)
-        return ReconcileResult(slug, ThemeInstall.STATUS_FAILED, "storage unavailable")
+        _mark_status(install, ThemeInstall.STATUS_FAILED, dry_run=dry_run)
+        return ReconcileResult(slug, ThemeInstall.STATUS_FAILED, "failed", "storage unavailable")
 
-    _mark_status(install, ThemeInstall.STATUS_SUCCESS)
-    return ReconcileResult(slug, ThemeInstall.STATUS_SUCCESS, "already in sync")
+    _mark_status(install, ThemeInstall.STATUS_SUCCESS, dry_run=dry_run)
+    return ReconcileResult(slug, ThemeInstall.STATUS_SUCCESS, "skipped", "already in sync")
 
 
 def reconcile_installed_themes(
-    *, base_dir: Optional[Path] = None, upload_missing_to_storage: Optional[bool] = None
+    *,
+    base_dir: Optional[Path] = None,
+    upload_missing_to_storage: Optional[bool] = None,
+    dry_run: bool = False,
+    installs: Optional[list[ThemeInstall]] = None,
+    slugs: Optional[list[str]] = None,
 ) -> list[ReconcileResult]:
     """
     Use installed theme records as the source of truth and reconcile local + storage copies.
@@ -161,16 +216,40 @@ def reconcile_installed_themes(
     results: list[ReconcileResult] = []
     restored_any = False
 
-    for install in ThemeInstall.objects.all():
+    if installs is None:
+        installs_query = ThemeInstall.objects.all()
+        if slugs:
+            installs_query = installs_query.filter(slug__in=slugs)
+        installs = list(installs_query.order_by("slug"))
+
+    for install in installs:
         result = _reconcile_install(
             install,
             base_dir=base_dir,
             upload_missing_to_storage=upload_missing,
+            dry_run=dry_run,
         )
-        restored_any = restored_any or result.restored
+        _log_reconcile_result(result, dry_run=dry_run)
+        if not dry_run:
+            restored_any = restored_any or result.restored
         results.append(result)
 
-    if restored_any:
+    if restored_any and not dry_run:
         clear_template_caches()
 
     return results
+
+
+def _log_reconcile_result(result: ReconcileResult, *, dry_run: bool = False) -> None:
+    from core.models import ThemeInstall
+
+    level = logging.WARNING if result.status == ThemeInstall.STATUS_FAILED else logging.INFO
+    logger.log(
+        level,
+        "theme_reconcile slug=%s action=%s status=%s detail=%s dry_run=%s",
+        result.slug,
+        result.action,
+        result.status,
+        result.detail,
+        dry_run,
+    )

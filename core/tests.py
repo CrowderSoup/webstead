@@ -9,7 +9,10 @@ from typing import Optional
 from unittest import mock
 
 from django.contrib.auth import get_user_model
+from django.contrib.admin import helpers
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import TestCase
 from django.test.utils import override_settings
 from django.urls import reverse
@@ -300,6 +303,72 @@ class ThemeReconciliationTests(TestCase):
             record = ThemeInstall.objects.get(slug=slug)
             self.assertEqual(record.last_sync_status, ThemeInstall.STATUS_FAILED)
             self.assertIn("storage unavailable", "\n".join(logs.output).lower())
+
+    def test_dry_run_reports_without_writing(self):
+        with tempfile.TemporaryDirectory() as storage_root, tempfile.TemporaryDirectory() as themes_root:
+            storage = FileSystemStorage(location=storage_root)
+            slug = "sample"
+            build_test_theme(slug, Path(storage_root) / "themes")
+            install = ThemeInstall.objects.create(slug=slug, source_type=ThemeInstall.SOURCE_STORAGE)
+
+            with override_settings(
+                THEMES_ROOT=themes_root,
+                THEME_STORAGE_PREFIX="themes",
+            ), mock.patch("core.themes.get_theme_storage", return_value=storage):
+                results = reconcile_installed_themes(dry_run=True)
+
+            install.refresh_from_db()
+            self.assertEqual(install.last_sync_status, "")
+            self.assertFalse((Path(themes_root) / slug / "theme.json").exists())
+            self.assertEqual(results[0].action, "downloaded")
+
+
+class ThemeReconcileCommandTests(TestCase):
+    def test_strict_mode_raises_on_failure(self):
+        with tempfile.TemporaryDirectory() as themes_root:
+            slug = "sample"
+            ThemeInstall.objects.create(slug=slug, source_type=ThemeInstall.SOURCE_UPLOAD)
+            build_test_theme(slug, Path(themes_root))
+
+            with override_settings(THEMES_ROOT=themes_root):
+                with mock.patch("core.theme_sync.theme_exists_in_storage", return_value=False):
+                    with self.assertRaises(CommandError):
+                        call_command("theme_reconcile", "--strict")
+
+
+class ThemeReconcileAdminActionTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        user = get_user_model().objects.create_superuser(
+            username="admin",
+            email="admin@example.com",
+            password="password",
+        )
+        self.client.force_login(user)
+
+    def test_admin_action_reconciles_selected_themes(self):
+        install = ThemeInstall.objects.create(slug="sample", source_type=ThemeInstall.SOURCE_STORAGE)
+        url = reverse("admin:core_themeinstall_changelist")
+        post_data = {
+            "action": "reconcile_installs",
+            helpers.ACTION_CHECKBOX_NAME: [str(install.pk)],
+            "index": 0,
+        }
+
+        response = self.client.post(url, post_data)
+        self.assertTemplateUsed(response, "admin/core/themeinstall/reconcile_confirmation.html")
+
+        with mock.patch("core.admin.reconcile_installed_themes") as reconcile:
+            reconcile.return_value = []
+            response = self.client.post(
+                url,
+                {**post_data, "apply": "1"},
+                follow=True,
+            )
+
+        reconcile.assert_called_once()
+        messages = [message.message for message in response.context["messages"]]
+        self.assertTrue(any("Reconciled" in message for message in messages))
 
 
 class ThemeStorageTests(TestCase):
