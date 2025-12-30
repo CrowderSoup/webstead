@@ -10,8 +10,9 @@ from django.urls import reverse
 from django.utils import timezone
 
 from blog.models import Post
+from core.models import HCard, HCardPhoto
 from core.test_utils import build_test_theme
-from files.models import File
+from files.models import Attachment, File
 
 
 class SiteAdminAccessTests(TestCase):
@@ -173,6 +174,150 @@ class SiteAdminProfilePhotoTests(TestCase):
                 payload = json.loads(response.content.decode())
                 self.assertEqual(payload["status"], "deleted")
                 self.assertFalse(File.objects.filter(id=asset_id).exists())
+
+    def test_profile_delete_photo_blocks_in_use_asset(self):
+        self.client.force_login(self.staff)
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                upload = SimpleUploadedFile(
+                    "profile.jpg",
+                    b"fake-image-data",
+                    content_type="image/jpeg",
+                )
+                asset = File.objects.create(
+                    kind=File.IMAGE,
+                    file=upload,
+                    owner=self.staff,
+                )
+                hcard = HCard.objects.create(user=self.staff, name="Editor")
+                HCardPhoto.objects.create(
+                    hcard=hcard,
+                    asset=asset,
+                    value=asset.file.url,
+                    sort_order=0,
+                )
+
+                response = self.client.post(
+                    reverse("site_admin:profile_delete_photo"),
+                    {"id": asset.id},
+                )
+
+                self.assertEqual(response.status_code, 409)
+                payload = json.loads(response.content.decode())
+                self.assertEqual(
+                    payload["error"],
+                    "File is still used in a profile photo.",
+                )
+                self.assertTrue(File.objects.filter(id=asset.id).exists())
+
+
+class SiteAdminFileDeleteTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.staff = get_user_model().objects.create_user(
+            username="editor",
+            email="editor@example.com",
+            password="password",
+            is_staff=True,
+        )
+
+    def test_delete_post_photo_blocks_in_use_asset(self):
+        self.client.force_login(self.staff)
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                upload = SimpleUploadedFile(
+                    "post.jpg",
+                    b"fake-image-data",
+                    content_type="image/jpeg",
+                )
+                asset = File.objects.create(
+                    kind=File.IMAGE,
+                    file=upload,
+                    owner=self.staff,
+                )
+                post = Post.objects.create(
+                    title="Post",
+                    slug="post",
+                    kind=Post.ARTICLE,
+                    content="Hello",
+                    published_on=timezone.now(),
+                )
+                Attachment.objects.create(
+                    content_object=post,
+                    asset=asset,
+                    role="photo",
+                )
+
+                response = self.client.post(
+                    reverse("site_admin:post_delete_photo"),
+                    {"id": asset.id},
+                )
+
+                self.assertEqual(response.status_code, 409)
+                payload = json.loads(response.content.decode())
+                self.assertEqual(
+                    payload["error"],
+                    "File is still attached to content.",
+                )
+                self.assertTrue(File.objects.filter(id=asset.id).exists())
+
+    def test_post_edit_removes_attachment_without_deleting_shared_file(self):
+        self.client.force_login(self.staff)
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                upload = SimpleUploadedFile(
+                    "post.jpg",
+                    b"fake-image-data",
+                    content_type="image/jpeg",
+                )
+                asset = File.objects.create(
+                    kind=File.IMAGE,
+                    file=upload,
+                    owner=self.staff,
+                )
+                post_a = Post.objects.create(
+                    title="Post A",
+                    slug="post-a",
+                    kind=Post.ARTICLE,
+                    content="Hello A",
+                    published_on=timezone.now(),
+                )
+                post_b = Post.objects.create(
+                    title="Post B",
+                    slug="post-b",
+                    kind=Post.ARTICLE,
+                    content="Hello B",
+                    published_on=timezone.now(),
+                )
+                Attachment.objects.create(
+                    content_object=post_a,
+                    asset=asset,
+                    role="photo",
+                )
+                Attachment.objects.create(
+                    content_object=post_b,
+                    asset=asset,
+                    role="photo",
+                )
+
+                response = self.client.post(
+                    reverse("site_admin:post_edit", kwargs={"slug": post_a.slug}),
+                    {
+                        "title": post_a.title,
+                        "slug": post_a.slug,
+                        "kind": post_a.kind,
+                        "content": post_a.content,
+                        "published_on": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                        "existing_remove_ids": [str(asset.id)],
+                    },
+                )
+
+                self.assertEqual(response.status_code, 302)
+                self.assertTrue(File.objects.filter(id=asset.id).exists())
+                self.assertEqual(
+                    Attachment.objects.filter(asset=asset).count(),
+                    1,
+                )
 
 
 class SiteAdminThemeFileTests(TestCase):

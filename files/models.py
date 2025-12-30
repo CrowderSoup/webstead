@@ -27,6 +27,16 @@ class File(models.Model):
     def __str__(self):
         return os.path.basename(self.file.name)
 
+    def is_in_use(self):
+        return self.attachments.exists() or self.hcard_photos.exists()
+
+    def in_use_message(self):
+        if self.attachments.exists():
+            return "File is still attached to content."
+        if self.hcard_photos.exists():
+            return "File is still used in a profile photo."
+        return ""
+
 class Attachment(models.Model):
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveIntegerField()

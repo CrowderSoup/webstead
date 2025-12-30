@@ -159,6 +159,13 @@ def _build_profile_photo_items(
     return photo_items
 
 
+def _file_in_use_response(asset):
+    message = asset.in_use_message()
+    if message:
+        return JsonResponse({"error": message}, status=409)
+    return None
+
+
 def _sync_profile_photos(
     *,
     request,
@@ -944,14 +951,16 @@ def post_edit(request, slug=None):
                 for attachment in list(
                     saved_post.attachments.select_related("asset")
                 ):
-                    asset_id = attachment.asset.id
+                    asset = attachment.asset
+                    asset_id = asset.id
                     if asset_id in existing_remove_ids:
-                        attachment.asset.delete()
+                        attachment.delete()
+                        if not asset.is_in_use():
+                            asset.delete()
                         continue
                     meta = existing_meta.get(asset_id)
                     if not meta:
                         continue
-                    asset = attachment.asset
                     asset.alt_text = meta.get("alt", "")
                     asset.caption = meta.get("caption", "")
                     asset.save(update_fields=["alt_text", "caption"])
@@ -1484,6 +1493,10 @@ def profile_delete_photo(request):
     except File.DoesNotExist:
         return JsonResponse({"error": "Not found."}, status=404)
 
+    in_use_response = _file_in_use_response(asset)
+    if in_use_response:
+        return in_use_response
+
     asset.delete()
     return JsonResponse({"status": "deleted"})
 
@@ -1578,6 +1591,10 @@ def delete_post_photo(request):
         asset = File.objects.get(id=asset_id, owner=request.user)
     except File.DoesNotExist:
         return JsonResponse({"error": "Not found."}, status=404)
+
+    in_use_response = _file_in_use_response(asset)
+    if in_use_response:
+        return in_use_response
 
     asset.delete()
     return JsonResponse({"status": "deleted"})
