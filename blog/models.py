@@ -51,8 +51,12 @@ class Post(models.Model):
         return self.title
 
     def save(self, *args, **kwargs):
+        timestamp = int(timezone.now().timestamp())
+
+        if not self.slug:
+            self.slug = slugify(f"{self.title}-{timestamp}") if self.title else slugify(f"{self.kind}-{timestamp}")
+
         if not self.title:
-            timestamp = int(timezone.now().timestamp())
             base_titles = {
                 Post.NOTE: "Note",
                 Post.PHOTO: "Photo",
@@ -61,17 +65,6 @@ class Post(models.Model):
                 Post.REPLY: "Reply",
             }
             self.title = f"{base_titles.get(self.kind, 'Article')}: {timestamp}"
-
-        if not self.slug:
-            timestamp = int(timezone.now().timestamp())
-            base = f"{self.kind}-{timestamp}"
-            slug = base
-            i = 2
-            # Ensure uniqueness without race conditions
-            while Post.objects.filter(slug=slug).exclude(pk=self.pk).exists():
-                slug = f"{base}-{i}"
-                i += 1
-            self.slug = slug
 
         super().save(*args, **kwargs)
 

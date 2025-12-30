@@ -51,8 +51,8 @@ class PostModelTests(TestCase):
         post = Post(title="Hello World", content="text")
         post.save()
 
-        self.assertTrue(post.slug.startswith(f"{post.kind}-"))
-        suffix = post.slug.split(f"{post.kind}-", 1)[1]
+        self.assertTrue(post.slug.startswith("hello-world-"))
+        suffix = post.slug.split("hello-world-", 1)[1]
         self.assertTrue(suffix.isdigit())
 
     def test_slug_defaults_to_page_when_title_blank(self):
