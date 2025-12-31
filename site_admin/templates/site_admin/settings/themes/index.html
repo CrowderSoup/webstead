@@ -79,6 +79,53 @@
       </section>
 
       <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+        <h2 class="text-lg font-semibold">Install from git</h2>
+        <p class="mt-1 text-sm text-[color:var(--admin-muted)]">
+          Provide a public git repository URL and optional ref to install a theme.
+        </p>
+        <form method="post" class="mt-4 space-y-4">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="install_git" />
+          {{ git_form.non_field_errors }}
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]" for="{{ git_form.git_url.id_for_label }}">
+              {{ git_form.git_url.label }}
+            </label>
+            {{ git_form.git_url.errors }}
+            {{ git_form.git_url }}
+            {% if git_form.git_url.help_text %}
+              <p class="mt-2 text-xs text-[color:var(--admin-muted)]">{{ git_form.git_url.help_text }}</p>
+            {% endif %}
+          </div>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]" for="{{ git_form.slug.id_for_label }}">
+                {{ git_form.slug.label }}
+              </label>
+              {{ git_form.slug.errors }}
+              {{ git_form.slug }}
+            </div>
+            <div>
+              <label class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]" for="{{ git_form.ref.id_for_label }}">
+                {{ git_form.ref.label }}
+              </label>
+              {{ git_form.ref.errors }}
+              {{ git_form.ref }}
+              {% if git_form.ref.help_text %}
+                <p class="mt-2 text-xs text-[color:var(--admin-muted)]">{{ git_form.ref.help_text }}</p>
+              {% endif %}
+            </div>
+          </div>
+          <button
+            type="submit"
+            class="rounded-full bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+          >
+            Install theme
+          </button>
+        </form>
+      </section>
+
+      <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 class="text-lg font-semibold">Available themes</h2>

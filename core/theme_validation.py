@@ -124,7 +124,10 @@ def validate_theme_dir(
             )
         )
     if not slug:
-        slug = slugify(theme_dir.name)
+        if expected_slug:
+            slug = slugify(expected_slug)
+        else:
+            slug = slugify(theme_dir.name)
     dir_slug = slugify(theme_dir.name)
     if require_directory_slug and metadata_slug and dir_slug and slug != dir_slug:
         errors.append(
@@ -138,7 +141,7 @@ def validate_theme_dir(
 
     if expected_slug:
         expected = slugify(expected_slug)
-        if slug != expected:
+        if metadata_slug and slug != expected:
             errors.append(
                 ThemeValidationIssue(
                     code="slug_mismatch_expected",
@@ -146,7 +149,7 @@ def validate_theme_dir(
                     message=f"Theme slug '{slug}' does not match expected slug '{expected}'.",
                 )
             )
-            slug = expected
+        slug = expected
 
     version = metadata.get("version") if metadata else None
     if version is not None and not isinstance(version, str):

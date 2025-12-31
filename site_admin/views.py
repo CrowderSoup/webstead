@@ -41,6 +41,7 @@ from core.themes import (
     delete_theme_path,
     discover_themes,
     ingest_theme_archive,
+    install_theme_from_git,
     list_theme_directories,
     list_theme_files,
     read_theme_file,
@@ -61,6 +62,7 @@ from .forms import (
     PostForm,
     RedirectForm,
     SiteConfigurationForm,
+    ThemeGitInstallForm,
     ThemeFileForm,
     ThemeUploadForm,
 )
@@ -1076,6 +1078,7 @@ def theme_settings(request):
         return guard
 
     upload_form = ThemeUploadForm(request.POST or None, request.FILES or None)
+    git_form = ThemeGitInstallForm(request.POST or None)
     if request.method == "POST" and request.POST.get("action") == "check_theme_storage":
         restored = []
         failures = []
@@ -1113,6 +1116,24 @@ def theme_settings(request):
             messages.info(request, "No themes found in installs or storage to sync.")
 
         return redirect("site_admin:theme_settings")
+
+    if request.method == "POST" and request.POST.get("action") == "install_git":
+        if git_form.is_valid():
+            try:
+                theme = install_theme_from_git(
+                    git_form.cleaned_data["git_url"],
+                    git_form.cleaned_data["slug"],
+                    ref=git_form.cleaned_data.get("ref") or "",
+                )
+                messages.success(
+                    request,
+                    f"Theme '{theme.label}' ({theme.slug}) installed from git and synced to storage.",
+                )
+                return redirect("site_admin:theme_settings")
+            except ThemeUploadError as exc:
+                git_form.add_error(None, exc)
+            except Exception as exc:  # pragma: no cover - defensive
+                git_form.add_error(None, f"Unexpected error: {exc}")
 
     if request.method == "POST" and upload_form.is_valid():
         try:
@@ -1168,9 +1189,10 @@ def theme_settings(request):
 
     return render(
         request,
-        "site_admin/settings/themes/index.html",
+            "site_admin/settings/themes/index.html",
         {
             "upload_form": upload_form,
+            "git_form": git_form,
             "themes": themes,
             "theme_rows": theme_rows,
             "active_theme_slug": active_theme_slug,

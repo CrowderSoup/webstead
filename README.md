@@ -33,11 +33,11 @@ How it works:
 - Themes are discovered at runtime; adding a new folder under `themes/` makes it show up in the **Site Configuration** admin dropdown immediately.
 - Selecting an active theme in admin clears template caches so overrides apply without restarting the app.
 - Templates first resolve from `themes/<slug>/templates/` (matching the same relative paths as the default templates) and automatically fall back to the built-in app templates when missing.
-- Static assets are collected from each theme under the `themes/<slug>/` prefix, so you can reference them with `{% static theme.static_prefix|add:"css/theme.css" %}`. Run `collectstatic` after adding new theme assets.
+- Static assets are collected from each theme under the `themes/<slug>/static/` prefix, so you can reference them with `{% static theme.static_prefix|add:"css/theme.css" %}`. Run `collectstatic` after adding new theme assets.
 - The `theme` context processor exposes:
   - `theme.slug` / `theme.label`
   - `theme.template_prefix` (e.g., `themes/cool-theme/templates/`) for `{% include theme.template_prefix|add:"blog/post.html" ignore missing %}`
-  - `theme.static_prefix` (e.g., `themes/cool-theme/`) for building asset URLs
+  - `theme.static_prefix` (e.g., `themes/cool-theme/static/`) for building asset URLs
   - `theme.metadata` for any extra fields defined in `theme.json`
 
 To create a new theme:

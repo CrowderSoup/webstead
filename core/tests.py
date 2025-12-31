@@ -1,6 +1,8 @@
 import importlib
 import io
 import json
+import os
+import subprocess
 import tempfile
 import zipfile
 from datetime import timedelta
@@ -12,9 +14,11 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.template import Context, Template
 from django.test import TestCase
 from django.test.utils import override_settings
 from django.urls import reverse
+from django.templatetags.static import static
 from django.utils import timezone
 from django.core.files.storage import FileSystemStorage
 
@@ -31,7 +35,7 @@ from .models import (
 )
 from .apps import CoreConfig, _reset_startup_state, _run_startup_reconcile
 from .theme_sync import reconcile_installed_themes
-from .themes import ThemeUploadError, get_theme, ingest_theme_archive, theme_exists_in_storage
+from .themes import ThemeUploadError, get_theme, ingest_theme_archive, install_theme_from_git, theme_exists_in_storage
 from .theme_validation import validate_theme_dir
 from .test_utils import build_test_theme
 from blog.models import Post, Tag
@@ -462,6 +466,19 @@ class ThemeValidationTests(TestCase):
         self.assertIn("missing_templates", codes)
         self.assertIn("missing_static", codes)
 
+    def test_validate_theme_dir_uses_expected_slug_when_metadata_slug_missing(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            theme_dir = self._build_theme_dir(
+                Path(tmp_dir),
+                slug="tmp6j1c8bag",
+                metadata={"label": "Sample", "version": "1.0"},
+            )
+
+            result = validate_theme_dir(theme_dir, expected_slug="webstead-default-2026")
+
+        self.assertTrue(result.is_valid)
+        self.assertEqual(result.slug, "webstead-default-2026")
+
     def test_fixture_theme_is_valid(self):
         fixture_dir = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "themes" / "example"
 
@@ -501,6 +518,36 @@ class ThemeInstallTests(TestCase):
             archive.writestr("static/style.css", "body{}")
         buffer.seek(0)
         return SimpleUploadedFile("theme.zip", buffer.read(), content_type="application/zip")
+
+    def _git_env(self):
+        env = os.environ.copy()
+        env.update(
+            {
+                "GIT_AUTHOR_NAME": "Test",
+                "GIT_AUTHOR_EMAIL": "test@example.com",
+                "GIT_COMMITTER_NAME": "Test",
+                "GIT_COMMITTER_EMAIL": "test@example.com",
+            }
+        )
+        return env
+
+    def _git(self, repo_dir: Path, *args: str) -> str:
+        result = subprocess.run(
+            ["git", "-C", str(repo_dir), *args],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=self._git_env(),
+        )
+        return result.stdout.strip()
+
+    def _init_theme_repo(self, repo_dir: Path, slug: str, *, version: str) -> Path:
+        theme_dir = build_test_theme(slug, repo_dir, metadata={"version": version})
+        self._git(repo_dir, "init")
+        self._git(repo_dir, "add", ".")
+        self._git(repo_dir, "commit", "-m", f"init {version}")
+        return theme_dir
 
     def test_upload_rejects_invalid_theme(self):
         with tempfile.TemporaryDirectory() as storage_root, tempfile.TemporaryDirectory() as themes_root:
@@ -569,8 +616,92 @@ class ThemeInstallTests(TestCase):
         self.assertEqual(previous.last_sync_status, ThemeInstall.STATUS_SUCCESS)
         self.assertGreater(previous.last_synced_at, installed_at)
 
+    def test_install_theme_from_git_creates_install_record(self):
+        with tempfile.TemporaryDirectory() as storage_root, tempfile.TemporaryDirectory() as themes_root:
+            storage = FileSystemStorage(location=storage_root)
+            with tempfile.TemporaryDirectory() as repo_root:
+                repo_dir = Path(repo_root)
+                self._init_theme_repo(repo_dir, "sample", version="1.0")
+
+                with override_settings(THEMES_ROOT=themes_root, THEME_STORAGE_PREFIX="themes"):
+                    with mock.patch("core.themes.get_theme_storage", return_value=storage):
+                        theme = install_theme_from_git(str(repo_dir), "sample")
+
+        record = ThemeInstall.objects.get(slug="sample")
+
+        self.assertEqual(record.source_type, ThemeInstall.SOURCE_GIT)
+        self.assertEqual(record.source_url, str(repo_dir))
+        self.assertEqual(record.version, "1.0")
+        self.assertEqual(record.last_sync_status, ThemeInstall.STATUS_SUCCESS)
+        self.assertIsNotNone(record.last_synced_at)
+        self.assertEqual(theme.slug, record.slug)
+
+    def test_install_theme_from_git_checks_out_ref(self):
+        with tempfile.TemporaryDirectory() as storage_root, tempfile.TemporaryDirectory() as themes_root:
+            storage = FileSystemStorage(location=storage_root)
+            with tempfile.TemporaryDirectory() as repo_root:
+                repo_dir = Path(repo_root)
+                theme_dir = self._init_theme_repo(repo_dir, "sample", version="1.0")
+                base_meta = json.loads((theme_dir / "theme.json").read_text())
+                base_meta["version"] = "2.0"
+                (theme_dir / "theme.json").write_text(json.dumps(base_meta))
+                self._git(repo_dir, "add", "sample/theme.json")
+                self._git(repo_dir, "commit", "-m", "bump version")
+                first_commit = self._git(repo_dir, "rev-parse", "HEAD~1")
+
+                with override_settings(THEMES_ROOT=themes_root, THEME_STORAGE_PREFIX="themes"):
+                    with mock.patch("core.themes.get_theme_storage", return_value=storage):
+                        theme = install_theme_from_git(str(repo_dir), "sample", ref=first_commit)
+
+        self.assertEqual(theme.version, "1.0")
+
+    def test_install_theme_from_git_rejects_invalid_repo(self):
+        with tempfile.TemporaryDirectory() as storage_root, tempfile.TemporaryDirectory() as themes_root:
+            storage = FileSystemStorage(location=storage_root)
+            with tempfile.TemporaryDirectory() as repo_root:
+                repo_dir = Path(repo_root)
+                repo_dir.mkdir(parents=True, exist_ok=True)
+                self._git(repo_dir, "init")
+                (repo_dir / "README.md").write_text("no theme here")
+                self._git(repo_dir, "add", "README.md")
+                self._git(repo_dir, "commit", "-m", "docs")
+
+                with override_settings(THEMES_ROOT=themes_root, THEME_STORAGE_PREFIX="themes"):
+                    with mock.patch("core.themes.get_theme_storage", return_value=storage):
+                        with self.assertRaises(ThemeUploadError):
+                            install_theme_from_git(str(repo_dir), "sample")
+
+        self.assertFalse((Path(themes_root) / "sample").exists())
+        self.assertFalse(ThemeInstall.objects.filter(slug="sample").exists())
+
     def test_expected_slugs_returns_sorted_list(self):
         ThemeInstall.objects.create(slug="beta", source_type=ThemeInstall.SOURCE_UPLOAD)
         ThemeInstall.objects.create(slug="alpha", source_type=ThemeInstall.SOURCE_UPLOAD)
 
         self.assertEqual(ThemeInstall.objects.expected_slugs(), ["alpha", "beta"])
+
+
+class ThemeStaticTemplateTagTests(TestCase):
+    def test_theme_static_uses_context_active_theme(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            build_test_theme("sample", tmp_dir)
+            with override_settings(THEMES_ROOT=tmp_dir):
+                theme = get_theme("sample", base_dir=tmp_dir)
+                template = Template("{% load theme %}{% theme_static 'css/theme.css' %}")
+
+                rendered = template.render(Context({"active_theme": theme}))
+
+        self.assertEqual(rendered, static("themes/sample/static/css/theme.css"))
+
+    def test_theme_static_falls_back_to_site_configuration(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            build_test_theme("sample", tmp_dir)
+            with override_settings(THEMES_ROOT=tmp_dir):
+                settings = SiteConfiguration.get_solo()
+                settings.active_theme = "sample"
+                settings.save()
+                template = Template("{% load theme %}{% theme_static 'css/theme.css' %}")
+
+                rendered = template.render(Context({}))
+
+        self.assertEqual(rendered, static("themes/sample/static/css/theme.css"))

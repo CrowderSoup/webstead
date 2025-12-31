@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import logging
 import shutil
+import subprocess
 import tempfile
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlsplit
 from typing import Iterable, Optional, Sequence
 
 from django.core.files import File
@@ -50,13 +52,13 @@ class ThemeDefinition:
 
     @property
     def static_prefix(self) -> str:
-        return f"{THEMES_DIRNAME}/{self.slug}/"
+        return f"{THEMES_DIRNAME}/{self.slug}/static/"
 
 
 def get_themes_root(base_dir: Optional[Path] = None) -> Path:
     """Return the absolute themes directory."""
     if base_dir is not None:
-        return Path(base_dir) / THEMES_DIRNAME
+        return Path(base_dir)
 
     try:
         from django.conf import settings  # type: ignore
@@ -264,6 +266,66 @@ def _find_theme_root(extracted_path: Path) -> Path:
     raise ThemeUploadError("Archive must contain theme.json at the root of the theme.")
 
 
+def _find_git_theme_root(clone_dir: Path, slug: str) -> Path:
+    """Return the theme root for a cloned git repository."""
+    top_level_meta = clone_dir / THEME_META_FILENAME
+    if top_level_meta.exists():
+        return clone_dir
+
+    if slug:
+        nested = clone_dir / THEMES_DIRNAME / slug
+        if (nested / THEME_META_FILENAME).exists():
+            return nested
+
+    return _find_theme_root(clone_dir)
+
+
+def _is_public_git_url(url: str) -> bool:
+    parsed = urlsplit(url)
+    if not parsed.scheme:
+        if url.startswith(("/", "./", "../")):
+            return True
+        return "@" not in url
+    if parsed.scheme in ("http", "https"):
+        return parsed.username is None and parsed.password is None and "@" not in parsed.netloc
+    if parsed.scheme == "file":
+        return True
+    return False
+
+
+def _ensure_git_url_allowed(url: str) -> None:
+    try:
+        from django.conf import settings  # type: ignore
+
+        allow_private = getattr(settings, "THEME_GIT_ALLOW_PRIVATE", False)
+    except Exception:
+        allow_private = False
+
+    if allow_private:
+        return
+
+    if not _is_public_git_url(url):
+        raise ThemeUploadError(
+            "Private git URLs are disabled. Set THEME_GIT_ALLOW_PRIVATE to enable them."
+        )
+
+
+def _run_git(command: list[str], *, error_message: str) -> None:
+    try:
+        subprocess.run(
+            command,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or exc.stdout or "").strip()
+        if detail:
+            raise ThemeUploadError(f"{error_message}: {detail}") from exc
+        raise ThemeUploadError(error_message) from exc
+
+
 def _extract_theme_archive(uploaded_path: Path) -> tuple[str, Path, dict]:
     with tempfile.TemporaryDirectory() as tmp_dir:
         destination = Path(tmp_dir)
@@ -347,6 +409,85 @@ def ingest_theme_archive(uploaded_file, *, base_dir: Optional[Path] = None) -> T
     if theme:
         return theme
     raise ThemeUploadError("Theme upload completed but could not be discovered locally.")
+
+
+def install_theme_from_git(
+    git_url: str,
+    slug: str,
+    *,
+    ref: str = "",
+    base_dir: Optional[Path] = None,
+) -> ThemeDefinition:
+    """
+    Clone a theme from a git repository, validate, and persist to storage + disk.
+    """
+    if not git_url:
+        raise ThemeUploadError("Git URL is required to install a theme.")
+
+    normalized_slug = slugify(slug or "")
+    if not normalized_slug:
+        raise ThemeUploadError("Theme slug is required to install a theme.")
+
+    _ensure_git_url_allowed(git_url)
+
+    clone_dir = Path(tempfile.mkdtemp())
+    try:
+        _run_git(
+            ["git", "clone", "--depth", "1", git_url, str(clone_dir)],
+            error_message="Unable to clone theme repository",
+        )
+        if ref:
+            _run_git(
+                ["git", "-C", str(clone_dir), "fetch", "--depth", "1", "origin", ref],
+                error_message=f"Unable to fetch ref '{ref}'",
+            )
+            _run_git(
+                ["git", "-C", str(clone_dir), "checkout", ref],
+                error_message=f"Unable to checkout ref '{ref}'",
+            )
+
+        theme_root = _find_git_theme_root(clone_dir, normalized_slug)
+        validation = validate_theme_dir(
+            theme_root,
+            expected_slug=normalized_slug,
+            meta_filename=THEME_META_FILENAME,
+            require_directory_slug=theme_root != clone_dir,
+        )
+        if not validation.is_valid:
+            raise ThemeUploadError(validation.summary(detailed=True))
+        metadata = validation.metadata
+
+        _write_theme_to_storage(normalized_slug, theme_root)
+        local_path = _write_theme_to_disk(normalized_slug, theme_root, base_dir=base_dir)
+        logger.info("Git theme %s written to %s and storage", normalized_slug, local_path)
+
+        try:
+            from core.models import ThemeInstall
+
+            ThemeInstall.objects.update_or_create(
+                slug=normalized_slug,
+                defaults={
+                    "source_type": ThemeInstall.SOURCE_GIT,
+                    "source_url": git_url,
+                    "source_ref": ref or "",
+                    "version": metadata.get("version") or "",
+                    "checksum": "",
+                    "last_synced_at": timezone.now(),
+                    "last_sync_status": ThemeInstall.STATUS_SUCCESS,
+                },
+            )
+        except Exception:
+            logger.warning(
+                "Unable to persist theme install record for %s", normalized_slug, exc_info=True
+            )
+
+        clear_template_caches()
+        theme = get_theme(normalized_slug, base_dir=base_dir)
+        if theme:
+            return theme
+        raise ThemeUploadError("Theme install completed but could not be discovered locally.")
+    finally:
+        shutil.rmtree(clone_dir, ignore_errors=True)
 
 
 def list_theme_files(slug: str, *, base_dir: Optional[Path] = None, suffixes: Optional[Sequence[str]] = None) -> list[str]:
@@ -543,7 +684,7 @@ def get_theme_static_dirs(base_dir: Optional[Path] = None, *, sync: bool = False
     for theme in discover_themes(base_dir=base_dir):
         static_dir = theme.static_path
         if static_dir.exists():
-            yield (f"{THEMES_DIRNAME}/{theme.slug}", static_dir)
+            yield (f"{THEMES_DIRNAME}/{theme.slug}/static", static_dir)
 
 
 def get_active_theme_slug() -> str:

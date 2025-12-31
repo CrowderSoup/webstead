@@ -289,6 +289,27 @@ class ThemeUploadForm(forms.Form):
         return file
 
 
+class ThemeGitInstallForm(forms.Form):
+    git_url = forms.URLField(
+        label="Git URL",
+        help_text="Provide a public git URL (https) for the theme repository.",
+    )
+    slug = forms.SlugField(label="Theme slug")
+    ref = forms.CharField(
+        label="Git ref",
+        required=False,
+        help_text="Optional branch, tag, or commit to checkout.",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name in ("git_url", "slug", "ref"):
+            self.fields[name].widget.attrs.setdefault(
+                "class",
+                "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+            )
+
+
 class ThemeFileForm(forms.Form):
     theme = forms.ChoiceField(label="Theme")
     path = forms.ChoiceField(label="File")

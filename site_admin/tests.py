@@ -1,6 +1,7 @@
 import json
 import tempfile
 from pathlib import Path
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -11,6 +12,7 @@ from django.utils import timezone
 
 from blog.models import Post
 from core.models import HCard, HCardPhoto
+from core.themes import ThemeDefinition
 from core.test_utils import build_test_theme
 from files.models import Attachment, File
 
@@ -350,3 +352,45 @@ class SiteAdminThemeFileTests(TestCase):
                 self.assertFalse(
                     (Path(themes_root) / "demo" / "templates" / "bad.exe").exists()
                 )
+
+
+class SiteAdminThemeInstallTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.staff = get_user_model().objects.create_user(
+            username="theme-admin",
+            email="theme-admin@example.com",
+            password="password",
+            is_staff=True,
+        )
+
+    def test_theme_install_from_git_validates_form(self):
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            reverse("site_admin:theme_settings"),
+            {
+                "action": "install_git",
+                "git_url": "not-a-url",
+                "slug": "demo",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["git_form"].errors)
+
+    def test_theme_install_from_git_invokes_helper(self):
+        self.client.force_login(self.staff)
+        theme = ThemeDefinition(slug="demo", path=Path("/tmp/demo"), label="Demo")
+        with mock.patch("site_admin.views.install_theme_from_git", return_value=theme) as install:
+            response = self.client.post(
+                reverse("site_admin:theme_settings"),
+                {
+                    "action": "install_git",
+                    "git_url": "https://example.com/demo.git",
+                    "ref": "main",
+                    "slug": "demo",
+                },
+            )
+
+        install.assert_called_once_with("https://example.com/demo.git", "demo", ref="main")
+        self.assertEqual(response.status_code, 302)
