@@ -385,6 +385,16 @@
             .filter(Boolean);
         };
 
+        const isGitPath = (path) => {
+          if (!path) return false;
+          return (
+            path === ".git" ||
+            path.startsWith(".git/") ||
+            path.includes("/.git/") ||
+            path.endsWith("/.git")
+          );
+        };
+
         const buildTree = (files, dirs) => {
           const root = {name: "", type: "dir", path: "", children: new Map(), expanded: true};
 
@@ -525,12 +535,16 @@
         let fileChoices = [];
         let dirChoices = [];
         try {
-          fileChoices = normalizePaths(JSON.parse(fileChoicesData.textContent || "[]"));
+          fileChoices = normalizePaths(JSON.parse(fileChoicesData.textContent || "[]")).filter(
+            (path) => !isGitPath(path)
+          );
         } catch (_) {
           fileChoices = [];
         }
         try {
-          dirChoices = normalizePaths(JSON.parse(dirChoicesData?.textContent || "[]"));
+          dirChoices = normalizePaths(JSON.parse(dirChoicesData?.textContent || "[]")).filter(
+            (path) => !isGitPath(path)
+          );
         } catch (_) {
           dirChoices = [];
         }

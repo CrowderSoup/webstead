@@ -243,14 +243,25 @@ def _theme_choices():
     return [(theme.slug, theme.label) for theme in discover_themes()]
 
 
+def _is_git_path(path):
+    if not path:
+        return False
+    return ".git" in path.split("/")
+
+
 def _build_theme_selection(request, slug_param):
     themes = discover_themes()
     default_slug = slug_param or request.GET.get("theme") or (themes[0].slug if themes else "")
     selected_slug = request.POST.get("theme", default_slug)
 
     files = list_theme_files(selected_slug, suffixes=ALLOWED_SUFFIXES) if selected_slug else []
+    files = [path for path in files if not _is_git_path(path)]
     default_path = request.GET.get("path") or (files[0] if files else None)
+    if _is_git_path(default_path):
+        default_path = None
     selected_path = request.POST.get("path") or default_path
+    if _is_git_path(selected_path):
+        selected_path = None
 
     content = ""
     if selected_slug and selected_path:
@@ -1224,7 +1235,9 @@ def theme_file_edit(request, slug):
     file_choices = (
         list_theme_files(selection.slug, suffixes=ALLOWED_SUFFIXES) if selection.slug else []
     )
+    file_choices = [path for path in file_choices if not _is_git_path(path)]
     directory_choices = list_theme_directories(selection.slug) if selection.slug else []
+    directory_choices = [path for path in directory_choices if not _is_git_path(path)]
     path_choices = sorted(set(file_choices + directory_choices))
 
     form_initial = {"theme": selection.slug, "path": selection.path, "content": selection.content}
