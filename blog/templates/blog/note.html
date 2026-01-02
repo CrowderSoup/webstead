@@ -1,12 +1,18 @@
 {% load author %}
-<article class="h-entry note">
-  <div class="p-content">{{ post.html }}</div>
+
+<article class="h-entry entry-note">
+  <div class="p-content">
+    {{ post.html }}
+  </div>
+
   {% include 'blog/tags.html' %}
-  <a href="/blog/post/{{ post.slug }}">
-    <time class="dt-published" datetime="{{ page.published_on }}">
-      {{ post.published_on|date:"Y-m-d" }}
-    </time>
-  </a>
-  by
-  <a class="p-author h-card" href="#">{% author_hcard_name post.author %}</a>
+
+  <div class="entry-meta">
+    <a class="u-url" href="/blog/post/{{ post.slug }}">
+      <time class="dt-published" datetime="{{ post.published_on }}">
+        {{ post.published_on|date:"Y-m-d" }}
+      </time>
+    </a>
+    <span class="p-author h-card">{% author_hcard_name post.author %}</span>
+  </div>
 </article>

@@ -1,13 +1,8 @@
 {% extends "base.html" %}
-{% block title %} / Not Found{% endblock %}
+
 {% block content %}
-<section class="error-page">
-  <div class="error-code">404</div>
-  <h2>Page not found</h2>
-  <p>The page you’re looking for has moved, been unpublished, or never existed. Try heading back or exploring the latest posts.</p>
-  <div class="error-actions">
-    <a href="/">Back to home</a>
-    <a href="{% url 'posts' %}">View the blog</a>
-  </div>
-</section>
+  <section class="error-page">
+    <h1>404 - Not found</h1>
+    <p>This page could not be found.</p>
+  </section>
 {% endblock %}

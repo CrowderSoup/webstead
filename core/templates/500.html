@@ -1,13 +1,8 @@
 {% extends "base.html" %}
-{% block title %} / Error{% endblock %}
+
 {% block content %}
-<section class="error-page">
-  <div class="error-code">500</div>
-  <h2>Something went wrong</h2>
-  <p>We hit an unexpected error on our end. Please try again in a bit, or head back to the blog.</p>
-  <div class="error-actions">
-    <a href="/">Back to home</a>
-    <a href="{% url 'posts' %}">View the blog</a>
-  </div>
-</section>
+  <section class="error-page">
+    <h1>500 - Server error</h1>
+    <p>Something went wrong on our side.</p>
+  </section>
 {% endblock %}

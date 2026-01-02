@@ -1,37 +1,51 @@
-{% extends "base.html" %} {% block content %}
-<h1>Tag: {{ tag }}</h1>
-<div class="h-feed">
-  {% for post in posts %}
-    <!-- Post Kind Detection -->
-    {% if post.kind == 'note' %}
-      <!-- Show Note Template -->
-      {% include 'blog/note.html' %} 
-    {% elif post.kind == 'photo' %}
-      <!-- Show Photo Template -->
-      {% include 'blog/photo.html' %} 
-    {% elif post.kind == 'activity' %}
-      <!-- Show Activity Summary Template -->
-      {% include 'blog/article-summary.html' %} 
-    {% else %}
-      <!-- Show Article Template -->
-      {% include 'blog/article-summary.html' %} 
-    {% endif %}
-  {% endfor %}
-</div>
+{% extends "base.html" %}
+{% load static %}
 
-<nav class="paginator">
-  {% if posts.has_previous %}
-  <span class="pagination-item">
-    <a href="?page={{ posts.previous_page_number }}">&larr; Newer</a>
-  </span>
+{% block head %}
+  {{ block.super }}
+  {% if has_activity %}
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+      defer
+    ></script>
+    <script src="{% static 'js/activity_map.js' %}" defer></script>
   {% endif %}
-  <span class="pagination-item-spacer">
-    Page {{ posts.number }} of {{ posts.paginator.num_pages }}
-  </span>
-  {% if posts.has_next %}
-  <span class="pagination-item">
-    <a href="?page={{ posts.next_page_number }}">Older &rarr;</a>
-  </span>
-  {% endif %}
-</nav>
+{% endblock %}
+
+{% block content %}
+  <header class="section-header">
+    <h1>Tag: {{ tag }}</h1>
+  </header>
+
+  <section class="h-feed">
+    {% for post in posts %}
+      {% if post.kind == 'note' %}
+        {% include 'blog/note.html' %}
+      {% elif post.kind == 'photo' %}
+        {% include 'blog/photo.html' %}
+      {% elif post.kind == 'activity' %}
+        {% include 'blog/activity-summary.html' %}
+      {% else %}
+        {% include 'blog/article-summary.html' %}
+      {% endif %}
+    {% endfor %}
+  </section>
+
+  <nav class="paginator" aria-label="Pagination">
+    {% if posts.has_previous %}
+    <a class="pagination-item" href="?page={{ posts.previous_page_number }}">Newer</a>
+    {% endif %}
+    <span class="pagination-item pagination-status">Page {{ posts.number }} of {{ posts.paginator.num_pages }}</span>
+    {% if posts.has_next %}
+    <a class="pagination-item" href="?page={{ posts.next_page_number }}">Older</a>
+    {% endif %}
+  </nav>
 {% endblock %}

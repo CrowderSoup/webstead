@@ -1,12 +1,13 @@
 {% load author %}
-<article class="h-entry">
-  {% with post.photo_attachments as photos %}
+
+<article class="h-entry entry-photo">
   <section class="photo-slider" aria-labelledby="gallery-title" role="region">
+    <h2 id="gallery-title" class="sr-only">Photo gallery</h2>
     <ol class="slides" tabindex="0">
-      {% for photo in photos %}
-      <li>
+      {% for photo in post.attachments.all %}
+      <li class="slide">
         <figure id="photo-{{ photo.asset.id }}">
-          <div class="photo-container" style="--src: url('{{ photo.asset.file.url }}')">
+          <div class="photo-frame" style="--photo-image: url('{{ photo.asset.file.url }}')">
             <img
               src="{{ photo.asset.file.url }}"
               alt="{{ photo.asset.alt_text }}"
@@ -20,31 +21,32 @@
       </li>
       {% endfor %}
     </ol>
-    {% if photos|length > 1 %}
+
+    {% if post.attachments.count > 1 %}
     <nav class="slider-nav" aria-label="Slide navigation">
       <ol>
-        {% for photo in photos %}
+        {% for photo in post.attachments.all %}
         <li>
-          <a
-            href="#photo-{{ photo.asset.id }}"
-            aria-label="Go to photo {{ photo.asset.file.name }}"
-          >
-            ●
-          </a>
+          <a href="#photo-{{ photo.asset.id }}" aria-label="Go to photo {{ photo.asset.file.name }}">●</a>
         </li>
         {% endfor %}
       </ol>
     </nav>
     {% endif %}
   </section>
-  {% endwith %}
-  <div class="p-content">{{ post.html }}</div>
+
+  <div class="p-content">
+    {{ post.html }}
+  </div>
+
   {% include 'blog/tags.html' %}
-  <a class="u-url" href="/blog/post/{{ post.slug }}">
-    <time class="dt-published" datetime="{{ page.published_on }}">
-      {{ post.published_on|date:"Y-m-d" }}
-    </time>
-  </a>
-  by
-  <a class="p-author h-card" href="#">{% author_hcard_name post.author %}</a>
+
+  <div class="entry-meta">
+    <a class="u-url" href="/blog/post/{{ post.slug }}">
+      <time class="dt-published" datetime="{{ post.published_on }}">
+        {{ post.published_on|date:"Y-m-d" }}
+      </time>
+    </a>
+    <span class="p-author h-card">{% author_hcard_name post.author %}</span>
+  </div>
 </article>

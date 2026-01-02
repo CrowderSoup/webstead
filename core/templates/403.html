@@ -1,13 +1,8 @@
 {% extends "base.html" %}
-{% block title %} / Forbidden{% endblock %}
+
 {% block content %}
-<section class="error-page">
-  <div class="error-code">403</div>
-  <h2>Access Denied</h2>
-  <p>Sorry, you don’t have permission to view this page. If you think this is a mistake, try signing in or reaching out.</p>
-  <div class="error-actions">
-    <a href="/">Back to home</a>
-    <a href="{% url 'posts' %}">View the blog</a>
-  </div>
-</section>
+  <section class="error-page">
+    <h1>403 - Forbidden</h1>
+    <p>You do not have permission to access this page.</p>
+  </section>
 {% endblock %}

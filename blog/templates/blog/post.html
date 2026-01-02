@@ -21,14 +21,14 @@
 {% endblock %}
 
 {% block content %}
-
-<!-- Post Kind Detection -->
-{% if post.kind == 'note' %}
-<!-- Show Note Template -->
-{% include 'blog/note.html' %} {% elif post.kind == 'photo' %}
-<!-- Show Photo Template -->
-{% include 'blog/photo.html' %} {% elif post.kind == 'activity' %}
-<!-- Show Activity Template -->
-{% include 'blog/activity.html' %} {% else %}
-<!-- Show Article Template -->
-{% include 'blog/article.html' %} {% endif %} {% endblock %}
+  {# Post kind switcher: note, photo, or article. #}
+  {% if post.kind == 'note' %}
+    {% include 'blog/note.html' %}
+  {% elif post.kind == 'photo' %}
+    {% include 'blog/photo.html' %}
+  {% elif post.kind == 'activity' %}
+    {% include 'blog/activity.html' %}
+  {% else %}
+    {% include 'blog/article.html' %}
+  {% endif %}
+{% endblock %}

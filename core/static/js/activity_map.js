@@ -332,7 +332,7 @@
       const gpxUrl = el.dataset.gpxUrl;
       if (!gpxUrl) return;
 
-      const wrapper = el.closest(".activity");
+      const wrapper = el.closest(".entry-activity");
       const statsEl = wrapper?.querySelector("[data-activity-stats]");
       const elevationEl = wrapper?.querySelector("[data-activity-elevation]");
 

@@ -1,11 +1,14 @@
 {% load author %}
-<article class="h-entry activity">
-  <header class="activity-header">
+
+<article class="h-entry entry-activity">
+  <header class="entry-header">
     {% if activity.name %}
       <p class="activity-kicker p-category">{{ activity.name }}</p>
     {% endif %}
     {% if post.title %}
-      <h3 class="p-name">{{ post.title }}</h3>
+      <a class="u-url" href="/blog/post/{{ post.slug }}">
+        <h1 class="p-name">{{ post.title }}</h1>
+      </a>
     {% endif %}
   </header>
 
@@ -66,7 +69,7 @@
         {% for photo in activity_photos %}
         <li>
           <figure id="photo-{{ photo.asset.id }}">
-            <div class="photo-container" style="--src: url('{{ photo.asset.file.url }}')">
+            <div class="photo-container" style="--photo-image: url('{{ photo.asset.file.url }}')">
               <img
                 src="{{ photo.asset.file.url }}"
                 alt="{{ photo.asset.alt_text }}"
@@ -101,11 +104,12 @@
 
   <div class="p-content">{{ post.html }}</div>
   {% include 'blog/tags.html' %}
-  <a class="u-url" href="/blog/post/{{ post.slug }}">
-    <time class="dt-published" datetime="{{ page.published_on }}">
-      {{ post.published_on|date:"Y-m-d" }}
-    </time>
-  </a>
-  by
-  <a class="p-author h-card" href="#">{% author_hcard_name post.author %}</a>
+  <div class="entry-meta">
+    <a class="u-url" href="/blog/post/{{ post.slug }}">
+      <time class="dt-published" datetime="{{ page.published_on }}">
+        {{ post.published_on|date:"Y-m-d" }}
+      </time>
+    </a>
+    <span class="p-author h-card">{% author_hcard_name post.author %}</span>
+  </div>
 </article>

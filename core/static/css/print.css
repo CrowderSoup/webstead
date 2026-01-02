@@ -1,0 +1,24 @@
+body {
+  background: #fff;
+  color: #000;
+  font-size: 12pt;
+}
+
+.site-header,
+.site-footer,
+.site-nav,
+.post-filter,
+.slider-nav,
+.skip-link {
+  display: none !important;
+}
+
+.entry-article,
+.entry-note,
+.entry-summary,
+.entry-photo,
+.author-card {
+  box-shadow: none;
+  border: none;
+  padding: 0;
+}

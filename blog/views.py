@@ -60,6 +60,12 @@ def posts(request):
     except EmptyPage:
         posts = paginator.page(paginator.num_pages)
 
+    has_activity = False
+    for post in posts:
+        if post.kind == Post.ACTIVITY:
+            has_activity = True
+            post.activity = _activity_from_mf2(post)
+
     return render(
         request,
         'blog/posts.html',
@@ -69,6 +75,7 @@ def posts(request):
             "selected_kinds": selected_kinds,
             "selected_kinds_query": urlencode([("kind", kind) for kind in selected_kinds]),
             "feed_kinds_query": feed_kinds_query,
+            "has_activity": has_activity,
         },
     )
 
@@ -91,7 +98,22 @@ def posts_by_tag(request, tag):
     except EmptyPage:
         posts.paginator.page(paginator.num_pages)
 
-    return render(request, 'blog/posts_by_tag.html', { "posts": posts, "tag": tag })
+    has_activity = False
+    for post in posts:
+        if post.kind == Post.ACTIVITY:
+            has_activity = True
+            post.activity = _activity_from_mf2(post)
+
+
+    return render(
+        request, 
+        'blog/posts_by_tag.html',
+        {
+            "posts": posts,
+            "tag": tag,
+            "has_activity": has_activity,
+        }
+    )
 
 def post(request, slug):
     post = get_object_or_404(

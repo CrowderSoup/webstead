@@ -1,18 +1,22 @@
 {% load author %}
-<article class="h-entry">
-  <header>
+
+<article class="h-entry entry-article">
+  <header class="entry-header">
     <a class="u-url" href="/blog/post/{{ post.slug }}">
-      <h3 class="p-name">{{ post.title }}</h3>
+      <h1 class="p-name">{{ post.title }}</h1>
     </a>
-    <p>
-      by
-      <a class="p-author h-card" href="#">{% author_hcard_name post.author %}</a>
-      on
-      <time class="dt-published" datetime="{{ page.published_on }}">
+
+    <div class="entry-meta">
+      <span class="p-author h-card">{% author_hcard_name post.author %}</span>
+      <time class="dt-published" datetime="{{ post.published_on }}">
         {{ post.published_on|date:"Y-m-d" }}
       </time>
-    </p>
+    </div>
   </header>
-  <div class="e-content">{{ post.html }}</div>
+
+  <div class="e-content">
+    {{ post.html }}
+  </div>
+
   {% include 'blog/tags.html' %}
 </article>

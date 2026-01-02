@@ -1,76 +1,87 @@
-{% extends "base.html" %} {% load static %} {% block content %}
-<div class="block h-card">
-  <section class="author">
-    <aside>
-      <figure class="author-image-container">
-        {% if site_author_hcard and site_author_hcard.primary_photo_url %}
-          <img
-            class="u-photo"
-            alt="{{ site_author_display_name|default:settings.title|default:'Site author' }} avatar"
-            src="{{ site_author_hcard.primary_photo_url }}"
-            height="90"
-            width="90"
-          />
-        {% else %}
-          <img
-            class="u-photo"
-            alt="{{ site_author_display_name|default:settings.title|default:'Site author' }} avatar"
-            src="{% static 'space.jpeg' %}"
-            height="90"
-            width="90"
-          />
-        {% endif %}
-      </figure>
-    </aside>
-    <div class="author-box">
-      {% if site_author_hcard and site_author_hcard.note_html %}
-      <div class="author-bio p-note">{{ site_author_hcard.note_html }}</div>
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+  {# Author card pulls from site_author_hcard in the theme context processor. #}
+  <section class="author-card h-card">
+    <div class="author-media">
+      {% if site_author_hcard and site_author_hcard.primary_photo_url %}
+      <img
+        class="u-photo"
+        src="{{ site_author_hcard.primary_photo_url }}"
+        alt="{{ site_author_display_name|default:settings.title|default:'Site author' }} avatar"
+        height="120"
+        width="120"
+      />
+      {% else %}
+      <img
+        class="u-photo"
+        src="{% theme_static 'img/default-avatar.svg' %}"
+        alt="{{ site_author_display_name|default:settings.title|default:'Site author' }} avatar"
+        height="120"
+        width="120"
+      />
       {% endif %}
     </div>
-		{% if site_author_hcard %}
-		<div class="elsewhere">
-		{% for profile in site_author_hcard.urls.all %}
-			<a
-				class="elsewhere-link"
-				target="_blank"
-        rel="me {% if profile.kind == 'bsky' %}atproto{% endif %}"
-				href="{{ profile.href }}">
-        {% if profile.kind == 'x' %}
-          {% include 'core/svg/twitter.svg' %}
-        {% elif profile.kind == 'bsky' %}
-          {% include 'core/svg/bluesky.svg' %}
-        {% elif profile.kind == 'email' %}
-          {% include 'core/svg/email.svg' %}
-        {% elif profile.kind == 'mastodon' %}
-          {% include 'core/svg/mastodon.svg' %}
-        {% elif profile.kind == 'github' %}
-          {% include 'core/svg/github.svg' %}
-        {% elif profile.kind == 'instagram' %}
-          {% include 'core/svg/instagram.svg' %}
-        {% elif profile.kind == 'other' %}
-          {% include 'core/svg/globe.svg' %}
-        {% else %}
-          {{ profile.kind }}
-        {% endif %}
-			</a>
-		{% endfor %}
-		</div>
-		{% endif %}
+
+    <div class="author-details">
+      <h1 class="p-name">{{ site_author_display_name|default:settings.title }}</h1>
+      {% if site_author_hcard and site_author_hcard.note_html %}
+      <div class="author-bio p-note">{{ site_author_hcard.note_html }}</div>
+      {% else %}
+      <p class="author-bio">Welcome to the Webstead Default 2026 theme.</p>
+      {% endif %}
+
+      {% if site_author_hcard %}
+      <div class="author-links">
+        {% for profile in site_author_hcard.urls.all %}
+        <a
+          class="author-link"
+          target="_blank"
+          rel="me {% if profile.kind == 'bsky' %}atproto{% endif %}"
+          href="{{ profile.href }}"
+        >
+          {% if profile.kind == 'x' %}
+            {% include 'core/svg/twitter.svg' %}
+          {% elif profile.kind == 'bsky' %}
+            {% include 'core/svg/bluesky.svg' %}
+          {% elif profile.kind == 'email' %}
+            {% include 'core/svg/email.svg' %}
+          {% elif profile.kind == 'mastodon' %}
+            {% include 'core/svg/mastodon.svg' %}
+          {% elif profile.kind == 'github' %}
+            {% include 'core/svg/github.svg' %}
+          {% elif profile.kind == 'instagram' %}
+            {% include 'core/svg/instagram.svg' %}
+          {% elif profile.kind == 'other' %}
+            {% include 'core/svg/globe.svg' %}
+          {% else %}
+            {{ profile.kind }}
+          {% endif %}
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
   </section>
-</div>
-<div class="h-feed">
-  <h3>Recent Blog Posts</h3>
-  <ul>
-    {% for post in recent_posts %}
-    <li class="h-entry">
-      <time class="dt-published" datetime="{{ post.published_on }}">
-        {{ post.published_on|date:"Y-m-d" }}
-      </time>
-      <a class="u-url" href="/blog/post/{{ post.slug }}">
-        <span class="p-name">{{ post.title }}</span>
-      </a>
-    </li>
-    {% endfor %}
-  </ul>
-</div>
+
+  <section class="recent-posts h-feed">
+    <header class="section-header">
+      <h2>Recent posts</h2>
+      <a class="section-link" href="{% url 'posts' %}">View all</a>
+    </header>
+
+    <ul class="recent-post-list">
+      {% for post in recent_posts %}
+      <li class="h-entry">
+        <time class="dt-published" datetime="{{ post.published_on }}">
+          {{ post.published_on|date:"Y-m-d" }}
+        </time>
+        <a class="u-url p-name" href="/blog/post/{{ post.slug }}">
+          {{ post.title }}
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
 {% endblock %}

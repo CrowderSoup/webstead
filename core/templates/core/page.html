@@ -1,20 +1,20 @@
-{% extends "base.html" %} {% load author %} {% block content %}
-<article class="h-entry">
-  <header>
-    <a class="u-url" href="/page/{{ page.slug }}">
-      <h3 class="p-name">{{ page.title }}</h3>
-    </a>
-    <p>
-      by
-      <a class="p-author h-card" href="./">
-        {% author_hcard_name page.author %}
-      </a>
-      on
-      <time class="dt-published" datetime="{{ page.published_on }}">
-        {{ page.published_on|date:"Y-m-d" }}
-      </time>
-    </p>
-  </header>
-  <div class="e-content">{{ page.html }}</div>
-</article>
+{% extends "base.html" %}
+{% load author %}
+
+{% block content %}
+  <article class="h-entry page-entry">
+    <header class="entry-header">
+      <h1 class="p-name">{{ page.title }}</h1>
+      <div class="entry-meta">
+        <span>By <span class="p-author h-card">{% author_hcard_name page.author %}</span></span>
+        <time class="dt-published" datetime="{{ page.published_on }}">
+          {{ page.published_on|date:"Y-m-d" }}
+        </time>
+      </div>
+    </header>
+
+    <div class="e-content">
+      {{ page.html }}
+    </div>
+  </article>
 {% endblock %}
