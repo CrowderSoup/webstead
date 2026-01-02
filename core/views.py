@@ -1,7 +1,8 @@
 import markdown
 
 from django.http import HttpResponse
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
+from django.templatetags.static import static
 from django.urls import reverse
 
 from .models import Page, SiteConfiguration
@@ -24,6 +25,13 @@ def page(request, slug):
 def robots_txt(request):
     config = SiteConfiguration.get_solo()
     return HttpResponse(config.robots_txt, content_type="text/plain")
+
+
+def favicon(request):
+    config = SiteConfiguration.get_solo()
+    if config.favicon_id and config.favicon and config.favicon.file:
+        return redirect(config.favicon.file.url)
+    return redirect(static("favicon.svg"))
 
 
 def sitemap(request):

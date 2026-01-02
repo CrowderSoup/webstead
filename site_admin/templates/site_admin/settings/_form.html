@@ -34,6 +34,19 @@
       </div>
       <div>
         <label
+          for="{{ form.favicon.id_for_label }}"
+          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+        >
+          Favicon
+        </label>
+        {{ form.favicon }}
+        {% if form.favicon.help_text %}
+          <p class="mt-1 text-xs text-[color:var(--admin-muted)]">{{ form.favicon.help_text }}</p>
+        {% endif %}
+        {{ form.favicon.errors }}
+      </div>
+      <div>
+        <label
           for="{{ form.site_author.id_for_label }}"
           class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
         >

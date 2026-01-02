@@ -269,12 +269,19 @@ class FileForm(forms.ModelForm):
 
 class SiteConfigurationForm(forms.ModelForm):
     active_theme = forms.ChoiceField(required=False, label="Active theme")
+    favicon = forms.ModelChoiceField(
+        queryset=File.objects.none(),
+        required=False,
+        label="Favicon",
+        help_text="Pick an uploaded image to use as the site favicon.",
+    )
 
     class Meta:
         model = SiteConfiguration
         fields = [
             "title",
             "tagline",
+            "favicon",
             "site_author",
             "active_theme",
             "main_menu",
@@ -295,6 +302,9 @@ class SiteConfigurationForm(forms.ModelForm):
                 label = f"{label} ({theme.version})"
             choices.append((theme.slug, label))
         self.fields["active_theme"].choices = choices
+        self.fields["favicon"].queryset = File.objects.filter(kind=File.IMAGE).order_by(
+            "-created_at"
+        )
         for field in self.fields.values():
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.setdefault(

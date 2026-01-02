@@ -5,6 +5,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>{{ settings.title }}{% block title %}{% endblock %}</title>
+    {% if settings.favicon_id %}
+    <link rel="icon" href="{{ settings.favicon.file.url }}" />
+    {% else %}
+    <link rel="icon" href="{% static 'favicon.svg' %}" />
+    {% endif %}
 
     {# Theme assets live at themes/<slug>/... #}
     <link rel="stylesheet" href="{% theme_static 'css/theme.css' %}" />

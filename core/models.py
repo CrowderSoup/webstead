@@ -139,6 +139,14 @@ class ThemeInstall(models.Model):
 class SiteConfiguration(SingletonModel):
     title = models.CharField(max_length=255, default="", blank=True)
     tagline = models.CharField(max_length=1024, default="", blank=True)
+    favicon = models.ForeignKey(
+        File,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="site_favicons",
+        help_text="File to use as the site favicon.",
+    )
     site_author = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
