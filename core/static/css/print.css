@@ -8,6 +8,7 @@ body {
 .site-footer,
 .site-nav,
 .post-filter,
+.slider-controls,
 .slider-nav,
 .skip-link {
   display: none !important;

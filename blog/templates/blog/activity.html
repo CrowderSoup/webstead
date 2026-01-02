@@ -65,9 +65,10 @@
 
   {% if activity_photos %}
     <section class="photo-slider" aria-labelledby="gallery-title" role="region">
+      <h2 id="gallery-title" class="sr-only">Photo gallery</h2>
       <ol class="slides" tabindex="0">
         {% for photo in activity_photos %}
-        <li>
+        <li class="slide">
           <figure id="photo-{{ photo.asset.id }}">
             <div class="photo-container" style="--photo-image: url('{{ photo.asset.file.url }}')">
               <img
