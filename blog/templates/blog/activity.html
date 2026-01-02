@@ -11,9 +11,51 @@
 
   {% if activity.track_url %}
     <div class="activity-map" data-gpx-url="{{ activity.track_url }}" aria-label="Activity map"></div>
-    <p class="activity-track">
-      <a class="u-url u-track" href="{{ activity.track_url }}">Download GPX</a>
-    </p>
+    <section class="activity-elevation" data-activity-elevation>
+      <header class="activity-elevation__header">
+        <p>Elevation profile</p>
+        <p class="activity-elevation__totals">
+          Gain <strong data-stat="elevation-gain">--</strong>
+          Loss <strong data-stat="elevation-loss">--</strong>
+        </p>
+      </header>
+      <svg class="activity-elevation__chart" role="img" aria-label="Elevation over time"></svg>
+      <p class="activity-elevation__empty" hidden>Elevation data unavailable.</p>
+    </section>
+    <dl class="activity-stats" data-activity-stats>
+      <div>
+        <dt>Distance</dt>
+        <dd data-stat="distance">--</dd>
+      </div>
+      <div>
+        <dt>Moving time</dt>
+        <dd data-stat="moving-time">--</dd>
+      </div>
+      <div>
+        <dt>Stopped time</dt>
+        <dd data-stat="stopped-time">--</dd>
+      </div>
+      <div>
+        <dt>Total time</dt>
+        <dd data-stat="total-time">--</dd>
+      </div>
+      <div>
+        <dt>Avg moving speed</dt>
+        <dd data-stat="avg-moving-speed">--</dd>
+      </div>
+      <div>
+        <dt>Max speed</dt>
+        <dd data-stat="max-speed">--</dd>
+      </div>
+      <div>
+        <dt>Elevation gain</dt>
+        <dd data-stat="elevation-gain">--</dd>
+      </div>
+      <div>
+        <dt>Elevation loss</dt>
+        <dd data-stat="elevation-loss">--</dd>
+      </div>
+    </dl>
   {% else %}
     <p class="activity-track activity-track--missing">GPX track coming soon.</p>
   {% endif %}
