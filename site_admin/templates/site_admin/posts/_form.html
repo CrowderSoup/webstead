@@ -103,6 +103,54 @@
             class="mt-2 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]"
           >
           <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Upload a .gpx file so the map can render the route.</p>
+          <div class="mt-3 rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] px-4 py-3 text-xs text-[color:var(--admin-muted)]">
+            <div class="flex flex-wrap items-center gap-3">
+              <label class="flex items-center gap-2 text-[color:var(--admin-ink)]">
+                <input
+                  type="checkbox"
+                  name="gpx_trim"
+                  value="1"
+                  class="h-4 w-4 rounded border-[color:var(--admin-border)] text-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]"
+                  {% if gpx_trim_enabled %}checked{% endif %}
+                >
+                <span>Trim start/end</span>
+              </label>
+              <div class="flex items-center gap-2">
+                <input
+                  type="number"
+                  name="gpx_trim_distance"
+                  min="0"
+                  step="10"
+                  value="{{ gpx_trim_distance }}"
+                  class="w-24 rounded-full border border-[color:var(--admin-border)] bg-white px-2 py-1 text-xs text-[color:var(--admin-ink)]"
+                >
+                <span>meters</span>
+              </div>
+            </div>
+            <div class="mt-2 flex flex-wrap items-center gap-4 text-[color:var(--admin-ink)]">
+              <label class="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="gpx_blur"
+                  value="1"
+                  class="h-4 w-4 rounded border-[color:var(--admin-border)] text-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]"
+                  {% if gpx_blur_enabled %}checked{% endif %}
+                >
+                <span>Blur coordinates (5-20 m)</span>
+              </label>
+              <label class="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="gpx_remove_timestamps"
+                  value="1"
+                  class="h-4 w-4 rounded border-[color:var(--admin-border)] text-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]"
+                  {% if gpx_remove_timestamps %}checked{% endif %}
+                >
+                <span>Remove timestamps</span>
+              </label>
+            </div>
+            <p class="mt-2">Trim is enabled by default. Coordinate blurring and timestamp removal are optional.</p>
+          </div>
           {% if activity_gpx %}
             <div class="mt-3 flex flex-wrap items-center gap-3 text-xs">
               <a href="{{ activity_gpx.url }}" class="font-semibold text-[color:var(--admin-accent)]">

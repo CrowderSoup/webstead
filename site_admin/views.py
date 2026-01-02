@@ -7,6 +7,7 @@ from typing import Optional
 
 from django.contrib import messages
 from django.contrib.auth.views import LoginView, LogoutView
+from django.core.files.base import ContentFile
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.utils import timezone
@@ -21,6 +22,7 @@ from blog.models import Post
 from analytics.models import Visit
 
 from files.models import Attachment, File
+from files.gpx import GpxAnonymizeError, GpxAnonymizeOptions, anonymize_gpx
 
 from core.models import (
     HCard,
@@ -67,6 +69,40 @@ from .forms import (
     ThemeFileForm,
     ThemeUploadForm,
 )
+
+
+def _gpx_form_defaults(request):
+    data = request.POST if getattr(request, "POST", None) else {}
+    return {
+        "gpx_trim_enabled": data.get("gpx_trim", "1") == "1",
+        "gpx_trim_distance": data.get("gpx_trim_distance", "500"),
+        "gpx_blur_enabled": data.get("gpx_blur", "") == "1",
+        "gpx_remove_timestamps": data.get("gpx_remove_timestamps", "") == "1",
+    }
+
+
+def _parse_gpx_anonymize_options(request):
+    defaults = _gpx_form_defaults(request)
+    errors = []
+    trim_distance_m = 500.0
+    if defaults["gpx_trim_enabled"]:
+        trim_distance = defaults["gpx_trim_distance"]
+        try:
+            trim_distance_m = float(trim_distance)
+        except (TypeError, ValueError):
+            trim_distance_m = 500.0
+            errors.append("GPX trim distance must be a number of meters.")
+        if trim_distance_m < 0:
+            trim_distance_m = 500.0
+            errors.append("GPX trim distance must be zero or greater.")
+
+    options = GpxAnonymizeOptions(
+        trim_enabled=defaults["gpx_trim_enabled"],
+        trim_distance_m=trim_distance_m,
+        blur_enabled=defaults["gpx_blur_enabled"],
+        remove_timestamps=defaults["gpx_remove_timestamps"],
+    )
+    return options, errors
 
 
 MenuItemFormSet = inlineformset_factory(
@@ -993,6 +1029,7 @@ def post_edit(request, slug=None):
         uploads = request.FILES.getlist("photos")
         gpx_upload = request.FILES.get("gpx_file")
         gpx_remove = request.POST.get("gpx_remove") == "1"
+        gpx_options, gpx_option_errors = _parse_gpx_anonymize_options(request)
         if form.is_valid():
             selected_kind = form.cleaned_data.get("kind")
             content_value = (form.cleaned_data.get("content") or "").strip()
@@ -1004,6 +1041,8 @@ def post_edit(request, slug=None):
             errors = []
             if gpx_upload and Path(gpx_upload.name).suffix.lower() != ".gpx":
                 errors.append("GPX uploads must use a .gpx file.")
+            if gpx_upload:
+                errors.extend(gpx_option_errors)
             if selected_kind == Post.LIKE and not like_of_value:
                 errors.append("Provide a URL for the like.")
             if selected_kind == Post.REPOST and not repost_of_value:
@@ -1137,9 +1176,34 @@ def post_edit(request, slug=None):
                 existing_gpx_attachments = []
 
             if gpx_upload:
+                try:
+                    anonymized_gpx = anonymize_gpx(
+                        gpx_upload.read(), gpx_options
+                    )
+                except GpxAnonymizeError as exc:
+                    form.add_error(None, str(exc))
+                    context = _build_post_form_context(
+                        request=request,
+                        form=form,
+                        post=post,
+                        saved=False,
+                        existing_meta=existing_meta,
+                        existing_remove_ids=existing_remove_ids,
+                        uploaded_meta=uploaded_meta,
+                    )
+                    template_name = (
+                        "site_admin/posts/_form_messages.html"
+                        if request.headers.get("HX-Request")
+                        else "site_admin/posts/edit.html"
+                    )
+                    return render(request, template_name, context)
+
+                anonymized_upload = ContentFile(
+                    anonymized_gpx, name=gpx_upload.name
+                )
                 asset = File.objects.create(
                     kind=File.DOC,
-                    file=gpx_upload,
+                    file=anonymized_upload,
                     owner=request.user,
                 )
                 attachment = Attachment.objects.create(
@@ -1730,6 +1794,7 @@ def _build_post_form_context(
     existing_meta = existing_meta or {}
     existing_remove_ids = existing_remove_ids or set()
     uploaded_meta = uploaded_meta or {}
+    gpx_defaults = _gpx_form_defaults(request)
 
     photo_items = []
     activity_gpx = None
@@ -1786,6 +1851,10 @@ def _build_post_form_context(
         "photo_upload_url": reverse("site_admin:post_upload_photo"),
         "photo_delete_url": reverse("site_admin:post_delete_photo"),
         "activity_gpx": activity_gpx,
+        "gpx_trim_enabled": gpx_defaults["gpx_trim_enabled"],
+        "gpx_trim_distance": gpx_defaults["gpx_trim_distance"],
+        "gpx_blur_enabled": gpx_defaults["gpx_blur_enabled"],
+        "gpx_remove_timestamps": gpx_defaults["gpx_remove_timestamps"],
     }
 
 
