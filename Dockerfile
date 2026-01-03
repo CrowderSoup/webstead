@@ -9,8 +9,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Add git (and ssh client if you need SSH URLs)
-RUN apk add --no-cache git
+# Add git and ffmpeg for flyover generation
+RUN apk add --no-cache git ffmpeg
 
 # Install uv once, no pip cache left behind
 RUN pip install --no-cache-dir uv

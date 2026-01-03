@@ -12,96 +12,161 @@
     {% endif %}
   </header>
 
-  {% if activity.track_url %}
-    <div class="activity-map" data-gpx-url="{{ activity.track_url }}" aria-label="Activity map"></div>
-    <section class="activity-elevation" data-activity-elevation>
-      <header class="activity-elevation__header">
-        <p>Elevation profile</p>
-        <p class="activity-elevation__totals">
-          Gain <strong data-stat="elevation-gain">--</strong>
-          Loss <strong data-stat="elevation-loss">--</strong>
-        </p>
-      </header>
-      <svg class="activity-elevation__chart" role="img" aria-label="Elevation over time"></svg>
-      <p class="activity-elevation__empty" hidden>Elevation data unavailable.</p>
-    </section>
-    <dl class="activity-stats" data-activity-stats>
-      <div>
-        <dt>Distance</dt>
-        <dd data-stat="distance">--</dd>
-      </div>
-      <div>
-        <dt>Moving time</dt>
-        <dd data-stat="moving-time">--</dd>
-      </div>
-      <div>
-        <dt>Stopped time</dt>
-        <dd data-stat="stopped-time">--</dd>
-      </div>
-      <div>
-        <dt>Total time</dt>
-        <dd data-stat="total-time">--</dd>
-      </div>
-      <div>
-        <dt>Avg moving speed</dt>
-        <dd data-stat="avg-moving-speed">--</dd>
-      </div>
-      <div>
-        <dt>Max speed</dt>
-        <dd data-stat="max-speed">--</dd>
-      </div>
-      <div>
-        <dt>Elevation gain</dt>
-        <dd data-stat="elevation-gain">--</dd>
-      </div>
-      <div>
-        <dt>Elevation loss</dt>
-        <dd data-stat="elevation-loss">--</dd>
-      </div>
-    </dl>
-  {% else %}
-    <p class="activity-track activity-track--missing">GPX track coming soon.</p>
-  {% endif %}
+  <section
+    class="media-slider activity-media"
+    aria-labelledby="activity-media-title"
+    role="region"
+    data-slider-label="media item"
+  >
+    <h2 id="activity-media-title" class="sr-only">Activity media</h2>
+    <ol class="slides" tabindex="0">
+      <li class="slide" id="activity-map-{{ post.id }}">
+        <div class="activity-media__tile">
+          {% if activity.track_url %}
+            <div class="activity-map" data-gpx-url="{{ activity.track_url }}" aria-label="Activity map"></div>
+            <section class="activity-elevation" data-activity-elevation>
+              <header class="activity-elevation__header">
+                <p>Elevation profile</p>
+                <p class="activity-elevation__totals">
+                  Gain <strong data-stat="elevation-gain">--</strong>
+                  Loss <strong data-stat="elevation-loss">--</strong>
+                </p>
+              </header>
+              <svg class="activity-elevation__chart" role="img" aria-label="Elevation over time"></svg>
+              <p class="activity-elevation__empty" hidden>Elevation data unavailable.</p>
+            </section>
+            <dl class="activity-stats" data-activity-stats>
+              <div>
+                <dt>Distance</dt>
+                <dd data-stat="distance">--</dd>
+              </div>
+              <div>
+                <dt>Moving time</dt>
+                <dd data-stat="moving-time">--</dd>
+              </div>
+              <div>
+                <dt>Stopped time</dt>
+                <dd data-stat="stopped-time">--</dd>
+              </div>
+              <div>
+                <dt>Total time</dt>
+                <dd data-stat="total-time">--</dd>
+              </div>
+              <div>
+                <dt>Avg moving speed</dt>
+                <dd data-stat="avg-moving-speed">--</dd>
+              </div>
+              <div>
+                <dt>Max speed</dt>
+                <dd data-stat="max-speed">--</dd>
+              </div>
+              <div>
+                <dt>Elevation gain</dt>
+                <dd data-stat="elevation-gain">--</dd>
+              </div>
+              <div>
+                <dt>Elevation loss</dt>
+                <dd data-stat="elevation-loss">--</dd>
+              </div>
+            </dl>
+          {% else %}
+            <p class="activity-track activity-track--missing">GPX track coming soon.</p>
+          {% endif %}
+        </div>
+      </li>
 
-  {% if activity_photos %}
-    <section class="photo-slider" aria-labelledby="gallery-title" role="region">
-      <h2 id="gallery-title" class="sr-only">Photo gallery</h2>
-      <ol class="slides" tabindex="0">
-        {% for photo in activity_photos %}
-        <li class="slide">
-          <figure id="photo-{{ photo.asset.id }}">
-            <div class="photo-container" style="--photo-image: url('{{ photo.asset.file.url }}')">
-              <img
-                src="{{ photo.asset.file.url }}"
-                alt="{{ photo.asset.alt_text }}"
-                loading="lazy"
-              />
+      {% if activity.track_url %}
+      <li class="slide" id="activity-flyover-{{ post.id }}">
+        <div
+          class="activity-media__tile activity-flyover"
+          data-flyover-status-url="{% url 'activity_flyover_status' slug=post.slug %}"
+        >
+          {% if activity_flyover and activity_flyover.status == 'ready' and activity_flyover.video %}
+            <video class="activity-flyover__video" controls preload="none" data-flyover-video>
+              <source src="{{ activity_flyover.video.file.url }}" type="video/mp4" />
+            </video>
+          {% else %}
+            <div class="activity-flyover__frame" data-flyover-placeholder>
+              <div>
+                <p class="activity-flyover__title">Route flyover</p>
+                <p class="activity-flyover__status" data-flyover-status>Generating flyover video.</p>
+              </div>
             </div>
-            {% if photo.asset.caption %}
-            <figcaption>{{ photo.asset.caption }}</figcaption>
-            {% endif %}
-          </figure>
-        </li>
-        {% endfor %}
-      </ol>
-      {% if activity_photos|length > 1 %}
-      <nav class="slider-nav" aria-label="Slide navigation">
-        <ol>
-          {% for photo in activity_photos %}
-          <li>
-            <a
-              href="#photo-{{ photo.asset.id }}"
-              aria-label="Go to photo {{ photo.asset.file.name }}"
-            >
-              ●
-            </a>
-          </li>
-          {% endfor %}
-        </ol>
-      </nav>
+            <video class="activity-flyover__video" controls preload="none" data-flyover-video hidden></video>
+          {% endif %}
+        </div>
+      </li>
       {% endif %}
-    </section>
-  {% endif %}
+
+      {% for photo in activity_photos %}
+      <li class="slide">
+        <figure id="photo-{{ photo.asset.id }}">
+          <div class="photo-container" style="--photo-image: url('{{ photo.asset.file.url }}')">
+            <img
+              src="{{ photo.asset.file.url }}"
+              alt="{{ photo.asset.alt_text }}"
+              loading="lazy"
+            />
+          </div>
+          {% if photo.asset.caption %}
+          <figcaption>{{ photo.asset.caption }}</figcaption>
+          {% endif %}
+        </figure>
+      </li>
+      {% endfor %}
+    </ol>
+
+    {% with photo_count=activity_photos|length %}
+      {% if activity.track_url %}
+        {% with slide_count=photo_count|add:2 %}
+          {% if slide_count > 1 %}
+          <nav class="slider-nav" aria-label="Slide navigation">
+            <ol>
+              <li>
+                <a href="#activity-map-{{ post.id }}" aria-label="Go to map and stats">●</a>
+              </li>
+              <li>
+                <a href="#activity-flyover-{{ post.id }}" aria-label="Go to flyover video">●</a>
+              </li>
+              {% for photo in activity_photos %}
+              <li>
+                <a
+                  href="#photo-{{ photo.asset.id }}"
+                  aria-label="Go to photo {{ forloop.counter }}"
+                >
+                  ●
+                </a>
+              </li>
+              {% endfor %}
+            </ol>
+          </nav>
+          {% endif %}
+        {% endwith %}
+      {% else %}
+        {% with slide_count=photo_count|add:1 %}
+          {% if slide_count > 1 %}
+          <nav class="slider-nav" aria-label="Slide navigation">
+            <ol>
+              <li>
+                <a href="#activity-map-{{ post.id }}" aria-label="Go to map and stats">●</a>
+              </li>
+              {% for photo in activity_photos %}
+              <li>
+                <a
+                  href="#photo-{{ photo.asset.id }}"
+                  aria-label="Go to photo {{ forloop.counter }}"
+                >
+                  ●
+                </a>
+              </li>
+              {% endfor %}
+            </ol>
+          </nav>
+          {% endif %}
+        {% endwith %}
+      {% endif %}
+    {% endwith %}
+  </section>
 
   <div class="p-content">{{ post.html }}</div>
   {% include 'blog/tags.html' %}

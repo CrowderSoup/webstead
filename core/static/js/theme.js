@@ -12,7 +12,7 @@
   reducedMotion.addEventListener("change", applyMotion);
 
   const enhanceSliders = () => {
-    const sliders = document.querySelectorAll(".photo-slider");
+    const sliders = document.querySelectorAll(".photo-slider, .media-slider");
     sliders.forEach((slider) => {
       const track = slider.querySelector(".slides");
       if (!track) {
@@ -35,13 +35,14 @@
       const prevButton = document.createElement("button");
       prevButton.type = "button";
       prevButton.className = "slider-button slider-button--prev";
-      prevButton.setAttribute("aria-label", "Previous photo");
+      const sliderLabel = slider.dataset.sliderLabel || "photo";
+      prevButton.setAttribute("aria-label", `Previous ${sliderLabel}`);
       prevButton.textContent = "Prev";
 
       const nextButton = document.createElement("button");
       nextButton.type = "button";
       nextButton.className = "slider-button slider-button--next";
-      nextButton.setAttribute("aria-label", "Next photo");
+      nextButton.setAttribute("aria-label", `Next ${sliderLabel}`);
       nextButton.textContent = "Next";
 
       const counter = document.createElement("span");

@@ -1,0 +1,112 @@
+alerts:
+  - rule: DEPLOYMENT_FAILED
+  - rule: DOMAIN_FAILED
+
+databases:
+  - cluster_name: crowder-cloud
+    db_name: blog
+    db_user: doadmin
+    engine: PG
+    name: production-database
+    production: true
+  - cluster_name: crowder-cloud-redis
+    engine: REDIS
+    name: redis
+    production: true
+
+domains:
+  - domain: crowdersoup.com
+    type: PRIMARY
+    zone: crowdersoup.com
+
+envs:
+  - key: DB_NAME
+    scope: RUN_TIME
+    value: blog
+  - key: DB_USER
+    scope: RUN_TIME
+    value: doadmin
+  - key: DB_HOST
+    scope: RUN_TIME
+    value: crowder-cloud-do-user-4979145-0.g.db.ondigitalocean.com
+  - key: DB_PORT
+    scope: RUN_TIME
+    value: "25060"
+  - key: AWS_ACCESS_KEY_ID
+    scope: RUN_TIME
+    value: DO801WGZZVCC4KXWACUK
+  - key: AWS_STORAGE_BUCKET_NAME
+    scope: RUN_TIME
+    value: crowdersoup-blog
+  - key: AWS_S3_ENDPOINT_URL
+    scope: RUN_TIME
+    value: https://sfo3.digitaloceanspaces.com
+  - key: AWS_S3_REGION_NAME
+    scope: RUN_TIME
+    value: sfo3
+  - key: ALLOWED_HOSTS
+    scope: RUN_AND_BUILD_TIME
+    value: 10.244.174.123,crowdersoup.com,.crowdersoup.com
+  - key: CSRF_TRUSTED_ORIGINS
+    scope: RUN_AND_BUILD_TIME
+    value: https://crowdersoup.com,https://www.crowdersoup.com
+  - key: AWS_S3_CUSTOM_DOMAIN
+    scope: RUN_AND_BUILD_TIME
+    value: crowdersoup-blog.sfo3.cdn.digitaloceanspaces.com
+  - key: THEME_STORAGE_PREFIX
+    scope: RUN_AND_BUILD_TIME
+    value: themes/
+  - key: CELERY_BROKER_URL
+    scope: RUN_TIME
+    value: ${redis.DATABASE_URL}
+  - key: CELERY_RESULT_BACKEND
+    scope: RUN_TIME
+    value: ${redis.DATABASE_URL}
+
+features:
+  - buildpack-stack=ubuntu-22
+
+ingress:
+  rules:
+    - component:
+        name: django-blog
+      match:
+        authority:
+          exact: ""
+        path:
+          prefix: /
+
+name: crowdersoup-blog
+region: sfo
+
+services:
+  - dockerfile_path: /Dockerfile
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${production-database.DATABASE_URL}
+    github:
+      branch: main
+      deploy_on_push: true
+      repo: CrowderSoup/django-blog
+    http_port: 8000
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    name: django-blog
+    source_dir: /
+
+workers:
+  - dockerfile_path: /Dockerfile
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${production-database.DATABASE_URL}
+    github:
+      branch: main
+      deploy_on_push: true
+      repo: CrowderSoup/django-blog
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    name: celery-worker
+    source_dir: /
+    run_command: uv run celery -A config worker -l info

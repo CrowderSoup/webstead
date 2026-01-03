@@ -1,5 +1,5 @@
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render, get_object_or_404
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -7,29 +7,11 @@ from django.utils.text import Truncator
 
 from urllib.parse import urlencode
 
-from .models import Post, Tag
+from .models import Post, Tag, ActivityFlyover
+from .activity import activity_from_mf2
+from .tasks import enqueue_activity_flyover
 from core.models import SiteConfiguration
 from core.og import absolute_url, first_attachment_image_url
-
-
-def _activity_from_mf2(post):
-    activity = {"name": "", "track_url": ""}
-    mf2_data = post.mf2 if isinstance(post.mf2, dict) else {}
-    activity_items = mf2_data.get("activity") or []
-    activity_item = activity_items[0] if isinstance(activity_items, list) and activity_items else activity_items
-    if isinstance(activity_item, dict):
-        properties = activity_item.get("properties") or {}
-        if isinstance(properties, dict):
-            for key in ("name", "activity-type", "category"):
-                values = properties.get(key) or []
-                if values and not activity["name"]:
-                    activity["name"] = str(values[0])
-            track_values = properties.get("track") or []
-            if track_values:
-                activity["track_url"] = track_values[0]
-    if not activity["track_url"] and post.gpx_attachment:
-        activity["track_url"] = post.gpx_attachment.asset.file.url
-    return activity
 
 
 def _staff_guard(request):
@@ -68,7 +50,7 @@ def posts(request):
     for post in posts:
         if post.kind == Post.ACTIVITY:
             has_activity = True
-            post.activity = _activity_from_mf2(post)
+            post.activity = activity_from_mf2(post)
 
     return render(
         request,
@@ -110,7 +92,7 @@ def posts_by_tag(request, tag):
     for post in posts:
         if post.kind == Post.ACTIVITY:
             has_activity = True
-            post.activity = _activity_from_mf2(post)
+            post.activity = activity_from_mf2(post)
 
 
     return render(
@@ -137,8 +119,12 @@ def post(request, slug):
         deleted=False,
     )
 
-    activity = _activity_from_mf2(post) if post.kind == Post.ACTIVITY else None
+    activity = activity_from_mf2(post) if post.kind == Post.ACTIVITY else None
     activity_photos = list(post.photo_attachments) if post.kind == Post.ACTIVITY else []
+    activity_flyover = None
+    if post.kind == Post.ACTIVITY and activity and activity.get("track_url"):
+        activity_flyover, _ = ActivityFlyover.objects.get_or_create(post=post)
+        enqueue_activity_flyover(activity_flyover)
     og_image = ""
     og_image_alt = ""
     if activity_photos:
@@ -154,6 +140,7 @@ def post(request, slug):
             "post": post,
             "activity": activity,
             "activity_photos": activity_photos,
+            "activity_flyover": activity_flyover,
             "og_title": post.title,
             "og_description": Truncator(post.summary()).chars(200, truncate="..."),
             "og_image": absolute_url(request, og_image),
@@ -174,3 +161,24 @@ def delete_post(request, slug):
     post.deleted = True
     post.save(update_fields=["deleted"])
     return redirect(reverse("posts"))
+
+
+def activity_flyover_status(request, slug):
+    post = get_object_or_404(Post, slug=slug, deleted=False)
+    if post.kind != Post.ACTIVITY:
+        return JsonResponse({"status": "unavailable"}, status=404)
+
+    activity = activity_from_mf2(post)
+    if not activity or not activity.get("track_url"):
+        return JsonResponse({"status": "missing_gpx"}, status=404)
+
+    flyover, _ = ActivityFlyover.objects.get_or_create(post=post)
+    enqueue_activity_flyover(flyover)
+    payload = {"status": flyover.status}
+
+    if flyover.status == ActivityFlyover.READY and flyover.video:
+        payload["url"] = flyover.video.file.url
+    elif flyover.status == ActivityFlyover.FAILED and flyover.error_message:
+        payload["error"] = flyover.error_message
+
+    return JsonResponse(payload)

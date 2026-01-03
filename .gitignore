@@ -51,6 +51,9 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
+# DigitalOcean App Platform
+.do/app.secrets.yaml
+
 # collected static files
 staticfiles/
 

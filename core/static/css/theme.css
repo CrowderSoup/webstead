@@ -281,7 +281,8 @@ a:focus {
   color: var(--muted);
 }
 
-.photo-slider {
+.photo-slider,
+.media-slider {
   margin: 2rem 0;
   padding: 1rem 1.25rem 1.25rem;
   border-radius: 20px;
@@ -305,7 +306,8 @@ a:focus {
   scrollbar-color: rgba(22, 20, 19, 0.25) transparent;
 }
 
-html[data-motion="full"] .photo-slider.is-enhanced .slides {
+html[data-motion="full"] .photo-slider.is-enhanced .slides,
+html[data-motion="full"] .media-slider.is-enhanced .slides {
   scroll-behavior: smooth;
 }
 
@@ -367,7 +369,10 @@ html[data-motion="full"] .photo-slider.is-enhanced .slides {
   color: var(--accent-deep);
   font-size: 0.85rem;
   font-weight: 600;
-  transition: transform 0.2s ease, background 0.2s ease, border 0.2s ease,
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease,
+    border 0.2s ease,
     color 0.2s ease;
 }
 
@@ -476,6 +481,78 @@ html[data-motion="full"] .photo-slider.is-enhanced .slides {
 .entry-activity .entry-header h1.p-name,
 .entry-activity .entry-header h3.p-name {
   margin: 0;
+}
+
+.activity-media {
+  margin: 1.25rem 0 1.75rem;
+}
+
+.activity-media .slides {
+  gap: 1rem;
+}
+
+.activity-media__tile {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--panel);
+  box-shadow: 0 18px 32px var(--shadow);
+}
+
+.activity-flyover {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.activity-media .activity-map {
+  height: clamp(14rem, 40vh, 26rem);
+  margin: 0 0 1rem;
+  border-radius: 18px;
+  box-shadow: none;
+}
+
+.activity-media .activity-elevation {
+  margin: 0.5rem 0 1rem;
+}
+
+.activity-media .activity-stats {
+  margin: 0.5rem 0 0;
+}
+
+.activity-flyover__frame {
+  aspect-ratio: 16 / 9;
+  border-radius: 18px;
+  border: 1px dashed var(--line);
+  background: linear-gradient(140deg, #fff4e8 0%, #ffffff 80%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1.5rem;
+  color: var(--muted);
+}
+
+.activity-flyover__title {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--accent-deep);
+}
+
+.activity-flyover__status {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.activity-flyover__video {
+  display: block;
+  width: 100%;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: #101010;
 }
 
 .activity-map {
