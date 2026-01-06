@@ -1,4 +1,5 @@
 import json
+import logging
 from urllib.parse import urlencode, urlparse
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -73,6 +74,8 @@ from .forms import (
     WebmentionCreateForm,
     WebmentionFilterForm,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _gpx_form_defaults(request):
@@ -916,11 +919,30 @@ def webmention_create(request):
     if request.method == "POST":
         form = WebmentionCreateForm(request.POST)
         if form.is_valid():
-            mention = send_webmention(
-                form.cleaned_data["source"],
-                form.cleaned_data["target"],
-                mention_type=form.cleaned_data["mention_type"],
+            logger.info(
+                "Webmention send requested",
+                extra={
+                    "webmention_source": form.cleaned_data["source"],
+                    "webmention_target": form.cleaned_data["target"],
+                    "webmention_type": form.cleaned_data["mention_type"],
+                },
             )
+            try:
+                mention = send_webmention(
+                    form.cleaned_data["source"],
+                    form.cleaned_data["target"],
+                    mention_type=form.cleaned_data["mention_type"],
+                )
+            except Exception:
+                logger.exception(
+                    "Webmention send crashed",
+                    extra={
+                        "webmention_source": form.cleaned_data["source"],
+                        "webmention_target": form.cleaned_data["target"],
+                        "webmention_type": form.cleaned_data["mention_type"],
+                    },
+                )
+                raise
             if mention.status == Webmention.ACCEPTED:
                 messages.success(request, "Webmention sent successfully.")
             elif mention.status == Webmention.PENDING:
@@ -934,6 +956,13 @@ def webmention_create(request):
                     "Webmention was rejected by the target endpoint.",
                 )
             return redirect("site_admin:webmention_detail", mention_id=mention.id)
+        logger.info(
+            "Webmention form invalid",
+            extra={
+                "webmention_errors": form.errors.as_json(),
+                "webmention_post": request.POST.dict(),
+            },
+        )
     else:
         form = WebmentionCreateForm()
 

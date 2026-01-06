@@ -264,5 +264,10 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+        "site_admin.views": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
     },
 }
