@@ -18,10 +18,12 @@ class Webmention(models.Model):
     PENDING = "pending"
     ACCEPTED = "accepted"
     REJECTED = "rejected"
+    TIMED_OUT = "timed_out"
     STATUS_CHOICES = [
         (PENDING, "Pending"),
         (ACCEPTED, "Accepted"),
         (REJECTED, "Rejected"),
+        (TIMED_OUT, "Timed out"),
     ]
 
     source = models.URLField()

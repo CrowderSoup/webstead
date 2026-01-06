@@ -42,6 +42,8 @@
                   <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-[color:var(--admin-accent)]">Accepted</span>
                 {% elif mention.status == "pending" %}
                   <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-[color:var(--admin-muted)]">Pending</span>
+                {% elif mention.status == "timed_out" %}
+                  <span class="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">Timed out</span>
                 {% else %}
                   <span class="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">Rejected</span>
                 {% endif %}
@@ -107,6 +109,8 @@
             <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-[color:var(--admin-accent)]">Accepted</span>
           {% elif mention.status == "pending" %}
             <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-[color:var(--admin-muted)]">Pending</span>
+          {% elif mention.status == "timed_out" %}
+            <span class="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">Timed out</span>
           {% else %}
             <span class="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">Rejected</span>
           {% endif %}

@@ -1,5 +1,6 @@
 import logging
 import re
+import socket
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -134,7 +135,7 @@ def _send_webmention_request(source_url: str, target_url: str) -> tuple[str, str
             if response.status in (200, 201):
                 return Webmention.ACCEPTED, ""
             return Webmention.REJECTED, f"Unexpected status {response.status}"
-    except (urllib.error.HTTPError, urllib.error.URLError, ValueError) as exc:
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, socket.timeout, ValueError) as exc:
         error_status = getattr(exc, "code", None)
         error_body = ""
         if isinstance(exc, urllib.error.HTTPError):
@@ -142,6 +143,9 @@ def _send_webmention_request(source_url: str, target_url: str) -> tuple[str, str
                 error_body = exc.read().decode("utf-8", errors="replace")
             except Exception:
                 error_body = ""
+        status = Webmention.REJECTED
+        if isinstance(exc, (TimeoutError, socket.timeout)):
+            status = Webmention.TIMED_OUT
         logger.info(
             "Webmention request failed",
             extra={
@@ -153,15 +157,7 @@ def _send_webmention_request(source_url: str, target_url: str) -> tuple[str, str
                 "webmention_body": error_body[:2000],
             },
         )
-        print({
-            "webmention_source": source_url,
-            "webmention_target": target_url,
-            "webmention_endpoint": endpoint,
-            "webmention_status": error_status,
-            "webmention_error": str(exc),
-            "webmention_body": error_body[:2000],
-        })
-        return Webmention.REJECTED, str(exc)
+        return status, str(exc)
 
 
 def send_webmention(

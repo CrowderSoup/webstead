@@ -950,6 +950,11 @@ def webmention_create(request):
                     request,
                     "Webmention accepted for processing and is still pending.",
                 )
+            elif mention.status == Webmention.TIMED_OUT:
+                messages.warning(
+                    request,
+                    "Webmention request timed out. You can retry it later.",
+                )
             else:
                 messages.error(
                     request,
@@ -983,7 +988,10 @@ def webmention_detail(request, mention_id):
         return guard
 
     mention = get_object_or_404(Webmention, pk=mention_id)
-    can_resend = mention.status == Webmention.PENDING and _is_local_url(mention.source, request)
+    can_resend = mention.status in (Webmention.PENDING, Webmention.TIMED_OUT) and _is_local_url(
+        mention.source,
+        request,
+    )
     can_delete = mention.status == Webmention.REJECTED
     return render(
         request,
@@ -1003,8 +1011,8 @@ def webmention_resend(request, mention_id):
         return guard
 
     mention = get_object_or_404(Webmention, pk=mention_id)
-    if mention.status != Webmention.PENDING:
-        messages.error(request, "Only pending webmentions can be resent.")
+    if mention.status not in (Webmention.PENDING, Webmention.TIMED_OUT):
+        messages.error(request, "Only pending or timed-out webmentions can be resent.")
         return redirect("site_admin:webmention_detail", mention_id=mention.id)
     if not _is_local_url(mention.source, request):
         messages.error(request, "Only webmentions sourced from this site can be resent.")
@@ -1015,6 +1023,8 @@ def webmention_resend(request, mention_id):
         messages.success(request, "Webmention resent successfully.")
     elif mention.status == Webmention.PENDING:
         messages.warning(request, "Webmention is still pending after resend.")
+    elif mention.status == Webmention.TIMED_OUT:
+        messages.warning(request, "Webmention resend timed out.")
     else:
         messages.error(request, "Webmention resend was rejected.")
     return redirect("site_admin:webmention_detail", mention_id=mention.id)
