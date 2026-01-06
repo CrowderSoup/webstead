@@ -93,3 +93,7 @@ def sitemap(request):
     xml_lines.append("</urlset>")
 
     return HttpResponse("\n".join(xml_lines), content_type="application/xml")
+
+
+def server_error(request):
+    return render(request, "500.html", status=500)

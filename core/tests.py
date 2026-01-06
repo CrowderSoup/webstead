@@ -15,7 +15,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.template import Context, Template
-from django.test import TestCase
+from django.test import TestCase, RequestFactory
 from django.test.utils import override_settings
 from django.urls import reverse
 from django.templatetags.static import static
@@ -45,6 +45,7 @@ from .themes import (
 )
 from .theme_validation import validate_theme_dir
 from .test_utils import build_test_theme
+from .views import server_error
 from blog.models import Post, Tag
 
 
@@ -162,6 +163,21 @@ class SitemapTests(TestCase):
         self.assertIn(f"http://testserver{post.get_absolute_url()}", body)
         self.assertIn(f"http://testserver{reverse('posts_by_tag', kwargs={'tag': tag.tag})}", body)
         self.assertNotIn("/admin/", body)
+
+
+class ServerErrorHandlerTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.factory = RequestFactory()
+
+    def test_renders_without_error(self):
+        SiteConfiguration.get_solo()
+
+        request = self.factory.get("/__server_error__/")
+        response = server_error(request)
+
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("Server error", response.content.decode())
 
 
 class HCardTests(TestCase):
@@ -342,8 +358,15 @@ class ThemeReconcileCommandTests(TestCase):
 
             with override_settings(THEMES_ROOT=themes_root):
                 with mock.patch("core.theme_sync.theme_exists_in_storage", return_value=False):
-                    with self.assertRaises(CommandError):
-                        call_command("theme_reconcile", "--strict")
+                    with self.assertLogs("core.theme_sync", level="WARNING"):
+                        with self.assertRaises(CommandError):
+                            call_command(
+                                "theme_reconcile",
+                                "--strict",
+                                verbosity=0,
+                                stdout=io.StringIO(),
+                                stderr=io.StringIO(),
+                            )
 
 
 class ThemeListCommandTests(TestCase):

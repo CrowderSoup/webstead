@@ -10,6 +10,8 @@ urlpatterns = [
     path("analytics/", include("analytics.urls")),
 ]
 
+handler500 = "core.views.server_error"
+
 if settings.DEBUG:
     from debug_toolbar.toolbar import debug_toolbar_urls
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
