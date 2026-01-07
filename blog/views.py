@@ -1,5 +1,5 @@
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render, get_object_or_404
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -136,6 +136,8 @@ def post(request, slug):
         slug=slug,
         deleted=False,
     )
+    if not post.is_published() and not request.user.is_authenticated:
+        raise Http404
 
     activity = _activity_from_mf2(post) if post.kind == Post.ACTIVITY else None
     activity_photos = list(post.photo_attachments) if post.kind == Post.ACTIVITY else []

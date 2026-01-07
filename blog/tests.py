@@ -1,4 +1,6 @@
+from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from .models import Post, Tag
@@ -65,3 +67,32 @@ class PostModelTests(TestCase):
         suffix = post.slug.split("article-", 1)[1]
         self.assertTrue(suffix.isdigit())
 
+
+class PostViewTests(TestCase):
+    def test_draft_post_requires_login(self):
+        post = Post.objects.create(
+            title="Draft",
+            slug="draft-post",
+            content="text",
+        )
+
+        response = self.client.get(reverse("post", kwargs={"slug": post.slug}))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_authenticated_user_can_view_draft_post(self):
+        post = Post.objects.create(
+            title="Draft",
+            slug="draft-for-user",
+            content="text",
+        )
+        user = get_user_model().objects.create_user(
+            username="reader",
+            email="reader@example.com",
+            password="password",
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("post", kwargs={"slug": post.slug}))
+
+        self.assertEqual(response.status_code, 200)
