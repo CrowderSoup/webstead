@@ -53,7 +53,7 @@ from core.themes import (
     sync_themes_from_storage,
 )
 from micropub.models import Webmention
-from micropub.webmention import resend_webmention, send_webmention
+from micropub.webmention import resend_webmention, send_webmention, send_webmentions_for_post
 
 from .forms import (
     HCardEmailForm,
@@ -1430,6 +1430,8 @@ def post_edit(request, slug=None):
 
             saved_post.mf2 = mf2_payload
             saved_post.save(update_fields=["mf2"])
+            source_url = request.build_absolute_uri(saved_post.get_absolute_url())
+            send_webmentions_for_post(saved_post, source_url)
             if request.headers.get("HX-Request"):
                 if is_new:
                     response = HttpResponse(status=204)

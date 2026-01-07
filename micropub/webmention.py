@@ -192,8 +192,15 @@ def resend_webmention(webmention: Webmention) -> Webmention:
 def send_webmentions_for_post(post: Post, source_url: str) -> None:
     source_host = urllib.parse.urlparse(source_url).netloc
     targets = [url for url in _extract_targets(post) if urllib.parse.urlparse(url).netloc != source_host]
+    existing_targets = set()
+    if targets:
+        existing_targets = set(
+            Webmention.objects.filter(source=source_url, target__in=targets).values_list("target", flat=True)
+        )
 
     for target in targets:
+        if target in existing_targets:
+            continue
         mention_type = Webmention.MENTION
         if target == post.like_of:
             mention_type = Webmention.LIKE

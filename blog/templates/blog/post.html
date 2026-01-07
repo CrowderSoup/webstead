@@ -21,13 +21,19 @@
 {% endblock %}
 
 {% block content %}
-  {# Post kind switcher: note, photo, or article. #}
+  {# Post kind switcher: note, photo, activity, like, reply, repost, or article. #}
   {% if post.kind == 'note' %}
     {% include 'blog/note.html' %}
   {% elif post.kind == 'photo' %}
     {% include 'blog/photo.html' %}
   {% elif post.kind == 'activity' %}
     {% include 'blog/activity.html' %}
+  {% elif post.kind == 'like' %}
+    {% include 'blog/like.html' %}
+  {% elif post.kind == 'reply' %}
+    {% include 'blog/reply.html' %}
+  {% elif post.kind == 'repost' %}
+    {% include 'blog/repost.html' %}
   {% else %}
     {% include 'blog/article.html' %}
   {% endif %}

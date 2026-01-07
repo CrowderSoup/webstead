@@ -1,0 +1,28 @@
+{% load author %}
+
+{% with interaction=post.interaction %}
+<article class="h-entry entry-like">
+  <header class="entry-header">
+    <p class="interaction-kicker">{{ interaction.label }}</p>
+  </header>
+
+  {% include 'blog/interaction-target.html' with target=interaction.target %}
+
+  {% if interaction.show_content %}
+    <div class="p-content">
+      {{ post.html }}
+    </div>
+  {% endif %}
+
+  {% include 'blog/tags.html' %}
+
+  <div class="entry-meta">
+    <a class="u-url" href="/blog/post/{{ post.slug }}">
+      <time class="dt-published" datetime="{{ post.published_on }}">
+        {{ post.published_on|date:"Y-m-d" }}
+      </time>
+    </a>
+    <span class="p-author h-card">{% author_hcard_name post.author %}</span>
+  </div>
+</article>
+{% endwith %}

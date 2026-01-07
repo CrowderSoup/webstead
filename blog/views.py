@@ -8,6 +8,7 @@ from django.utils.text import Truncator
 from urllib.parse import urlencode
 
 from .models import Post, Tag
+from .mf2 import fetch_target_from_url
 from core.models import SiteConfiguration
 from core.og import absolute_url, first_attachment_image_url
 
@@ -36,6 +37,46 @@ def _staff_guard(request):
     if not request.user.is_authenticated or not request.user.is_staff:
         return HttpResponse(status=401)
     return None
+
+
+def _is_default_interaction_content(post, target_url):
+    content = (post.content or "").strip()
+    if not content:
+        return True
+    if not target_url:
+        return False
+    if post.kind == Post.LIKE:
+        return content == f"Liked {target_url}"
+    if post.kind == Post.REPOST:
+        return content == f"Reposted {target_url}"
+    if post.kind == Post.REPLY:
+        return content == f"Reply to {target_url}"
+    return False
+
+
+def _interaction_payload(post):
+    if post.kind == Post.LIKE:
+        target_url = post.like_of
+        label = "Liked"
+    elif post.kind == Post.REPOST:
+        target_url = post.repost_of
+        label = "Reposted"
+    elif post.kind == Post.REPLY:
+        target_url = post.in_reply_to
+        label = "Replying to"
+    else:
+        return None
+
+    target_url = target_url or ""
+    target = fetch_target_from_url(target_url) if target_url else None
+
+    return {
+        "kind": post.kind,
+        "label": label,
+        "target_url": target_url,
+        "target": target,
+        "show_content": not _is_default_interaction_content(post, target_url),
+    }
 
 def posts(request):
     settings = SiteConfiguration.get_solo()
@@ -69,6 +110,8 @@ def posts(request):
         if post.kind == Post.ACTIVITY:
             has_activity = True
             post.activity = _activity_from_mf2(post)
+        elif post.kind in (Post.LIKE, Post.REPLY, Post.REPOST):
+            post.interaction = _interaction_payload(post)
 
     return render(
         request,
@@ -111,6 +154,8 @@ def posts_by_tag(request, tag):
         if post.kind == Post.ACTIVITY:
             has_activity = True
             post.activity = _activity_from_mf2(post)
+        elif post.kind in (Post.LIKE, Post.REPLY, Post.REPOST):
+            post.interaction = _interaction_payload(post)
 
 
     return render(
@@ -140,6 +185,8 @@ def post(request, slug):
         raise Http404
 
     activity = _activity_from_mf2(post) if post.kind == Post.ACTIVITY else None
+    if post.kind in (Post.LIKE, Post.REPLY, Post.REPOST):
+        post.interaction = _interaction_payload(post)
     activity_photos = list(post.photo_attachments) if post.kind == Post.ACTIVITY else []
     og_image = ""
     og_image_alt = ""

@@ -47,6 +47,12 @@
         {% include 'blog/photo.html' %}
       {% elif post.kind == 'activity' %}
         {% include 'blog/activity-summary.html' %}
+      {% elif post.kind == 'like' %}
+        {% include 'blog/like.html' %}
+      {% elif post.kind == 'reply' %}
+        {% include 'blog/reply.html' %}
+      {% elif post.kind == 'repost' %}
+        {% include 'blog/repost.html' %}
       {% else %}
         {% include 'blog/article-summary.html' %}
       {% endif %}

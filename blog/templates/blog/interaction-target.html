@@ -1,0 +1,54 @@
+{% if target and target.original_url %}
+  <article class="interaction-card h-cite{% if variant %} interaction-card--{{ variant }}{% endif %}">
+    <header class="interaction-card__header">
+      <div class="interaction-card__meta">
+        <p class="interaction-source">From another site</p>
+        {% if target.author_name or target.author_url %}
+          <div class="interaction-byline p-author h-card">
+            <img
+              class="interaction-avatar u-photo"
+              src="{{ target.author_photo }}"
+              alt=""
+              loading="lazy"
+            />
+            <p class="interaction-author">
+              {% if target.author_url %}
+                <a class="u-url" href="{{ target.author_url }}">
+                  <span class="p-name">{{ target.author_name|default:target.author_url }}</span>
+                </a>
+              {% else %}
+                <span class="p-name">{{ target.author_name }}</span>
+              {% endif %}
+            </p>
+          </div>
+        {% endif %}
+      </div>
+      <div class="interaction-card__main">
+        {% if target.title %}
+          <p class="interaction-title">
+            <a class="u-url" href="{{ target.original_url }}" target="_blank" rel="noopener noreferrer">
+              {{ target.title }}
+            </a>
+          </p>
+        {% else %}
+          <p class="interaction-title">
+            <a class="u-url" href="{{ target.original_url }}" target="_blank" rel="noopener noreferrer">
+              {{ target.original_url }}
+            </a>
+          </p>
+        {% endif %}
+      </div>
+    </header>
+    <div class="interaction-card__content p-content">
+      {% if target.summary_html %}
+        {{ target.summary_html|safe }}
+      {% else %}
+        {{ target.summary_text|linebreaksbr }}
+      {% endif %}
+    </div>
+  </article>
+{% else %}
+  <p class="interaction-missing">
+    Original post unavailable.
+  </p>
+{% endif %}

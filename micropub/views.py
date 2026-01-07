@@ -301,6 +301,8 @@ def _handle_update_action(request, data):
             post.tags.clear()
 
     post.save()
+    source_url = request.build_absolute_uri(post.get_absolute_url())
+    send_webmentions_for_post(post, source_url)
     return HttpResponse(status=204)
 
 
