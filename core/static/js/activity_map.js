@@ -373,6 +373,8 @@
     });
   }
 
+  window.initializeActivityMaps = initMaps;
+
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", initMaps);
   } else {

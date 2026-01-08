@@ -1,7 +1,8 @@
 {# Tag list used by articles, notes, and photos. #}
 <nav class="tags">
+  {% url 'posts' as posts_url %}
   {% for tag in post.tags.all %}
-  <a href="/blog/tag/{{ tag }}" rel="tag" class="p-category" title="{{ tag }}">
+  <a href="{{ posts_url|slice:":-1" }}?tag={{ tag }}" rel="tag" class="p-category" title="{{ tag }}" data-tag="{{ tag }}">
     #{{ tag }}
   </a>
   {% endfor %}

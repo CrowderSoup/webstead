@@ -36,13 +36,30 @@ class PostsFeed(Feed):
     def items(self, obj=None):
         request = getattr(self, "request", None)
 
-        selected_kinds = request.GET.getlist("kind") if request else []
+        selected_kinds = []
+        selected_tags = []
+        if request:
+            for value in request.GET.getlist("kind"):
+                selected_kinds.extend(
+                    [chunk.strip().lower() for chunk in value.split(",") if chunk.strip()]
+                )
+            for value in request.GET.getlist("tag"):
+                selected_tags.extend(
+                    [chunk.strip().lower() for chunk in value.split(",") if chunk.strip()]
+                )
+        seen_kinds = set()
+        selected_kinds = [kind for kind in selected_kinds if not (kind in seen_kinds or seen_kinds.add(kind))]
+        seen_tags = set()
+        selected_tags = [tag for tag in selected_tags if not (tag in seen_tags or seen_tags.add(tag))]
         valid_kinds = {kind for kind, _ in Post.KIND_CHOICES}
         selected_kinds = [kind for kind in selected_kinds if kind in valid_kinds]
 
         queryset = Post.objects.exclude(published_on__isnull=True).filter(deleted=False).order_by("-published_on")
         if selected_kinds:
             queryset = queryset.filter(kind__in=selected_kinds)
+        for tag in selected_tags:
+            queryset = queryset.filter(tags__tag=tag)
+        queryset = queryset.distinct()
         return queryset
 
     def item_title(self, item):

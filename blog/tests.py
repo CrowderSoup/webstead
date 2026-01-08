@@ -322,7 +322,71 @@ class Mf2NormalizationTests(TestCase):
 
     def test_fetch_target_from_url_failure_returns_none(self):
         fetch_target_from_url.cache_clear()
-        with patch("blog.mf2.requests.get", side_effect=requests.RequestException):
-            target = fetch_target_from_url("https://example.com/post/404")
+        with self.assertLogs("blog.mf2", level="ERROR"):
+            with patch("blog.mf2.requests.get", side_effect=requests.RequestException):
+                target = fetch_target_from_url("https://example.com/post/404")
 
         self.assertIsNone(target)
+
+class PostFilterTests(TestCase):
+    def setUp(self):
+        self.tag_arcane = Tag.objects.create(tag="arcane")
+        self.tag_docker = Tag.objects.create(tag="docker")
+        self.tag_extra = Tag.objects.create(tag="extra")
+
+        self.article = Post.objects.create(
+            title="Arcane Docker",
+            slug="arcane-docker",
+            content="text",
+            kind=Post.ARTICLE,
+            published_on=timezone.now(),
+        )
+        self.article.tags.add(self.tag_arcane, self.tag_docker)
+
+        self.note = Post.objects.create(
+            title="Arcane Note",
+            slug="arcane-note",
+            content="text",
+            kind=Post.NOTE,
+            published_on=timezone.now(),
+        )
+        self.note.tags.add(self.tag_arcane)
+
+        self.photo = Post.objects.create(
+            title="Docker Photo",
+            slug="docker-photo",
+            content="text",
+            kind=Post.PHOTO,
+            published_on=timezone.now(),
+        )
+        self.photo.tags.add(self.tag_docker, self.tag_extra)
+
+    def test_filter_query_serialization(self):
+        response = self.client.get(reverse("posts"), {"kind": "article,note", "tag": "arcane"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["filter_query"], "kind=article,note&tag=arcane")
+
+    def test_filter_by_kind_and_tags(self):
+        response = self.client.get(
+            reverse("posts"),
+            {"kind": "article,note", "tag": "arcane,docker"},
+        )
+
+        posts = list(response.context["posts"].object_list)
+
+        self.assertIn(self.article, posts)
+        self.assertNotIn(self.note, posts)
+        self.assertNotIn(self.photo, posts)
+
+    def test_tag_pill_targets_filter(self):
+        response = self.client.get(reverse("posts"))
+
+        self.assertContains(response, 'data-tag="arcane"')
+        self.assertContains(response, "/blog?tag=arcane")
+
+    def test_tag_page_redirects_to_filter(self):
+        response = self.client.get(reverse("posts_by_tag", kwargs={"tag": "arcane"}))
+
+        self.assertEqual(response.status_code, 301)
+        self.assertEqual(response["Location"], "/blog?tag=arcane")

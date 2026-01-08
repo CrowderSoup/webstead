@@ -1,5 +1,6 @@
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from django.http import Http404, HttpResponse
+from django.db.models import Count
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render, get_object_or_404
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -37,7 +38,6 @@ def _staff_guard(request):
     if not request.user.is_authenticated or not request.user.is_staff:
         return HttpResponse(status=401)
     return None
-
 
 def _is_default_interaction_content(post, target_url):
     content = (post.content or "").strip()
@@ -78,22 +78,56 @@ def _interaction_payload(post):
         "show_content": not _is_default_interaction_content(post, target_url),
     }
 
+def _split_filter_values(values):
+    items = []
+    for value in values:
+        if value is None:
+            continue
+        for chunk in value.split(","):
+            chunk = chunk.strip()
+            if chunk:
+                items.append(chunk.lower())
+    seen = set()
+    deduped = []
+    for item in items:
+        if item in seen:
+            continue
+        seen.add(item)
+        deduped.append(item)
+    return deduped
+
+def _build_filter_query(selected_kinds, selected_tags):
+    params = []
+    if selected_kinds:
+        params.append(("kind", ",".join(selected_kinds)))
+    if selected_tags:
+        params.append(("tag", ",".join(selected_tags)))
+    return urlencode(params, safe=",")
+
 def posts(request):
     settings = SiteConfiguration.get_solo()
-    requested_kinds = request.GET.getlist("kind")
+    requested_kinds = _split_filter_values(request.GET.getlist("kind"))
+    selected_tags = _split_filter_values(request.GET.getlist("tag"))
     valid_kinds = {kind for kind, _ in Post.KIND_CHOICES}
     selected_kinds = [kind for kind in requested_kinds if kind in valid_kinds]
-    feed_kinds_query = urlencode([("kind", kind) for kind in selected_kinds])
-    selected_kinds = selected_kinds or [Post.ARTICLE]
+    default_kinds = [Post.ARTICLE]
+    if not selected_kinds and not selected_tags:
+        selected_kinds = default_kinds[:]
+    filter_query = _build_filter_query(selected_kinds, selected_tags)
+    has_active_filters = bool(requested_kinds or selected_tags)
 
     query_set = (
         Post.objects.select_related("author")
-        .prefetch_related("author__hcards")
+        .prefetch_related("author__hcards", "tags")
         .exclude(published_on__isnull=True)
         .filter(deleted=False)
         .order_by("-published_on")
     )
-    query_set = query_set.filter(kind__in=selected_kinds)
+    if selected_kinds:
+        query_set = query_set.filter(kind__in=selected_kinds)
+    for tag in selected_tags:
+        query_set = query_set.filter(tags__tag=tag)
+    query_set = query_set.distinct()
 
     paginator = Paginator(query_set, 10)
     page_number = request.GET.get("page")
@@ -120,8 +154,11 @@ def posts(request):
             "posts": posts,
             "post_kinds": Post.KIND_CHOICES,
             "selected_kinds": selected_kinds,
-            "selected_kinds_query": urlencode([("kind", kind) for kind in selected_kinds]),
-            "feed_kinds_query": feed_kinds_query,
+            "selected_tags": selected_tags,
+            "default_kinds": default_kinds,
+            "filter_query": filter_query,
+            "feed_filter_query": filter_query,
+            "has_active_filters": has_active_filters,
             "has_activity": has_activity,
             "og_title": f"{settings.title} posts" if settings.title else "Posts",
             "og_description": settings.tagline,
@@ -130,46 +167,23 @@ def posts(request):
     )
 
 def posts_by_tag(request, tag):
-    settings = SiteConfiguration.get_solo()
     tag = get_object_or_404(Tag, tag=tag)
-    query_set = (
-        Post.objects.select_related("author")
-        .prefetch_related("author__hcards")
-        .exclude(published_on__isnull=True)
-        .filter(tags=tag, deleted=False)
-        .order_by("-published_on")
+    posts_url = reverse("posts").rstrip("/")
+    target = f"{posts_url}?{urlencode({'tag': tag.tag})}"
+    return redirect(target, permanent=True)
+
+def tag_suggestions(request):
+    query = request.GET.get("q", "").strip()
+    if not query:
+        return JsonResponse({"tags": []})
+
+    suggestions = (
+        Tag.objects.filter(tag__icontains=query)
+        .annotate(post_count=Count("post"))
+        .order_by("-post_count", "tag")
+        .values_list("tag", flat=True)[:8]
     )
-    paginator = Paginator(query_set, 10)
-    page_number = request.GET.get("page")
-
-    try:
-        posts = paginator.page(page_number)
-    except PageNotAnInteger:
-        posts = paginator.page(1)
-    except EmptyPage:
-        posts.paginator.page(paginator.num_pages)
-
-    has_activity = False
-    for post in posts:
-        if post.kind == Post.ACTIVITY:
-            has_activity = True
-            post.activity = _activity_from_mf2(post)
-        elif post.kind in (Post.LIKE, Post.REPLY, Post.REPOST):
-            post.interaction = _interaction_payload(post)
-
-
-    return render(
-        request, 
-        'blog/posts_by_tag.html',
-        {
-            "posts": posts,
-            "tag": tag,
-            "has_activity": has_activity,
-            "og_title": f"{settings.title} · Tag: {tag.tag}" if settings.title else f"Tag: {tag.tag}",
-            "og_description": settings.tagline,
-            "og_url": request.build_absolute_uri(),
-        }
-    )
+    return JsonResponse({"tags": list(suggestions)})
 
 def post(request, slug):
     post = get_object_or_404(

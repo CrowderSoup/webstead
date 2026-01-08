@@ -242,6 +242,7 @@ a:focus {
   border-radius: 999px;
   font-size: 0.85rem;
   color: var(--accent-deep);
+  cursor: pointer;
 }
 
 .post-filter {
@@ -253,16 +254,145 @@ a:focus {
 }
 
 .post-filter form {
+  display: grid;
+  gap: 1rem;
+}
+
+.filter-header {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
   align-items: center;
+  justify-content: space-between;
 }
 
-.post-filter label {
+.filter-title {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.filter-clear {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+.filter-toggle {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+.filter-body {
+  display: grid;
+  gap: 1rem;
+}
+
+html.js-enabled .post-filter.is-collapsed .filter-body {
+  display: none;
+}
+
+html.js-enabled .post-filter.is-collapsed .filter-header {
+  cursor: pointer;
+}
+
+.filter-group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.filter-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.filter-kinds legend {
+  font-weight: 600;
+  margin-right: 0.75rem;
+}
+
+.filter-chip {
   display: inline-flex;
   gap: 0.35rem;
   align-items: center;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--line);
+  font-size: 0.85rem;
+}
+
+.filter-tags {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.filter-label {
+  font-weight: 600;
+}
+
+.tag-input {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.tag-chip {
+  border: none;
+  background: #f3eee5;
+  color: var(--accent-deep);
+  border-radius: 999px;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+.tag-input input {
+  border: none;
+  background: transparent;
+  min-width: 140px;
+  flex: 1;
+  padding: 0.2rem;
+  font-size: 0.9rem;
+}
+
+.tag-input input:focus {
+  outline: none;
+}
+
+.tag-suggestions {
+  display: block;
+}
+
+.tag-suggestions__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.tag-suggestion {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--ink);
 }
 
 .paginator {
