@@ -110,7 +110,7 @@ def posts(request):
     selected_tags = _split_filter_values(request.GET.getlist("tag"))
     valid_kinds = {kind for kind, _ in Post.KIND_CHOICES}
     selected_kinds = [kind for kind in requested_kinds if kind in valid_kinds]
-    default_kinds = [Post.ARTICLE]
+    default_kinds = [Post.ARTICLE, Post.NOTE, Post.PHOTO, Post.ACTIVITY]
     if not selected_kinds and not selected_tags:
         selected_kinds = default_kinds[:]
     filter_query = _build_filter_query(selected_kinds, selected_tags)
