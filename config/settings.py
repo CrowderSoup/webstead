@@ -80,13 +80,13 @@ if DEBUG:
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "analytics.middleware.AnalyticsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "core.middleware.RedirectMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "analytics.middleware.AnalyticsMiddleware",
 ]
 
 if DEBUG:
