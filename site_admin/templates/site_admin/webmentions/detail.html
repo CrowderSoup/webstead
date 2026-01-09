@@ -17,6 +17,26 @@
         >
           Back to webmentions
         </a>
+        {% if can_moderate %}
+          <form method="post" action="{% url 'site_admin:webmention_approve' mention_id=mention.id %}">
+            {% csrf_token %}
+            <button
+              type="submit"
+              class="rounded-full bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+            >
+              Approve webmention
+            </button>
+          </form>
+          <form method="post" action="{% url 'site_admin:webmention_reject' mention_id=mention.id %}">
+            {% csrf_token %}
+            <button
+              type="submit"
+              class="rounded-full border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
+            >
+              Reject webmention
+            </button>
+          </form>
+        {% endif %}
         {% if can_delete %}
           <form method="post" action="{% url 'site_admin:webmention_delete' mention_id=mention.id %}">
             {% csrf_token %}
@@ -33,7 +53,7 @@
             {% csrf_token %}
             <button
               type="submit"
-              class="rounded-full bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+              class="rounded-full border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
             >
               Resend webmention
             </button>

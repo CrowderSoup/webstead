@@ -67,6 +67,16 @@ urlpatterns = [
         name="webmention_resend",
     ),
     path(
+        "webmentions/<int:mention_id>/approve/",
+        views.webmention_approve,
+        name="webmention_approve",
+    ),
+    path(
+        "webmentions/<int:mention_id>/reject/",
+        views.webmention_reject,
+        name="webmention_reject",
+    ),
+    path(
         "webmentions/<int:mention_id>/delete/",
         views.webmention_delete,
         name="webmention_delete",

@@ -2,9 +2,11 @@ import json
 from unittest.mock import patch
 
 from django.test import TestCase
+from django.test.utils import override_settings
 from django.urls import reverse
 
 from blog.models import Post, Tag
+from micropub.models import Webmention
 
 
 MICROPUB_URL = "/micropub"
@@ -126,3 +128,66 @@ class MicropubViewTests(TestCase):
         props = body.get("properties", {})
         self.assertEqual(props.get("content"), ["Body"])
         self.assertIn("tag1", props.get("category", []))
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+class WebmentionViewTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.post = Post.objects.create(title="Hello", slug="hello", content="Hello world")
+        self.endpoint = reverse("webmention-endpoint")
+
+    def test_rejects_target_outside_site(self):
+        response = self.client.post(
+            self.endpoint,
+            data={"source": "https://source.example", "target": "https://example.com/blog/post/hello/"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Webmention.objects.count(), 0)
+
+    @override_settings(WEBMENTION_TRUSTED_DOMAINS=[])
+    @patch("micropub.views.verify_webmention_source", return_value=(True, "", False))
+    def test_verified_webmention_is_pending_by_default(self, _verify):
+        response = self.client.post(
+            self.endpoint,
+            data={"source": "https://source.example", "target": "http://testserver/blog/post/hello/"},
+        )
+
+        self.assertEqual(response.status_code, 202)
+        mention = Webmention.objects.get()
+        self.assertEqual(mention.status, Webmention.PENDING)
+
+    @override_settings(WEBMENTION_TRUSTED_DOMAINS=["trusted.example"])
+    @patch("micropub.views.verify_webmention_source", return_value=(True, "", False))
+    def test_trusted_domain_auto_approves(self, _verify):
+        response = self.client.post(
+            self.endpoint,
+            data={"source": "https://trusted.example/post", "target": "http://testserver/blog/post/hello/"},
+        )
+
+        self.assertEqual(response.status_code, 202)
+        mention = Webmention.objects.get()
+        self.assertEqual(mention.status, Webmention.ACCEPTED)
+
+    @patch("micropub.views.verify_webmention_source", return_value=(False, "No link found", False))
+    def test_missing_link_rejects(self, _verify):
+        response = self.client.post(
+            self.endpoint,
+            data={"source": "https://source.example", "target": "http://testserver/blog/post/hello/"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        mention = Webmention.objects.get()
+        self.assertEqual(mention.status, Webmention.REJECTED)
+
+    @patch("micropub.views.verify_webmention_source", return_value=(False, "Fetch failed", True))
+    def test_fetch_failures_stay_pending(self, _verify):
+        response = self.client.post(
+            self.endpoint,
+            data={"source": "https://source.example", "target": "http://testserver/blog/post/hello/"},
+        )
+
+        self.assertEqual(response.status_code, 202)
+        mention = Webmention.objects.get()
+        self.assertEqual(mention.status, Webmention.PENDING)

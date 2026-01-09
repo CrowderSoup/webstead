@@ -1,7 +1,7 @@
 {% if page_obj.object_list %}
   <div class="hidden md:block">
     <div class="overflow-hidden rounded-2xl border border-[color:var(--admin-border)]">
-      <table class="w-full text-left text-sm">
+      <table class="w-full table-fixed text-left text-sm">
         <thead class="bg-[color:var(--admin-bg)] text-xs uppercase tracking-widest text-[color:var(--admin-muted)]">
           <tr>
             <th class="px-4 py-3">Source</th>
@@ -10,7 +10,7 @@
             <th class="px-4 py-3">Status</th>
             <th class="px-4 py-3">Received</th>
             <th class="px-4 py-3">Post</th>
-            <th class="px-4 py-3"></th>
+            <th class="px-4 py-3 w-20"></th>
           </tr>
         </thead>
         <tbody>
@@ -19,7 +19,7 @@
               <td class="px-4 py-3 font-semibold">
                 <a
                   href="{{ mention.source }}"
-                  class="text-[color:var(--admin-accent)]"
+                  class="block max-w-[240px] truncate text-[color:var(--admin-accent)]"
                   target="_blank"
                   rel="noopener"
                 >
@@ -29,7 +29,7 @@
               <td class="px-4 py-3 text-[color:var(--admin-muted)]">
                 <a
                   href="{{ mention.target }}"
-                  class="text-[color:var(--admin-accent)]"
+                  class="block max-w-[240px] truncate text-[color:var(--admin-accent)]"
                   target="_blank"
                   rel="noopener"
                 >

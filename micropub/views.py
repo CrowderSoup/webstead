@@ -1,7 +1,9 @@
 import json
+import logging
 import mimetypes
 import os
 from datetime import datetime
+from typing import Optional
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
@@ -13,20 +15,24 @@ from django.http import (
 )
 from django.utils import timezone
 from django.utils.text import slugify
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
-from django.urls import reverse
+from django.urls import reverse, resolve
 from django.core.files.base import ContentFile
+from django.conf import settings
 
 from markdownify import markdownify as html_to_markdown
 
 from blog.models import Post, Tag
+from core.models import Page
 from files.models import Attachment, File
 from .models import Webmention
-from .webmention import send_webmentions_for_post
+from .webmention import send_webmentions_for_post, verify_webmention_source
 
 TOKEN_ENDPOINT = "https://tokens.indieauth.com/token"
+logger = logging.getLogger(__name__)
 
 
 def _first_value(data: dict, key: str, default=None):
@@ -117,6 +123,82 @@ def _normalize_payload(request):
         normalized.setdefault(normalized_key, []).extend(normalized_values)
 
     return normalized
+
+
+def _allowed_webmention_hosts(request):
+    allowed_hosts = list(settings.ALLOWED_HOSTS or [])
+    if not allowed_hosts:
+        allowed_hosts = [request.get_host()]
+    return allowed_hosts
+
+
+def _target_is_valid(request, target_url: str) -> tuple[Optional[Post], Optional[HttpResponse]]:
+    if not url_has_allowed_host_and_scheme(
+        target_url,
+        allowed_hosts=_allowed_webmention_hosts(request),
+        require_https=False,
+    ):
+        logger.info(
+            "Webmention target host rejected",
+            extra={"webmention_target": target_url},
+        )
+        return None, HttpResponseBadRequest("Target host is not allowed")
+
+    parsed = urlparse(target_url)
+    if parsed.scheme not in ("http", "https"):
+        logger.info(
+            "Webmention target scheme rejected",
+            extra={"webmention_target": target_url},
+        )
+        return None, HttpResponseBadRequest("Target scheme is not allowed")
+
+    try:
+        match = resolve(parsed.path)
+    except Exception:
+        logger.info(
+            "Webmention target path rejected",
+            extra={"webmention_target": target_url, "webmention_path": parsed.path},
+        )
+        return None, HttpResponseBadRequest("Target path is not recognized")
+
+    if match.url_name == "post":
+        slug = match.kwargs.get("slug")
+        if not slug:
+            return None, HttpResponseBadRequest("Target slug is missing")
+        try:
+            return Post.objects.get(slug=slug), None
+        except Post.DoesNotExist:
+            return None, HttpResponseBadRequest("Target post not found")
+
+    if match.url_name == "page":
+        slug = match.kwargs.get("slug")
+        if not slug:
+            return None, HttpResponseBadRequest("Target slug is missing")
+        try:
+            Page.objects.get(slug=slug)
+            return None, None
+        except Page.DoesNotExist:
+            return None, HttpResponseBadRequest("Target page not found")
+
+    logger.info(
+        "Webmention target view rejected",
+        extra={"webmention_target": target_url, "webmention_view": match.url_name},
+    )
+    return None, HttpResponseBadRequest("Target path is not recognized")
+
+
+def _is_trusted_domain(source_url: str) -> bool:
+    trusted = [domain.lower() for domain in settings.WEBMENTION_TRUSTED_DOMAINS]
+    if not trusted:
+        return False
+    source_host = urlparse(source_url).hostname
+    if not source_host:
+        return False
+    source_host = source_host.lower()
+    for domain in trusted:
+        if source_host == domain or source_host.endswith(f".{domain}"):
+            return True
+    return False
 
 
 def _is_mf2_object(value):
@@ -621,23 +703,39 @@ class WebmentionView(View):
         if not source or not target:
             return HttpResponseBadRequest("Missing source or target")
 
-        target_post = None
-        parsed = urlparse(target)
-        slug = parsed.path.rstrip("/").split("/")[-1]
-        if slug:
-            try:
-                target_post = Post.objects.get(slug=slug)
-            except Post.DoesNotExist:
-                target_post = None
+        target_post, error = _target_is_valid(request, target)
+        if error:
+            return error
 
-        status = Webmention.ACCEPTED if target_post else Webmention.PENDING
+        mention_type = mention_type if mention_type in dict(Webmention.MENTION_CHOICES) else Webmention.MENTION
+
+        verified, verify_error, fetch_failed = verify_webmention_source(source, target)
+        if not verified:
+            if fetch_failed:
+                status = Webmention.PENDING
+                response_status = 202
+            else:
+                status = Webmention.REJECTED
+                response_status = 400
+            logger.info(
+                "Webmention verification failed",
+                extra={
+                    "webmention_source": source,
+                    "webmention_target": target,
+                    "webmention_error": verify_error,
+                },
+            )
+        else:
+            status = Webmention.ACCEPTED if _is_trusted_domain(source) else Webmention.PENDING
+            response_status = 202
 
         Webmention.objects.create(
             source=source,
             target=target,
-            mention_type=mention_type if mention_type in dict(Webmention.MENTION_CHOICES) else Webmention.MENTION,
+            mention_type=mention_type,
             status=status,
             target_post=target_post,
+            error=verify_error or "",
         )
 
-        return HttpResponse(status=202)
+        return HttpResponse(status=response_status)

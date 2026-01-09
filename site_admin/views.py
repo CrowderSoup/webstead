@@ -993,6 +993,7 @@ def webmention_detail(request, mention_id):
         request,
     )
     can_delete = mention.status == Webmention.REJECTED
+    can_moderate = mention.status == Webmention.PENDING and _is_local_url(mention.target, request)
     return render(
         request,
         "site_admin/webmentions/detail.html",
@@ -1000,6 +1001,7 @@ def webmention_detail(request, mention_id):
             "mention": mention,
             "can_resend": can_resend,
             "can_delete": can_delete,
+            "can_moderate": can_moderate,
         },
     )
 
@@ -1043,6 +1045,41 @@ def webmention_delete(request, mention_id):
     mention.delete()
     messages.success(request, "Webmention deleted.")
     return redirect("site_admin:webmention_list")
+
+
+@require_POST
+def webmention_approve(request, mention_id):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    mention = get_object_or_404(Webmention, pk=mention_id)
+    if mention.status != Webmention.PENDING:
+        messages.error(request, "Only pending webmentions can be approved.")
+        return redirect("site_admin:webmention_detail", mention_id=mention.id)
+    mention.status = Webmention.ACCEPTED
+    mention.error = ""
+    mention.save(update_fields=["status", "error", "updated_at"])
+    messages.success(request, "Webmention approved.")
+    return redirect("site_admin:webmention_detail", mention_id=mention.id)
+
+
+@require_POST
+def webmention_reject(request, mention_id):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    mention = get_object_or_404(Webmention, pk=mention_id)
+    if mention.status != Webmention.PENDING:
+        messages.error(request, "Only pending webmentions can be rejected.")
+        return redirect("site_admin:webmention_detail", mention_id=mention.id)
+    mention.status = Webmention.REJECTED
+    if not mention.error:
+        mention.error = "Rejected by admin"
+    mention.save(update_fields=["status", "error", "updated_at"])
+    messages.success(request, "Webmention rejected.")
+    return redirect("site_admin:webmention_detail", mention_id=mention.id)
 
 
 @require_http_methods(["GET"])

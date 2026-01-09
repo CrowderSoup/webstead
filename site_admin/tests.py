@@ -15,6 +15,7 @@ from core.models import HCard, HCardPhoto, ThemeInstall
 from core.themes import ThemeDefinition, ThemeUpdateResult
 from core.test_utils import build_test_theme
 from files.models import Attachment, File
+from micropub.models import Webmention
 
 
 class SiteAdminAccessTests(TestCase):
@@ -473,3 +474,56 @@ class SiteAdminThemeInstallTests(TestCase):
 
         update.assert_called_once_with(install, ref="main")
         self.assertEqual(response.status_code, 302)
+
+
+class SiteAdminWebmentionModerationTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.staff = get_user_model().objects.create_user(
+            username="editor",
+            email="editor@example.com",
+            password="password",
+            is_staff=True,
+        )
+        self.client.force_login(self.staff)
+
+    def test_approve_pending_webmention(self):
+        mention = Webmention.objects.create(
+            source="https://source.example",
+            target="https://testserver/blog/post/hello/",
+            status=Webmention.PENDING,
+        )
+        response = self.client.post(
+            reverse("site_admin:webmention_approve", kwargs={"mention_id": mention.id})
+        )
+
+        self.assertEqual(response.status_code, 302)
+        mention.refresh_from_db()
+        self.assertEqual(mention.status, Webmention.ACCEPTED)
+
+    def test_reject_pending_webmention(self):
+        mention = Webmention.objects.create(
+            source="https://source.example",
+            target="https://testserver/blog/post/hello/",
+            status=Webmention.PENDING,
+        )
+        response = self.client.post(
+            reverse("site_admin:webmention_reject", kwargs={"mention_id": mention.id})
+        )
+
+        self.assertEqual(response.status_code, 302)
+        mention.refresh_from_db()
+        self.assertEqual(mention.status, Webmention.REJECTED)
+
+    def test_pending_outgoing_webmention_cannot_be_moderated(self):
+        mention = Webmention.objects.create(
+            source="https://testserver/blog/post/hello/",
+            target="https://external.example/post/1/",
+            status=Webmention.PENDING,
+        )
+        response = self.client.get(
+            reverse("site_admin:webmention_detail", kwargs={"mention_id": mention.id})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context["can_moderate"])

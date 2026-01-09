@@ -34,6 +34,20 @@ class _WebmentionDiscoveryParser(HTMLParser):
             self.endpoint = href
 
 
+class _WebmentionLinkParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.links: list[str] = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag.lower() != "a":
+            return
+        for key, value in attrs:
+            if key.lower() == "href" and value:
+                self.links.append(value)
+                break
+
+
 def _parse_link_header(header_value: str) -> Optional[str]:
     # Basic Link header parsing to find rel="webmention"
     for part in header_value.split(","):
@@ -50,6 +64,16 @@ def _parse_link_header(header_value: str) -> Optional[str]:
         if rel and "webmention" in rel.split():
             return url[1:]
     return None
+
+
+def _normalize_url_for_compare(url: str) -> str:
+    parsed = urllib.parse.urlparse(url)
+    scheme = parsed.scheme.lower()
+    netloc = parsed.netloc.lower()
+    path = parsed.path or "/"
+    if url.endswith("/") and not path.endswith("/"):
+        path = f"{path}/"
+    return urllib.parse.urlunparse((scheme, netloc, path, "", parsed.query, ""))
 
 
 def discover_webmention_endpoint(target_url: str) -> Optional[str]:
@@ -75,6 +99,37 @@ def discover_webmention_endpoint(target_url: str) -> Optional[str]:
     if parser.endpoint:
         return urllib.parse.urljoin(target_url, parser.endpoint)
     return None
+
+
+def verify_webmention_source(source_url: str, target_url: str) -> tuple[bool, str, bool]:
+    parsed_source = urllib.parse.urlparse(source_url)
+    if parsed_source.scheme not in ("http", "https"):
+        return False, "Unsupported source scheme", False
+
+    request = urllib.request.Request(source_url, headers={"User-Agent": "django-blog-webmention"})
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            content_type = response.headers.get("Content-Type", "")
+            if response.status != 200:
+                return False, f"Unexpected status {response.status}", True
+            if "html" not in content_type:
+                return False, "Source is not HTML", False
+            body = force_str(response.read(), errors="ignore")
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, socket.timeout, ValueError) as exc:
+        return False, str(exc), True
+
+    parser = _WebmentionLinkParser()
+    parser.feed(body)
+    if not parser.links:
+        return False, "No links found", False
+
+    normalized_target = _normalize_url_for_compare(target_url)
+    for href in parser.links:
+        resolved = urllib.parse.urljoin(source_url, href)
+        if _normalize_url_for_compare(resolved) == normalized_target:
+            return True, "", False
+
+    return False, "Source does not link to target", False
 
 
 def _extract_targets(post: Post) -> Iterable[str]:
