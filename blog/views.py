@@ -80,9 +80,14 @@ def _local_target_from_url(target_url, request):
     if not target_post:
         return None
 
+    summary_text = target_post.summary()
+    summary_excerpt = Truncator(summary_text).chars(240, truncate="...")
+
     return {
         "original_url": target_url,
-        "summary_text": target_post.summary(),
+        "summary_excerpt": summary_excerpt,
+        "summary_truncated": len(summary_text) > 240,
+        "summary_text": summary_text,
         "summary_html": None,
         "title": target_post.title,
     }
