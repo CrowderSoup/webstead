@@ -52,7 +52,7 @@ class PostForm(forms.ModelForm):
     tags_text = forms.CharField(
         required=False,
         label="Tags",
-        help_text="Comma-separated tags.",
+        help_text="Press Enter or comma to add tags.",
     )
     activity_type = forms.CharField(
         required=False,
@@ -126,6 +126,11 @@ class PostForm(forms.ModelForm):
             if name == "activity_type":
                 field.widget.attrs.setdefault("list", "activity-type-list")
                 field.widget.attrs.setdefault("placeholder", "Hike")
+            if name == "tags_text":
+                field.widget.attrs.setdefault("class", "tag-input__field")
+                field.widget.attrs.setdefault("placeholder", "Add tags")
+                field.widget.attrs.setdefault("autocomplete", "off")
+                field.widget.attrs.setdefault("spellcheck", "false")
         self.fields["slug"].widget.attrs.setdefault(
             "data-slug-source", "input[name='title']"
         )

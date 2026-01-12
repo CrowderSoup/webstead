@@ -217,7 +217,15 @@
         >
           Tags
         </label>
-        {{ form.tags_text }}
+        <div
+          class="tag-input mt-1"
+          data-tag-input
+          data-suggest-url="{% url 'tag_suggestions' %}"
+        >
+          <div class="tag-chips" data-tag-chips></div>
+          {{ form.tags_text }}
+          <div class="tag-suggestions" data-tag-suggestions hidden></div>
+        </div>
         <p class="mt-1 text-xs text-[color:var(--admin-muted)]">{{ form.tags_text.help_text }}</p>
         {{ form.tags_text.errors }}
       </div>

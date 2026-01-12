@@ -1,8 +1,74 @@
 {% extends "site_admin/base.html" %}
+{% load static %}
 
 {% block title %}{% if post %}Edit post{% else %}New post{% endif %}{% endblock %}
 
-{% block head %}{{ form.media }}{% endblock %}
+{% block head %}
+  {{ form.media }}
+  <script src="{% static 'js/tag_input.js' %}" defer></script>
+  <style>
+    .tag-input {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      padding: 0.6rem 0.75rem;
+      border-radius: 1.25rem;
+      border: 1px solid var(--admin-border);
+      background: var(--admin-surface);
+    }
+
+    .tag-input__field {
+      border: none;
+      background: transparent;
+      min-width: 140px;
+      flex: 1;
+      padding: 0.2rem;
+      font-size: 0.9rem;
+      color: var(--admin-ink);
+    }
+
+    .tag-input__field:focus {
+      outline: none;
+    }
+
+    .tag-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .tag-chip {
+      border: 1px solid var(--admin-border);
+      background: var(--admin-bg);
+      color: var(--admin-ink);
+      border-radius: 999px;
+      padding: 0.2rem 0.7rem;
+      font-size: 0.75rem;
+    }
+
+    .tag-suggestions {
+      display: block;
+      flex-basis: 100%;
+      width: 100%;
+    }
+
+    .tag-suggestions__list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      padding-top: 0.25rem;
+    }
+
+    .tag-suggestion {
+      border: 1px solid var(--admin-border);
+      background: var(--admin-surface);
+      color: var(--admin-ink);
+      border-radius: 999px;
+      padding: 0.2rem 0.7rem;
+      font-size: 0.75rem;
+    }
+  </style>
+{% endblock %}
 
 {% block content %}
   <div class="flex flex-col gap-6">
