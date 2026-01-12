@@ -685,6 +685,44 @@ html[data-motion="full"] .photo-slider.is-enhanced .slides {
   font-size: 0.95rem;
 }
 
+.interaction-summary {
+  margin: 0 0 0.75rem;
+}
+
+.interaction-read-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.32rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--accent-deep);
+  background: #fff;
+  color: var(--accent-deep);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+}
+
+.interaction-read-more:hover {
+  background: #ffe6cc;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.interaction-read-more__icon {
+  display: inline-flex;
+}
+
+.interaction-read-more__icon svg {
+  width: 0.7rem;
+  height: 0.7rem;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  fill: none;
+}
+
 .entry-activity .entry-header h1.p-name,
 .entry-activity .entry-header h3.p-name {
   margin: 0;

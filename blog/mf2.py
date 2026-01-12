@@ -5,12 +5,14 @@ import mf2py
 import requests
 from django.templatetags.static import static
 from django.utils.html import strip_tags
+from django.utils.text import Truncator
 
 
 logger = logging.getLogger(__name__)
 
 USER_AGENT = "Webstead/1.0 (+https://webstead.dev/)"
 DEFAULT_AVATAR_URL = static("img/default-avatar.svg")
+INTERACTION_SUMMARY_LENGTH = 240
 
 
 def _first_text(value, default=""):
@@ -85,6 +87,15 @@ def _extract_author(author_value):
     }
 
 
+def _summary_excerpt(value):
+    text = _strip_text(value)
+    if not text:
+        return "", False
+    truncated = len(text) > INTERACTION_SUMMARY_LENGTH
+    excerpt = Truncator(text).chars(INTERACTION_SUMMARY_LENGTH, truncate="...")
+    return excerpt, truncated
+
+
 def _find_entry(items):
     for item in items or []:
         if not isinstance(item, dict):
@@ -125,6 +136,9 @@ def normalize_interaction_properties(properties, target_url=""):
     summary_text = summary_text.strip()
     summary_html = _first_content_html(properties.get("content")) or None
 
+    summary_source = summary_text or summary_html or ""
+    summary_excerpt, summary_truncated = _summary_excerpt(summary_source)
+
     summary_for_compare = content_value or summary_text
     title = _normalized_title(_first_text(properties.get("name")), summary_for_compare)
 
@@ -132,6 +146,8 @@ def normalize_interaction_properties(properties, target_url=""):
 
     payload = {
         "original_url": original_url,
+        "summary_excerpt": summary_excerpt,
+        "summary_truncated": summary_truncated,
         "summary_text": summary_text,
         "summary_html": summary_html,
         "title": title,
