@@ -346,6 +346,7 @@
       </a>
       {% endif %}
     </nav>
+    {% if request.resolver_match and request.resolver_match.url_name != "admin_bar" %}
     <button
       type="button"
       class="site-admin-bar__theme-toggle"
@@ -354,6 +355,7 @@
     >
       Dark mode
     </button>
+    {% endif %}
     <details class="site-admin-bar__mobile">
       <summary class="site-admin-bar__hamburger" aria-label="Open admin menu">
         <span class="site-admin-bar__hamburger-lines"></span>
@@ -394,6 +396,7 @@
           </a>
           {% endif %}
         </div>
+        {% if request.resolver_match and request.resolver_match.url_name != "admin_bar" %}
         <div class="site-admin-bar__mobile-section">
           <div class="site-admin-bar__mobile-label">Appearance</div>
           <button
@@ -405,6 +408,7 @@
             Dark mode
           </button>
         </div>
+        {% endif %}
         <div class="site-admin-bar__mobile-section">
           <div class="site-admin-bar__mobile-label">
             Signed in as {{ request.user.get_username }}

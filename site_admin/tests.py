@@ -57,6 +57,15 @@ class SiteAdminAccessTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
 
+    def test_admin_bar_hides_theme_toggle_on_site(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse("site_admin:admin_bar"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "data-admin-theme-toggle")
+        self.assertNotContains(response, "Dark mode")
+        self.assertNotContains(response, "Light mode")
+
 
 class SiteAdminPageTests(TestCase):
     def setUp(self):
