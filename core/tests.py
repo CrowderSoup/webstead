@@ -41,6 +41,7 @@ from .themes import (
     ingest_theme_archive,
     install_theme_from_git,
     resolve_theme_settings,
+    theme_storage_healthcheck,
     theme_exists_in_storage,
     update_theme_from_git,
 )
@@ -433,6 +434,75 @@ class ThemeStorageTests(TestCase):
             exists = theme_exists_in_storage("sample")
 
         self.assertFalse(exists)
+
+
+class ThemeStorageHealthcheckTests(TestCase):
+    def test_healthcheck_success_read_only(self):
+        with tempfile.TemporaryDirectory() as storage_root:
+            storage = FileSystemStorage(location=storage_root)
+            (Path(storage_root) / "themes").mkdir(parents=True, exist_ok=True)
+            with override_settings(THEME_STORAGE_PREFIX="themes"):
+                with mock.patch("core.themes.get_theme_storage", return_value=storage):
+                    result = theme_storage_healthcheck()
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["read_ok"])
+        self.assertFalse(result["write_test"])
+        self.assertEqual(result["errors"], [])
+
+    def test_healthcheck_success_with_write_test(self):
+        with tempfile.TemporaryDirectory() as storage_root:
+            storage = FileSystemStorage(location=storage_root)
+            (Path(storage_root) / "themes").mkdir(parents=True, exist_ok=True)
+            with override_settings(THEME_STORAGE_PREFIX="themes"):
+                with mock.patch("core.themes.get_theme_storage", return_value=storage):
+                    result = theme_storage_healthcheck(write_test=True)
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["write_ok"])
+
+    def test_healthcheck_auth_failure(self):
+        class AuthError(Exception):
+            def __init__(self, message="AccessDenied"):
+                super().__init__(message)
+                self.response = {"Error": {"Code": "AccessDenied"}}
+
+        class FakeStorage:
+            def listdir(self, prefix):
+                raise AuthError("Access denied")
+
+        with mock.patch("core.themes.get_theme_storage", return_value=FakeStorage()):
+            result = theme_storage_healthcheck()
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["errors"][0]["type"], "auth")
+
+    def test_healthcheck_missing_bucket(self):
+        class MissingBucketError(Exception):
+            def __init__(self, message="NoSuchBucket"):
+                super().__init__(message)
+                self.response = {"Error": {"Code": "NoSuchBucket"}}
+
+        class FakeStorage:
+            def listdir(self, prefix):
+                raise MissingBucketError("Bucket does not exist")
+
+        with mock.patch("core.themes.get_theme_storage", return_value=FakeStorage()):
+            result = theme_storage_healthcheck()
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["errors"][0]["type"], "missing_bucket")
+
+    def test_healthcheck_network_failure(self):
+        class FakeStorage:
+            def listdir(self, prefix):
+                raise ConnectionError("Connection timed out")
+
+        with mock.patch("core.themes.get_theme_storage", return_value=FakeStorage()):
+            result = theme_storage_healthcheck()
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["errors"][0]["type"], "network")
 
 
 class ThemeValidationTests(TestCase):

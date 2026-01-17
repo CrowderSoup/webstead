@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest import mock
 
 from django.contrib.auth import get_user_model
+from django.contrib.messages import get_messages
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.test.utils import override_settings
@@ -518,6 +519,26 @@ class SiteAdminThemeInstallTests(TestCase):
             settings_obj.theme_settings.get("demo"),
             {"accent_color": "#222222", "show_banner": True},
         )
+
+    def test_theme_storage_healthcheck_defaults_read_only(self):
+        self.client.force_login(self.staff)
+        result = {
+            "ok": True,
+            "read_ok": True,
+            "write_ok": False,
+            "write_test": False,
+            "errors": [],
+        }
+        with mock.patch("site_admin.views.theme_storage_healthcheck", return_value=result) as healthcheck:
+            response = self.client.post(
+                reverse("site_admin:theme_settings"),
+                {"action": "theme_storage_healthcheck"},
+            )
+
+        healthcheck.assert_called_once_with(write_test=False)
+        self.assertEqual(response.status_code, 302)
+        messages = [message.message for message in get_messages(response.wsgi_request)]
+        self.assertTrue(any("healthcheck" in message.lower() for message in messages))
 
 
 class SiteAdminWebmentionModerationTests(TestCase):
