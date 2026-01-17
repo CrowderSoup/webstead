@@ -1,6 +1,10 @@
 {% extends "site_admin/base.html" %}
+{% load static %}
 
 {% block title %}Themes{% endblock %}
+{% block head %}
+  <script src="{% static 'js/theme_git_refs.js' %}"></script>
+{% endblock %}
 
 {% block content %}
   <div class="site-settings-layout grid gap-6 lg:grid-cols-[220px_1fr]">
@@ -55,25 +59,86 @@
       {% endif %}
 
       <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
-        <h2 class="text-lg font-semibold">Upload theme</h2>
+        <h2 class="text-lg font-semibold">Install theme</h2>
         <p class="mt-1 text-sm text-[color:var(--admin-muted)]">
-          Upload a zip with <code>theme.json</code>, templates, and optional static assets. Files are synced to storage.
+          Add a theme from a zip archive or a public git repository. Files are synced to storage.
         </p>
         <form method="post" enctype="multipart/form-data" class="mt-4 space-y-4">
           {% csrf_token %}
-          {{ upload_form.non_field_errors }}
+          <input type="hidden" name="action" value="install_theme" />
           <div>
-            {{ upload_form.archive.errors }}
-            {{ upload_form.archive }}
-            {% if upload_form.archive.help_text %}
-              <p class="mt-2 text-xs text-[color:var(--admin-muted)]">{{ upload_form.archive.help_text }}</p>
-            {% endif %}
+            <div class="text-xs uppercase tracking-wide text-[color:var(--admin-muted)]">Source</div>
+            <div class="mt-2 inline-flex rounded-full border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] p-1">
+              <button
+                type="button"
+                class="rounded-full px-4 py-1 text-xs font-semibold uppercase tracking-wide transition {% if install_source == 'git' %}bg-[color:var(--admin-accent)] text-white{% else %}text-[color:var(--admin-muted)]{% endif %}"
+                data-install-source-button="git"
+              >
+                Git repository
+              </button>
+              <button
+                type="button"
+                class="rounded-full px-4 py-1 text-xs font-semibold uppercase tracking-wide transition {% if install_source == 'upload' %}bg-[color:var(--admin-accent)] text-white{% else %}text-[color:var(--admin-muted)]{% endif %}"
+                data-install-source-button="upload"
+              >
+                Upload zip
+              </button>
+            </div>
+            <input type="hidden" name="install_source" value="{{ install_source }}" data-install-source-input />
+          </div>
+          <div data-install-form data-install-source="upload" class="{% if install_source != 'upload' %}hidden{% endif %}">
+            {{ upload_form.non_field_errors }}
+            <div>
+              {{ upload_form.archive.errors }}
+              {{ upload_form.archive }}
+              {% if upload_form.archive.help_text %}
+                <p class="mt-2 text-xs text-[color:var(--admin-muted)]">{{ upload_form.archive.help_text }}</p>
+              {% endif %}
+            </div>
+          </div>
+          <div
+            data-install-form
+            data-install-source="git"
+            data-git-ref-endpoint="{% url 'site_admin:theme_git_refs' %}"
+            class="{% if install_source != 'git' %}hidden{% endif %}"
+          >
+            {{ git_form.non_field_errors }}
+            <div>
+              <label class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]" for="{{ git_form.git_url.id_for_label }}">
+                {{ git_form.git_url.label }}
+              </label>
+              {{ git_form.git_url.errors }}
+              {{ git_form.git_url }}
+              {% if git_form.git_url.help_text %}
+                <p class="mt-2 text-xs text-[color:var(--admin-muted)]">{{ git_form.git_url.help_text }}</p>
+              {% endif %}
+            </div>
+            <div class="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]" for="{{ git_form.slug.id_for_label }}">
+                  {{ git_form.slug.label }}
+                </label>
+                {{ git_form.slug.errors }}
+                {{ git_form.slug }}
+              </div>
+              <div>
+                <label class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]" for="{{ git_form.ref.id_for_label }}">
+                  {{ git_form.ref.label }}
+                </label>
+                {{ git_form.ref.errors }}
+                {{ git_form.ref }}
+                <datalist id="theme-git-ref-options" data-git-ref-list></datalist>
+                {% if git_form.ref.help_text %}
+                  <p class="mt-2 text-xs text-[color:var(--admin-muted)]">{{ git_form.ref.help_text }}</p>
+                {% endif %}
+              </div>
+            </div>
           </div>
           <button
             type="submit"
             class="rounded-full bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
           >
-            Upload theme
+            Install theme
           </button>
         </form>
       </section>
@@ -200,81 +265,45 @@
             picker.addEventListener("input", sync);
             picker.addEventListener("change", sync);
           });
+
+          const sourceInput = document.querySelector("[data-install-source-input]");
+          const sourceButtons = Array.from(
+            document.querySelectorAll("[data-install-source-button]")
+          );
+          if (sourceInput && sourceButtons.length) {
+            const forms = Array.from(document.querySelectorAll("[data-install-form]"));
+            const toggleForms = (selected) => {
+              sourceInput.value = selected;
+              forms.forEach((form) => {
+                const isMatch = form.dataset.installSource === selected;
+                form.classList.toggle("hidden", !isMatch);
+              });
+              sourceButtons.forEach((button) => {
+                const isActive = button.dataset.installSourceButton === selected;
+                button.classList.toggle("bg-[color:var(--admin-accent)]", isActive);
+                button.classList.toggle("text-white", isActive);
+                button.classList.toggle("text-[color:var(--admin-muted)]", !isActive);
+              });
+            };
+            const initial = sourceInput.value || "git";
+            toggleForms(initial);
+            sourceButtons.forEach((button) => {
+              button.addEventListener("click", () => {
+                toggleForms(button.dataset.installSourceButton);
+              });
+            });
+          }
+
         });
       </script>
 
       <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
-        <h2 class="text-lg font-semibold">Install from git</h2>
-        <p class="mt-1 text-sm text-[color:var(--admin-muted)]">
-          Provide a public git repository URL and optional ref to install a theme.
-        </p>
-        <form method="post" class="mt-4 space-y-4">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="install_git" />
-          {{ git_form.non_field_errors }}
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]" for="{{ git_form.git_url.id_for_label }}">
-              {{ git_form.git_url.label }}
-            </label>
-            {{ git_form.git_url.errors }}
-            {{ git_form.git_url }}
-            {% if git_form.git_url.help_text %}
-              <p class="mt-2 text-xs text-[color:var(--admin-muted)]">{{ git_form.git_url.help_text }}</p>
-            {% endif %}
-          </div>
-          <div class="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]" for="{{ git_form.slug.id_for_label }}">
-                {{ git_form.slug.label }}
-              </label>
-              {{ git_form.slug.errors }}
-              {{ git_form.slug }}
-            </div>
-            <div>
-              <label class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]" for="{{ git_form.ref.id_for_label }}">
-                {{ git_form.ref.label }}
-              </label>
-              {{ git_form.ref.errors }}
-              {{ git_form.ref }}
-              {% if git_form.ref.help_text %}
-                <p class="mt-2 text-xs text-[color:var(--admin-muted)]">{{ git_form.ref.help_text }}</p>
-              {% endif %}
-            </div>
-          </div>
-          <button
-            type="submit"
-            class="rounded-full bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
-          >
-            Install theme
-          </button>
-        </form>
-      </section>
-
-      <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 class="text-lg font-semibold">Available themes</h2>
-            <p class="mt-1 text-sm text-[color:var(--admin-muted)]">Manage theme files and check install status.</p>
+            <h2 class="text-lg font-semibold">Themes inventory</h2>
+            <p class="mt-1 text-sm text-[color:var(--admin-muted)]">Review installed themes, local presence, and sync status.</p>
           </div>
           <div class="flex flex-wrap items-center gap-3">
-            <form method="post" class="flex flex-wrap items-center gap-2">
-              {% csrf_token %}
-              <input type="hidden" name="action" value="theme_storage_healthcheck" />
-              <label class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
-                <input
-                  type="checkbox"
-                  name="write_test"
-                  class="h-4 w-4 rounded border border-[color:var(--admin-border)] text-[color:var(--admin-accent)]"
-                />
-                Write test
-              </label>
-              <button
-                type="submit"
-                class="rounded-full border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
-              >
-                Run storage healthcheck
-              </button>
-            </form>
             <form method="post">
               {% csrf_token %}
               <input type="hidden" name="action" value="check_theme_storage" />
@@ -287,89 +316,12 @@
             </form>
           </div>
         </div>
-        {% if theme_rows %}
-          <div class="mt-4 overflow-x-auto">
-            <table class="min-w-full border border-[color:var(--admin-border)] text-sm">
-              <thead>
-                <tr class="bg-[color:var(--admin-bg)] text-left">
-                  <th class="p-3 font-semibold">Label</th>
-                  <th class="p-3 font-semibold">Slug</th>
-                  <th class="p-3 font-semibold">Version</th>
-                  <th class="p-3 font-semibold">Author</th>
-                  <th class="p-3 font-semibold">Files</th>
-                  <th class="p-3 font-semibold">Install status</th>
-                  <th class="p-3 font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for row in theme_rows %}
-                  <tr class="border-t border-[color:var(--admin-border)]">
-                    <td class="p-3">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <span>{{ row.theme.label }}</span>
-                        {% if row.theme.slug == active_theme_slug %}
-                          <span class="rounded-full bg-[color:var(--admin-bg)] px-2 py-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
-                            Active
-                          </span>
-                        {% endif %}
-                      </div>
-                    </td>
-                    <td class="p-3 font-mono text-xs">{{ row.theme.slug }}</td>
-                    <td class="p-3">{{ row.theme.version|default:"-" }}</td>
-                    <td class="p-3">{{ row.theme.author|default:"-" }}</td>
-                    <td class="p-3">{{ row.file_count }}</td>
-                    <td class="p-3">
-                      {% if row.install %}
-                        <span class="text-sm">{{ row.install.last_sync_status|default:"-" }}</span>
-                      {% else %}
-                        <span class="text-sm text-[color:var(--admin-muted)]">Untracked</span>
-                      {% endif %}
-                    </td>
-                    <td class="p-3">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <a
-                          href="{% url 'site_admin:theme_file_edit' slug=row.theme.slug %}"
-                          class="rounded-full border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
-                        >
-                          Manage files
-                        </a>
-                        {% if row.install %}
-                          <a
-                            href="{% url 'site_admin:theme_install_detail' slug=row.install.slug %}"
-                            class="rounded-full border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
-                          >
-                            Install info
-                          </a>
-                        {% endif %}
-                      </div>
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        {% else %}
-          <div class="mt-4 rounded-2xl border border-dashed border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] p-6 text-center text-sm text-[color:var(--admin-muted)]">
-            No themes found yet. Upload a theme or sync storage to get started.
-          </div>
-        {% endif %}
-      </section>
-
-      <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
-        <div class="flex flex-wrap items-center justify-between gap-3">
+        <form method="get" class="mt-4 flex flex-wrap items-end gap-4">
           <div>
-            <h2 class="text-lg font-semibold">Theme installs</h2>
-            <p class="mt-1 text-sm text-[color:var(--admin-muted)]">
-              Track installs coming from uploads, storage, or git sources.
-            </p>
-          </div>
-        </div>
-        <form method="get" class="mt-4 flex flex-wrap gap-4 items-end">
-          <div>
-            <label for="theme-install-source" class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]">Source</label>
+            <label for="theme-inventory-source" class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]">Source</label>
             <select
               name="source_type"
-              id="theme-install-source"
+              id="theme-inventory-source"
               class="mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]"
             >
               <option value="">All</option>
@@ -379,10 +331,10 @@
             </select>
           </div>
           <div>
-            <label for="theme-install-status" class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]">Status</label>
+            <label for="theme-inventory-status" class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]">Status</label>
             <select
               name="status"
-              id="theme-install-status"
+              id="theme-inventory-status"
               class="mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]"
             >
               <option value="">All</option>
@@ -392,12 +344,12 @@
             </select>
           </div>
           <div>
-            <label for="theme-install-search" class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]">Search</label>
+            <label for="theme-inventory-search" class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]">Search</label>
             <input
               type="text"
               name="q"
               value="{{ filters.q }}"
-              id="theme-install-search"
+              id="theme-inventory-search"
               placeholder="Slug or source ref"
               class="mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]"
             />
@@ -419,37 +371,73 @@
             {% endif %}
           </div>
         </form>
-        {% if installs %}
+        {% if inventory_rows %}
           <div class="mt-4 overflow-x-auto">
-            <table class="min-w-full border border-[color:var(--admin-border)] text-sm">
+            <table class="w-full table-fixed border border-[color:var(--admin-border)] text-sm">
               <thead>
                 <tr class="bg-[color:var(--admin-bg)] text-left">
-                  <th class="p-3 font-semibold">Slug</th>
-                  <th class="p-3 font-semibold">Source</th>
-                  <th class="p-3 font-semibold">Ref</th>
-                  <th class="p-3 font-semibold">URL</th>
-                  <th class="p-3 font-semibold">Version</th>
-                  <th class="p-3 font-semibold">Status</th>
-                  <th class="p-3 font-semibold">Last synced</th>
+                  <th class="w-5/12 p-3 font-semibold">Theme</th>
+                  <th class="w-5/12 p-3 font-semibold">Details</th>
+                  <th class="w-2/12 p-3 font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {% for row in installs %}
+                {% for row in inventory_rows %}
                   <tr class="border-t border-[color:var(--admin-border)]">
-                    <td class="p-3 font-mono text-xs">
-                      <a
-                        href="{% url 'site_admin:theme_install_detail' slug=row.install.slug %}"
-                        class="text-[color:var(--admin-accent-strong)] hover:underline"
-                      >
-                        {{ row.install.slug }}
-                      </a>
+                    <td class="p-3">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <span>{{ row.label }}</span>
+                        {% if row.is_active %}
+                          <span class="rounded-full bg-[color:var(--admin-bg)] px-2 py-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+                            Active
+                          </span>
+                        {% endif %}
+                      </div>
+                      <div class="mt-2 text-xs text-[color:var(--admin-muted)]">
+                        <span class="font-mono">{{ row.slug }}</span>
+                        <span class="mx-2 text-[color:var(--admin-border)]">•</span>
+                        <span>{{ row.version }}</span>
+                      </div>
                     </td>
-                    <td class="p-3">{{ row.install.source_type }}</td>
-                    <td class="p-3 font-mono text-xs">{{ row.source_ref|default:"-" }}</td>
-                    <td class="p-3 font-mono text-xs">{{ row.source_url|default:"-" }}</td>
-                    <td class="p-3">{{ row.install.version|default:"-" }}</td>
-                    <td class="p-3">{{ row.install.last_sync_status|default:"-" }}</td>
-                    <td class="p-3">{{ row.install.last_synced_at|date:"Y-m-d H:i"|default:"-" }}</td>
+                    <td class="p-3">
+                      <div class="flex flex-wrap gap-2 text-xs text-[color:var(--admin-muted)]">
+                        <span>Author: {{ row.author }}</span>
+                        <span>Files: {% if row.local_present %}{{ row.file_count }}{% else %}-{% endif %}</span>
+                        {% if row.local_present %}
+                          <span class="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Local</span>
+                        {% else %}
+                          <span class="rounded-full bg-rose-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-rose-700">Missing locally</span>
+                        {% endif %}
+                        <span>Source: {{ row.source_label }}</span>
+                        <span>Status: {{ row.install_status_label }}</span>
+                        <span>Last synced: {{ row.last_synced_at|date:"Y-m-d H:i"|default:"-" }}</span>
+                      </div>
+                      {% if row.source_ref or row.source_url %}
+                        <div class="mt-2 text-xs font-mono text-[color:var(--admin-muted)] break-all">
+                          {{ row.source_ref|default:row.source_url }}
+                        </div>
+                      {% endif %}
+                    </td>
+                    <td class="p-3">
+                      <div class="flex flex-wrap items-center gap-2">
+                        {% if row.local_present %}
+                          <a
+                            href="{% url 'site_admin:theme_file_edit' slug=row.slug %}"
+                            class="rounded-full border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+                          >
+                            Manage files
+                          </a>
+                        {% endif %}
+                        {% if row.install %}
+                          <a
+                            href="{% url 'site_admin:theme_install_detail' slug=row.install.slug %}"
+                            class="rounded-full border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+                          >
+                            Install info
+                          </a>
+                        {% endif %}
+                      </div>
+                    </td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -457,7 +445,7 @@
           </div>
         {% else %}
           <div class="mt-4 rounded-2xl border border-dashed border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] p-6 text-center text-sm text-[color:var(--admin-muted)]">
-            No theme installs found.
+            No themes found yet. Upload a theme or sync storage to get started.
           </div>
         {% endif %}
       </section>

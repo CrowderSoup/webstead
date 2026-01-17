@@ -1,5 +1,6 @@
 import json
 import logging
+import subprocess
 from urllib.parse import urlencode, urlparse
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -17,7 +18,7 @@ from django.db.models.functions import TruncDate
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.forms import inlineformset_factory
-from django.views.decorators.http import require_http_methods, require_POST
+from django.views.decorators.http import require_http_methods, require_GET, require_POST
 
 from blog.models import Post
 from analytics.models import Visit
@@ -1574,8 +1575,17 @@ def theme_settings(request):
         else None
     )
 
-    upload_form = ThemeUploadForm(request.POST or None, request.FILES or None)
-    git_form = ThemeGitInstallForm(request.POST or None)
+    install_source = request.POST.get("install_source") if request.method == "POST" else ""
+    if install_source not in {"upload", "git"}:
+        install_source = "git"
+    is_install_action = request.method == "POST" and request.POST.get("action") == "install_theme"
+
+    upload_form = ThemeUploadForm()
+    git_form = ThemeGitInstallForm()
+    if is_install_action and install_source == "upload":
+        upload_form = ThemeUploadForm(request.POST or None, request.FILES or None)
+    elif is_install_action and install_source == "git":
+        git_form = ThemeGitInstallForm(request.POST or None)
     if request.method == "POST" and request.POST.get("action") == "save_theme_settings":
         if not (active_theme and theme_settings_fields):
             messages.error(request, "Active theme does not define any settings to edit.")
@@ -1626,30 +1636,7 @@ def theme_settings(request):
 
         return redirect("site_admin:theme_settings")
 
-    if request.method == "POST" and request.POST.get("action") == "theme_storage_healthcheck":
-        write_test = request.POST.get("write_test") == "on"
-        result = theme_storage_healthcheck(write_test=write_test)
-        errors = result.get("errors") or []
-        if result.get("ok"):
-            if write_test:
-                messages.success(request, "Theme storage healthcheck succeeded (read/write).")
-            else:
-                messages.success(request, "Theme storage healthcheck succeeded (read-only).")
-        elif not errors:
-            messages.error(request, "Theme storage healthcheck failed.")
-        else:
-            for error in errors:
-                operation = error.get("operation") or "check"
-                detail = error.get("message") or "Unknown error"
-                hint = error.get("hint")
-                hint_suffix = f" Hint: {hint}" if hint else ""
-                messages.error(
-                    request,
-                    f"Theme storage healthcheck failed during {operation}: {detail}.{hint_suffix}",
-                )
-        return redirect("site_admin:theme_settings")
-
-    if request.method == "POST" and request.POST.get("action") == "install_git":
+    if is_install_action and install_source == "git":
         if git_form.is_valid():
             try:
                 theme = install_theme_from_git(
@@ -1667,55 +1654,104 @@ def theme_settings(request):
             except Exception as exc:  # pragma: no cover - defensive
                 git_form.add_error(None, f"Unexpected error: {exc}")
 
-    if request.method == "POST" and upload_form.is_valid():
-        try:
-            theme = ingest_theme_archive(upload_form.cleaned_data["archive"])
-            messages.success(
-                request,
-                f"Theme '{theme.label}' ({theme.slug}) uploaded and synced to storage.",
-            )
-            return redirect("site_admin:theme_settings")
-        except ThemeUploadError as exc:
-            upload_form.add_error("archive", exc)
-        except Exception as exc:  # pragma: no cover - defensive
-            upload_form.add_error("archive", f"Unexpected error: {exc}")
+    if is_install_action and install_source == "upload":
+        if upload_form.is_valid():
+            try:
+                theme = ingest_theme_archive(upload_form.cleaned_data["archive"])
+                messages.success(
+                    request,
+                    f"Theme '{theme.label}' ({theme.slug}) uploaded and synced to storage.",
+                )
+                return redirect("site_admin:theme_settings")
+            except ThemeUploadError as exc:
+                upload_form.add_error("archive", exc)
+            except Exception as exc:  # pragma: no cover - defensive
+                upload_form.add_error("archive", f"Unexpected error: {exc}")
 
     install_map = {install.slug: install for install in ThemeInstall.objects.all()}
     themes = discover_themes()
+    theme_by_slug = {theme.slug: theme for theme in themes}
     file_counts = {
         theme.slug: len(list_theme_files(theme.slug, suffixes=ALLOWED_SUFFIXES))
         for theme in themes
     }
-    theme_rows = [
-        {
-            "theme": theme,
-            "file_count": file_counts.get(theme.slug, 0),
-            "install": install_map.get(theme.slug),
-        }
-        for theme in themes
-    ]
-    installs = ThemeInstall.objects.all()
+    all_slugs = sorted(set(theme_by_slug) | set(install_map))
+
     source_type = (request.GET.get("source_type") or "").strip()
     status = (request.GET.get("status") or "").strip()
     query = (request.GET.get("q") or "").strip()
-
-    if source_type in dict(ThemeInstall.SOURCE_CHOICES):
-        installs = installs.filter(source_type=source_type)
-    if status in dict(ThemeInstall.STATUS_CHOICES):
-        installs = installs.filter(last_sync_status=status)
-    if query:
-        installs = installs.filter(
-            Q(slug__icontains=query) | Q(source_url__icontains=query) | Q(source_ref__icontains=query)
-        )
-
-    install_rows = [
-        {
-            "install": install,
-            "source_url": install.safe_source_url(),
-            "source_ref": install.source_ref,
-        }
-        for install in installs.order_by("slug")
+    status_choices = list(ThemeInstall.STATUS_CHOICES) + [
+        ("missing_local", "Missing locally"),
+        ("untracked", "Untracked"),
     ]
+    valid_statuses = {value for value, _ in status_choices}
+    valid_sources = dict(ThemeInstall.SOURCE_CHOICES)
+
+    inventory_rows = []
+    for slug in all_slugs:
+        theme = theme_by_slug.get(slug)
+        install = install_map.get(slug)
+        local_present = theme is not None
+        if install and not local_present:
+            effective_status = "missing_local"
+            install_status_label = "Missing locally"
+        elif install:
+            effective_status = install.last_sync_status or ""
+            install_status_label = (
+                install.get_last_sync_status_display()
+                if install.last_sync_status
+                else "-"
+            )
+        else:
+            effective_status = "untracked"
+            install_status_label = "Untracked"
+
+        row = {
+            "slug": slug,
+            "label": theme.label if theme else slug,
+            "theme": theme,
+            "install": install,
+            "file_count": file_counts.get(slug, 0) if local_present else 0,
+            "local_present": local_present,
+            "effective_status": effective_status,
+            "install_status_label": install_status_label,
+            "source_label": install.get_source_type_display() if install else "Local",
+            "source_ref": install.source_ref if install else "",
+            "source_url": install.safe_source_url() if install else "",
+            "version": (
+                theme.version
+                if theme and theme.version
+                else (install.version if install and install.version else "-")
+            ),
+            "author": theme.author if theme and theme.author else "-",
+            "last_synced_at": install.last_synced_at if install else None,
+            "is_active": slug == active_theme_slug,
+        }
+        inventory_rows.append(row)
+
+    filtered_rows = []
+    for row in inventory_rows:
+        if source_type in valid_sources:
+            if not row["install"] or row["install"].source_type != source_type:
+                continue
+        if status in valid_statuses:
+            if row["effective_status"] != status:
+                continue
+        if query:
+            haystack = " ".join(
+                filter(
+                    None,
+                    [
+                        row["slug"],
+                        row["label"],
+                        row.get("source_ref") or "",
+                        row.get("source_url") or "",
+                    ],
+                )
+            ).lower()
+            if query.lower() not in haystack:
+                continue
+        filtered_rows.append(row)
     theme_settings_groups = []
     theme_settings_ungrouped_fields = []
     if theme_settings_form:
@@ -1759,18 +1795,83 @@ def theme_settings(request):
             "theme_settings_ungrouped_fields": theme_settings_ungrouped_fields,
             "active_theme": active_theme,
             "themes": themes,
-            "theme_rows": theme_rows,
+            "inventory_rows": filtered_rows,
             "active_theme_slug": active_theme_slug,
-            "installs": install_rows,
             "filters": {
                 "source_type": source_type,
                 "status": status,
                 "q": query,
             },
             "source_choices": ThemeInstall.SOURCE_CHOICES,
-            "status_choices": ThemeInstall.STATUS_CHOICES,
+            "status_choices": status_choices,
+            "install_source": install_source,
         },
     )
+
+
+@require_GET
+def theme_git_refs(request):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    git_url = (request.GET.get("git_url") or "").strip()
+    if not git_url:
+        return JsonResponse({"refs": [], "default_ref": "", "error": "Missing git_url"}, status=400)
+
+    default_ref = ""
+    refs = []
+    try:
+        symref_result = subprocess.run(
+            ["git", "ls-remote", "--symref", git_url, "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=8,
+            check=False,
+        )
+        for line in symref_result.stdout.splitlines():
+            if line.startswith("ref:"):
+                ref_name = line.split("ref:", 1)[1].strip().split()[0]
+                if ref_name.startswith("refs/heads/"):
+                    default_ref = ref_name[len("refs/heads/") :]
+                elif ref_name.startswith("refs/tags/"):
+                    default_ref = ref_name[len("refs/tags/") :]
+                else:
+                    default_ref = ref_name
+                break
+
+        refs_result = subprocess.run(
+            ["git", "ls-remote", "--heads", "--tags", git_url],
+            capture_output=True,
+            text=True,
+            timeout=8,
+            check=False,
+        )
+        if refs_result.returncode != 0:
+            raise RuntimeError(refs_result.stderr.strip() or "Unable to read git refs.")
+
+        seen = set()
+        for line in refs_result.stdout.splitlines():
+            parts = line.split()
+            if len(parts) < 2:
+                continue
+            ref_name = parts[1]
+            if ref_name.endswith("^{}"):
+                continue
+            if ref_name.startswith("refs/heads/"):
+                ref_name = ref_name[len("refs/heads/") :]
+            elif ref_name.startswith("refs/tags/"):
+                ref_name = ref_name[len("refs/tags/") :]
+            if ref_name and ref_name not in seen:
+                seen.add(ref_name)
+                refs.append(ref_name)
+    except Exception as exc:
+        return JsonResponse({"refs": [], "default_ref": "", "error": str(exc)}, status=400)
+
+    if default_ref and default_ref not in refs:
+        refs.insert(0, default_ref)
+
+    return JsonResponse({"refs": refs, "default_ref": default_ref})
 
 
 @require_http_methods(["GET", "POST"])
@@ -1904,6 +2005,29 @@ def theme_install_detail(request, slug):
 
     install = get_object_or_404(ThemeInstall, slug=slug)
     if request.method == "POST":
+        if request.POST.get("action") == "theme_storage_healthcheck":
+            write_test = request.POST.get("write_test") == "on"
+            result = theme_storage_healthcheck(write_test=write_test)
+            errors = result.get("errors") or []
+            if result.get("ok"):
+                if write_test:
+                    messages.success(request, "Theme storage healthcheck succeeded (read/write).")
+                else:
+                    messages.success(request, "Theme storage healthcheck succeeded (read-only).")
+            elif not errors:
+                messages.error(request, "Theme storage healthcheck failed.")
+            else:
+                for error in errors:
+                    operation = error.get("operation") or "check"
+                    detail = error.get("message") or "Unknown error"
+                    hint = error.get("hint")
+                    hint_suffix = f" Hint: {hint}" if hint else ""
+                    messages.error(
+                        request,
+                        f"Theme storage healthcheck failed during {operation}: {detail}.{hint_suffix}",
+                    )
+            return redirect("site_admin:theme_install_detail", slug=slug)
+
         if install.source_type != ThemeInstall.SOURCE_GIT:
             messages.error(request, "Only git-installed themes can be updated.")
             return redirect("site_admin:theme_install_detail", slug=slug)

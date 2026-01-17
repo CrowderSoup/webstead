@@ -409,6 +409,9 @@ class ThemeGitInstallForm(forms.Form):
             "data-slug-source", "input[name='git_url']"
         )
         self.fields["slug"].widget.attrs.setdefault("data-slug-source-kind", "url")
+        self.fields["git_url"].widget.attrs.setdefault("data-git-url-input", "true")
+        self.fields["ref"].widget.attrs.setdefault("data-git-ref-input", "true")
+        self.fields["ref"].widget.attrs.setdefault("list", "theme-git-ref-options")
 
 
 class ThemeFileForm(forms.Form):

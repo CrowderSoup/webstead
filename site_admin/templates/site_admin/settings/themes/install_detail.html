@@ -1,6 +1,10 @@
 {% extends "site_admin/base.html" %}
+{% load static %}
 
 {% block title %}Theme install{% endblock %}
+{% block head %}
+  <script src="{% static 'js/theme_git_refs.js' %}"></script>
+{% endblock %}
 
 {% block content %}
   <div class="site-settings-layout grid gap-6 lg:grid-cols-[220px_1fr]">
@@ -91,14 +95,39 @@
           </tbody>
         </table>
       </section>
+      <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+        <h2 class="text-lg font-semibold">Storage healthcheck</h2>
+        <p class="mt-1 text-sm text-[color:var(--admin-muted)]">
+          Validate theme storage access and ensure installs can sync correctly.
+        </p>
+        <form method="post" class="mt-4 flex flex-wrap items-center gap-3">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="theme_storage_healthcheck" />
+          <label class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+            <input
+              type="checkbox"
+              name="write_test"
+              class="h-4 w-4 rounded border border-[color:var(--admin-border)] text-[color:var(--admin-accent)]"
+            />
+            Write test
+          </label>
+          <button
+            type="submit"
+            class="rounded-full border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+          >
+            Run storage healthcheck
+          </button>
+        </form>
+      </section>
       {% if install.source_type == "git" %}
         <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
           <h2 class="text-lg font-semibold">Update theme</h2>
           <p class="mt-1 text-sm text-[color:var(--admin-muted)]">
             Update to the latest commit on the stored ref, or supply a ref to use.
           </p>
-          <form method="post" class="mt-4 space-y-4">
+          <form method="post" class="mt-4 space-y-4" data-git-ref-endpoint="{% url 'site_admin:theme_git_refs' %}">
             {% csrf_token %}
+            <input type="hidden" name="git_url" value="{{ source_url }}" data-git-url-input />
             <div>
               <label class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]" for="theme-update-ref">Git ref (optional)</label>
               <input
@@ -106,8 +135,11 @@
                 name="ref"
                 id="theme-update-ref"
                 placeholder="{{ install.source_ref|default:'default branch' }}"
+                list="theme-git-ref-options"
+                data-git-ref-input
                 class="mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]"
               />
+              <datalist id="theme-git-ref-options" data-git-ref-list></datalist>
             </div>
             <button
               type="submit"

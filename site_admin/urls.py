@@ -12,6 +12,7 @@ urlpatterns = [
     path("analytics/", views.analytics_dashboard, name="analytics_dashboard"),
     path("settings/", views.site_settings, name="site_settings"),
     path("settings/themes/", views.theme_settings, name="theme_settings"),
+    path("settings/themes/git-refs/", views.theme_git_refs, name="theme_git_refs"),
     path(
         "settings/themes/<slug:slug>/edit/",
         views.theme_file_edit,
