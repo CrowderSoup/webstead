@@ -197,6 +197,86 @@ Notes:
 
 ---
 
+## Blog Post Templates: Context and Model Fields
+
+The single post template lives at `blog/post.html` and receives:
+
+- `post` (the `Post` model instance)
+- `activity` (activity summary dict for activity posts, or `None`)
+- `activity_photos` (photo attachments for activity posts, or `[]`)
+- Standard context listed above (site configuration, theme settings, etc.)
+
+### `Post` fields and helpers
+
+Core fields:
+
+- `post.title`, `post.slug`, `post.content`
+- `post.kind` (one of `article`, `note`, `photo`, `activity`, `like`, `repost`, `reply`)
+- `post.published_on`, `post.deleted`
+- `post.like_of`, `post.repost_of`, `post.in_reply_to` (URLs for interaction posts)
+- `post.mf2` (mf2 JSON payload, if provided)
+
+Relations and helpers:
+
+- `post.author` (user; may be `None`)
+- `post.author.hcards` (prefetched; use for author display)
+- `post.tags` (many-to-many; use `post.tags.all`)
+- `post.attachments` (generic relation; use `post.attachments.all`)
+- `post.photo_attachments` (attachments filtered to `role="photo"`)
+- `post.gpx_attachment` (first attachment with `role="gpx"` or `None`)
+- `post.html()` (markdown rendered to safe HTML)
+- `post.summary()` (plain-text excerpt, ~500 chars)
+- `post.get_absolute_url()`
+
+### Activity context
+
+When `post.kind == "activity"`:
+
+- `activity.name` (string)
+- `activity.track_url` (URL to a GPX track or external activity link)
+- `activity_photos` contains `Attachment` objects for photo role
+
+### Interaction context
+
+When `post.kind` is `like`, `repost`, or `reply`, the view sets:
+
+- `post.interaction.kind`
+- `post.interaction.label` (e.g., "Liked", "Reposted", "Replying to")
+- `post.interaction.target_url`
+- `post.interaction.target` (dict with `title`, `summary_text`, `summary_excerpt`, etc., when available)
+- `post.interaction.show_content` (bool; hide default "Liked {url}" text)
+
+---
+
+## Page Templates: Context and Model Fields
+
+The page template lives at `core/page.html` and receives:
+
+- `page` (the `Page` model instance)
+- Standard context listed above (site configuration, theme settings, etc.)
+
+### `Page` fields and helpers
+
+- `page.title`, `page.slug`, `page.content`
+- `page.published_on`
+- `page.author` (user; may be `None`)
+- `page.author.hcards` (prefetched; use for author display)
+- `page.attachments` (generic relation; use `page.attachments.all`)
+- `page.html()` (markdown rendered to safe HTML)
+
+### Attachments and assets
+
+Both posts and pages use `Attachment` objects with linked `File` assets:
+
+- `attachment.asset.file.url` (file URL)
+- `attachment.asset.alt_text`
+- `attachment.asset.caption`
+- `attachment.asset.kind` (`image`, `doc`, `video`)
+- `attachment.role` (theme-defined role like `hero`, `inline`, `gallery`)
+- `attachment.sort_order`
+
+---
+
 ## Templates: Structure and Expectations
 
 Themes provide templates under `templates/`. The exact structure is flexible, but some conventions exist.
