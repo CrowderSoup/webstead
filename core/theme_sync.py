@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import shutil
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
@@ -25,6 +26,7 @@ from core.themes import (
     _write_theme_to_disk,  # type: ignore
     _write_theme_to_storage,  # type: ignore
 )
+from core.observability import duration_ms, log_theme_operation, truncate_error
 
 if TYPE_CHECKING:
     from core.models import ThemeInstall
@@ -39,6 +41,9 @@ class ReconcileResult:
     action: str
     detail: str = ""
     restored: bool = False
+    source_type: str = ""
+    ref: str = ""
+    duration_ms: int = 0
 
 
 def rehydrate_theme_from_git(install: ThemeInstall, *, base_dir: Optional[Path] = None) -> bool:
@@ -82,12 +87,25 @@ def rehydrate_theme_from_git(install: ThemeInstall, *, base_dir: Optional[Path] 
         shutil.rmtree(clone_dir, ignore_errors=True)
 
 
-def _mark_status(install: ThemeInstall, status: str, *, dry_run: bool = False) -> None:
+def _mark_status(
+    install: ThemeInstall,
+    status: str,
+    *,
+    error: str = "",
+    dry_run: bool = False,
+) -> None:
+    from core.models import ThemeInstall
+
     if dry_run:
         return
     install.last_synced_at = timezone.now()
     install.last_sync_status = status
-    install.save(update_fields=["last_synced_at", "last_sync_status"])
+    update_fields = ["last_synced_at", "last_sync_status", "last_sync_error"]
+    if status == ThemeInstall.STATUS_FAILED:
+        install.last_sync_error = truncate_error(error)
+    else:
+        install.last_sync_error = ""
+    install.save(update_fields=update_fields)
 
 
 def _reconcile_install(
@@ -100,9 +118,22 @@ def _reconcile_install(
     from core.models import ThemeInstall
 
     slug = install.slug
+    started_at = time.monotonic()
     storage_available = True
     storage_exists = False
     storage_error: Optional[Exception] = None
+
+    def _result(status: str, action: str, detail: str, *, restored: bool = False) -> ReconcileResult:
+        return ReconcileResult(
+            slug=slug,
+            status=status,
+            action=action,
+            detail=detail,
+            restored=restored,
+            source_type=install.source_type,
+            ref=install.source_ref or "",
+            duration_ms=duration_ms(started_at),
+        )
 
     try:
         storage_exists = theme_exists_in_storage(slug)
@@ -115,15 +146,14 @@ def _reconcile_install(
         if install.source_type == ThemeInstall.SOURCE_GIT:
             if dry_run:
                 if not install.source_url:
-                    _mark_status(install, ThemeInstall.STATUS_FAILED, dry_run=dry_run)
-                    return ReconcileResult(
-                        slug,
+                    _mark_status(
+                        install,
                         ThemeInstall.STATUS_FAILED,
-                        "failed",
-                        "missing git source_url",
+                        error="missing git source_url",
+                        dry_run=dry_run,
                     )
-                return ReconcileResult(
-                    slug,
+                    return _result(ThemeInstall.STATUS_FAILED, "failed", "missing git source_url")
+                return _result(
                     ThemeInstall.STATUS_SUCCESS,
                     "downloaded",
                     "would restore from git",
@@ -133,13 +163,12 @@ def _reconcile_install(
                 restored = rehydrate_theme_from_git(install, base_dir=base_dir)
             except Exception as exc:
                 logger.warning("Failed to restore git theme %s: %s", slug, exc)
-                _mark_status(install, ThemeInstall.STATUS_FAILED, dry_run=dry_run)
-                return ReconcileResult(slug, ThemeInstall.STATUS_FAILED, "failed", "git restore failed")
+                _mark_status(install, ThemeInstall.STATUS_FAILED, error=str(exc), dry_run=dry_run)
+                return _result(ThemeInstall.STATUS_FAILED, "failed", "git restore failed")
 
             if restored:
                 _mark_status(install, ThemeInstall.STATUS_SUCCESS, dry_run=dry_run)
-                return ReconcileResult(
-                    slug,
+                return _result(
                     ThemeInstall.STATUS_SUCCESS,
                     "downloaded",
                     "restored from git",
@@ -148,8 +177,7 @@ def _reconcile_install(
 
         if storage_available and storage_exists:
             if dry_run:
-                return ReconcileResult(
-                    slug,
+                return _result(
                     ThemeInstall.STATUS_SUCCESS,
                     "downloaded",
                     "would restore from storage",
@@ -159,13 +187,12 @@ def _reconcile_install(
                 restored = download_theme_from_storage(slug, base_dir=base_dir)
             except Exception as exc:  # pragma: no cover - defensive
                 logger.warning("Unable to download missing theme %s from storage: %s", slug, exc)
-                _mark_status(install, ThemeInstall.STATUS_FAILED, dry_run=dry_run)
-                return ReconcileResult(slug, ThemeInstall.STATUS_FAILED, "failed", "storage restore failed")
+                _mark_status(install, ThemeInstall.STATUS_FAILED, error=str(exc), dry_run=dry_run)
+                return _result(ThemeInstall.STATUS_FAILED, "failed", "storage restore failed")
 
             if restored:
                 _mark_status(install, ThemeInstall.STATUS_SUCCESS, dry_run=dry_run)
-                return ReconcileResult(
-                    slug,
+                return _result(
                     ThemeInstall.STATUS_SUCCESS,
                     "downloaded",
                     "restored from storage",
@@ -174,19 +201,18 @@ def _reconcile_install(
 
         if not storage_available:
             logger.warning("Theme %s missing locally and storage unavailable: %s", slug, storage_error)
-            _mark_status(install, ThemeInstall.STATUS_FAILED, dry_run=dry_run)
-            return ReconcileResult(slug, ThemeInstall.STATUS_FAILED, "failed", "storage unavailable")
+            _mark_status(install, ThemeInstall.STATUS_FAILED, error="storage unavailable", dry_run=dry_run)
+            return _result(ThemeInstall.STATUS_FAILED, "failed", "storage unavailable")
 
         logger.warning("Theme %s missing locally and no source available to restore.", slug)
-        _mark_status(install, ThemeInstall.STATUS_FAILED, dry_run=dry_run)
-        return ReconcileResult(slug, ThemeInstall.STATUS_FAILED, "failed", "missing locally")
+        _mark_status(install, ThemeInstall.STATUS_FAILED, error="missing locally", dry_run=dry_run)
+        return _result(ThemeInstall.STATUS_FAILED, "failed", "missing locally")
 
     if storage_available:
         if not storage_exists:
             if upload_missing_to_storage:
                 if dry_run:
-                    return ReconcileResult(
-                        slug,
+                    return _result(
                         ThemeInstall.STATUS_SUCCESS,
                         "uploaded",
                         "would upload to storage",
@@ -194,22 +220,22 @@ def _reconcile_install(
                 try:
                     upload_theme_to_storage(slug, base_dir=base_dir)
                     _mark_status(install, ThemeInstall.STATUS_SUCCESS, dry_run=dry_run)
-                    return ReconcileResult(slug, ThemeInstall.STATUS_SUCCESS, "uploaded", "uploaded to storage")
+                    return _result(ThemeInstall.STATUS_SUCCESS, "uploaded", "uploaded to storage")
                 except Exception as exc:
                     logger.warning("Unable to upload theme %s to storage: %s", slug, exc)
-                    _mark_status(install, ThemeInstall.STATUS_FAILED, dry_run=dry_run)
-                    return ReconcileResult(slug, ThemeInstall.STATUS_FAILED, "failed", "upload to storage failed")
+                    _mark_status(install, ThemeInstall.STATUS_FAILED, error=str(exc), dry_run=dry_run)
+                    return _result(ThemeInstall.STATUS_FAILED, "failed", "upload to storage failed")
 
             logger.warning("Theme %s missing from storage; upload disabled.", slug)
-            _mark_status(install, ThemeInstall.STATUS_FAILED, dry_run=dry_run)
-            return ReconcileResult(slug, ThemeInstall.STATUS_FAILED, "failed", "missing in storage")
+            _mark_status(install, ThemeInstall.STATUS_FAILED, error="missing in storage", dry_run=dry_run)
+            return _result(ThemeInstall.STATUS_FAILED, "failed", "missing in storage")
     else:
         logger.warning("Storage unavailable while reconciling theme %s: %s", slug, storage_error)
-        _mark_status(install, ThemeInstall.STATUS_FAILED, dry_run=dry_run)
-        return ReconcileResult(slug, ThemeInstall.STATUS_FAILED, "failed", "storage unavailable")
+        _mark_status(install, ThemeInstall.STATUS_FAILED, error="storage unavailable", dry_run=dry_run)
+        return _result(ThemeInstall.STATUS_FAILED, "failed", "storage unavailable")
 
     _mark_status(install, ThemeInstall.STATUS_SUCCESS, dry_run=dry_run)
-    return ReconcileResult(slug, ThemeInstall.STATUS_SUCCESS, "skipped", "already in sync")
+    return _result(ThemeInstall.STATUS_SUCCESS, "skipped", "already in sync")
 
 
 def reconcile_installed_themes(
@@ -259,15 +285,14 @@ def reconcile_installed_themes(
 
 
 def _log_reconcile_result(result: ReconcileResult, *, dry_run: bool = False) -> None:
-    from core.models import ThemeInstall
-
-    level = logging.WARNING if result.status == ThemeInstall.STATUS_FAILED else logging.INFO
-    logger.log(
-        level,
-        "theme_reconcile slug=%s action=%s status=%s detail=%s dry_run=%s",
-        result.slug,
-        result.action,
-        result.status,
-        result.detail,
-        dry_run,
+    log_theme_operation(
+        logger,
+        theme_slug=result.slug,
+        operation="reconcile",
+        source_type=result.source_type,
+        ref=result.ref,
+        status=result.status,
+        duration_ms_value=result.duration_ms,
+        detail=result.detail,
+        dry_run=dry_run,
     )

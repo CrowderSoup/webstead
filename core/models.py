@@ -107,6 +107,7 @@ class ThemeInstall(models.Model):
     last_synced_commit = models.CharField(max_length=255, blank=True, default="")
     last_synced_at = models.DateTimeField(null=True, blank=True)
     last_sync_status = models.CharField(max_length=16, choices=STATUS_CHOICES, blank=True, default="")
+    last_sync_error = models.CharField(max_length=500, blank=True, default="")
 
     objects = ThemeInstallManager()
 

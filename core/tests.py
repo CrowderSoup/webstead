@@ -287,10 +287,11 @@ class ThemeReconciliationTests(TestCase):
                 with self.assertLogs("core.theme_sync", level="WARNING") as logs:
                     results = reconcile_installed_themes()
 
-                record = ThemeInstall.objects.get(slug=slug)
-                self.assertEqual(record.last_sync_status, ThemeInstall.STATUS_FAILED)
-                self.assertIn("missing from storage", "\n".join(logs.output).lower())
-                self.assertFalse(any(result.restored for result in results))
+            record = ThemeInstall.objects.get(slug=slug)
+            self.assertEqual(record.last_sync_status, ThemeInstall.STATUS_FAILED)
+            self.assertIn('detail="missing in storage"', "\n".join(logs.output).lower())
+            self.assertEqual(record.last_sync_error, "missing in storage")
+            self.assertFalse(any(result.restored for result in results))
 
     def test_rehydrates_missing_git_theme(self):
         with tempfile.TemporaryDirectory() as themes_root:
@@ -329,7 +330,8 @@ class ThemeReconciliationTests(TestCase):
 
             record = ThemeInstall.objects.get(slug=slug)
             self.assertEqual(record.last_sync_status, ThemeInstall.STATUS_FAILED)
-            self.assertIn("storage unavailable", "\n".join(logs.output).lower())
+            self.assertIn('detail="storage unavailable"', "\n".join(logs.output).lower())
+            self.assertEqual(record.last_sync_error, "storage unavailable")
 
     def test_dry_run_reports_without_writing(self):
         with tempfile.TemporaryDirectory() as storage_root, tempfile.TemporaryDirectory() as themes_root:
@@ -649,6 +651,7 @@ class ThemeInstallTests(TestCase):
         self.assertEqual(record.source_type, ThemeInstall.SOURCE_UPLOAD)
         self.assertEqual(record.version, "1.0")
         self.assertEqual(record.last_sync_status, ThemeInstall.STATUS_SUCCESS)
+        self.assertEqual(record.last_sync_error, "")
         self.assertIsNotNone(record.last_synced_at)
         self.assertEqual(theme.slug, record.slug)
 
@@ -702,6 +705,7 @@ class ThemeInstallTests(TestCase):
         self.assertEqual(record.version, "1.0")
         self.assertEqual(record.last_synced_commit, expected_commit)
         self.assertEqual(record.last_sync_status, ThemeInstall.STATUS_SUCCESS)
+        self.assertEqual(record.last_sync_error, "")
         self.assertIsNotNone(record.last_synced_at)
         self.assertEqual(theme.slug, record.slug)
 
@@ -773,6 +777,7 @@ class ThemeInstallTests(TestCase):
                         self.assertTrue(result.updated)
                         self.assertEqual(record.last_synced_commit, second_commit)
                         self.assertEqual(theme_meta["version"], "2.0")
+                        self.assertEqual(record.last_sync_error, "")
 
     def test_theme_update_command_updates_git_theme(self):
         with tempfile.TemporaryDirectory() as storage_root, tempfile.TemporaryDirectory() as themes_root:
@@ -807,7 +812,43 @@ class ThemeInstallTests(TestCase):
                         install.refresh_from_db()
 
                         self.assertEqual(install.last_synced_commit, second_commit)
+                        self.assertEqual(install.last_sync_error, "")
                         self.assertIn("Updated:", out.getvalue())
+
+    def test_upload_emits_structured_log(self):
+        with tempfile.TemporaryDirectory() as storage_root, tempfile.TemporaryDirectory() as themes_root:
+            storage = FileSystemStorage(location=storage_root)
+            upload = self._theme_archive()
+
+            with override_settings(THEMES_ROOT=themes_root, THEME_STORAGE_PREFIX="themes"):
+                with mock.patch("core.themes.get_theme_storage", return_value=storage):
+                    with self.assertLogs("core.themes", level="INFO") as logs:
+                        ingest_theme_archive(upload)
+
+        output = "\n".join(logs.output)
+        self.assertIn('operation="install"', output)
+        self.assertIn('source_type="upload"', output)
+        self.assertIn('status="success"', output)
+        self.assertIn('theme_slug="sample"', output)
+
+    def test_update_theme_from_git_persists_error_and_logs_failure(self):
+        install = ThemeInstall.objects.create(
+            slug="sample",
+            source_type=ThemeInstall.SOURCE_GIT,
+            source_url="https://example.com/themes.git",
+        )
+
+        with mock.patch("core.themes._run_git", side_effect=ThemeUploadError("boom")):
+            with self.assertLogs("core.themes", level="WARNING") as logs:
+                with self.assertRaises(ThemeUploadError):
+                    update_theme_from_git(install)
+
+        install.refresh_from_db()
+        self.assertEqual(install.last_sync_status, ThemeInstall.STATUS_FAILED)
+        self.assertIn("boom", install.last_sync_error)
+        output = "\n".join(logs.output)
+        self.assertIn('operation="update"', output)
+        self.assertIn('status="failed"', output)
 
     def test_expected_slugs_returns_sorted_list(self):
         ThemeInstall.objects.create(slug="beta", source_type=ThemeInstall.SOURCE_UPLOAD)

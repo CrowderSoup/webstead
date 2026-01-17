@@ -273,3 +273,11 @@ LOGGING = {
         },
     },
 }
+
+if RUNNING_TESTS:
+    LOGGING["loggers"].update(
+        {
+            "core.themes": {"handlers": [], "level": "ERROR", "propagate": False},
+            "core.theme_sync": {"handlers": [], "level": "ERROR", "propagate": False},
+        }
+    )

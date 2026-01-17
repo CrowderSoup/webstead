@@ -4,6 +4,7 @@ import logging
 import shutil
 import subprocess
 import tempfile
+import time
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -16,6 +17,7 @@ from django.core.files.storage import Storage, default_storage
 from django.utils import timezone
 from django.utils.text import slugify
 
+from .observability import duration_ms, log_theme_operation, truncate_error
 from .theme_validation import load_theme_metadata, validate_theme_dir
 
 THEME_META_FILENAME = "theme.json"
@@ -430,6 +432,7 @@ def ingest_theme_archive(uploaded_file, *, base_dir: Optional[Path] = None) -> T
     """
     Process an uploaded zip archive, validate it, and persist it to storage + disk.
     """
+    started_at = time.monotonic()
     with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp_file:
         for chunk in uploaded_file.chunks():
             tmp_file.write(chunk)
@@ -437,6 +440,8 @@ def ingest_theme_archive(uploaded_file, *, base_dir: Optional[Path] = None) -> T
 
     slug: Optional[str] = None
     extracted_dir: Optional[Path] = None
+    log_status = "success"
+    log_error = ""
     try:
         try:
             slug, extracted_dir, metadata = _extract_theme_archive(tmp_path)
@@ -463,11 +468,26 @@ def ingest_theme_archive(uploaded_file, *, base_dir: Optional[Path] = None) -> T
                     "checksum": "",
                     "last_synced_at": timezone.now(),
                     "last_sync_status": ThemeInstall.STATUS_SUCCESS,
+                    "last_sync_error": "",
                 },
             )
         except Exception:
             logger.warning("Unable to persist theme install record for %s", slug, exc_info=True)
+    except Exception as exc:
+        log_status = "failed"
+        log_error = str(exc)
+        raise
     finally:
+        log_theme_operation(
+            logger,
+            theme_slug=slug or "-",
+            operation="install",
+            source_type="upload",
+            ref="",
+            status=log_status,
+            duration_ms_value=duration_ms(started_at),
+            error=log_error,
+        )
         try:
             tmp_path.unlink(missing_ok=True)
         except Exception:
@@ -492,6 +512,7 @@ def install_theme_from_git(
     """
     Clone a theme from a git repository, validate, and persist to storage + disk.
     """
+    started_at = time.monotonic()
     if not git_url:
         raise ThemeUploadError("Git URL is required to install a theme.")
 
@@ -502,6 +523,8 @@ def install_theme_from_git(
     _ensure_git_url_allowed(git_url)
 
     clone_dir = Path(tempfile.mkdtemp())
+    log_status = "success"
+    log_error = ""
     try:
         _run_git(
             ["git", "clone", "--depth", "1", git_url, str(clone_dir)],
@@ -551,6 +574,7 @@ def install_theme_from_git(
                     "last_synced_commit": commit,
                     "last_synced_at": timezone.now(),
                     "last_sync_status": ThemeInstall.STATUS_SUCCESS,
+                    "last_sync_error": "",
                 },
             )
         except Exception:
@@ -563,7 +587,21 @@ def install_theme_from_git(
         if theme:
             return theme
         raise ThemeUploadError("Theme install completed but could not be discovered locally.")
+    except Exception as exc:
+        log_status = "failed"
+        log_error = str(exc)
+        raise
     finally:
+        log_theme_operation(
+            logger,
+            theme_slug=normalized_slug,
+            operation="install",
+            source_type="git",
+            ref=ref or "",
+            status=log_status,
+            duration_ms_value=duration_ms(started_at),
+            error=log_error,
+        )
         shutil.rmtree(clone_dir, ignore_errors=True)
 
 
@@ -584,9 +622,12 @@ def update_theme_from_git(
     if not install.source_url:
         raise ThemeUploadError(f"Theme {install.slug} missing source_url for git update.")
 
+    started_at = time.monotonic()
     ref_value = ref if ref is not None else (install.source_ref or "")
     clone_dir = Path(tempfile.mkdtemp())
     commit = ""
+    log_status = "success"
+    log_error = ""
     try:
         _run_git(
             ["git", "clone", "--depth", "1", install.source_url, str(clone_dir)],
@@ -658,11 +699,13 @@ def update_theme_from_git(
             "last_synced_commit",
             "last_synced_at",
             "last_sync_status",
+            "last_sync_error",
         ]
         install.version = metadata.get("version") or ""
         install.last_synced_commit = commit
         install.last_synced_at = timezone.now()
         install.last_sync_status = ThemeInstall.STATUS_SUCCESS
+        install.last_sync_error = ""
         if ref is not None:
             install.source_ref = ref_value
             update_fields.append("source_ref")
@@ -676,13 +719,27 @@ def update_theme_from_git(
             updated=updated,
             detail="updated" if updated else "refreshed",
         )
-    except Exception:
+    except Exception as exc:
+        log_status = "failed"
+        log_error = str(exc)
         if not dry_run:
             install.last_synced_at = timezone.now()
             install.last_sync_status = ThemeInstall.STATUS_FAILED
-            install.save(update_fields=["last_synced_at", "last_sync_status"])
+            install.last_sync_error = truncate_error(str(exc))
+            install.save(update_fields=["last_synced_at", "last_sync_status", "last_sync_error"])
         raise
     finally:
+        log_theme_operation(
+            logger,
+            theme_slug=install.slug,
+            operation="update",
+            source_type=install.source_type,
+            ref=ref_value,
+            status=log_status,
+            duration_ms_value=duration_ms(started_at),
+            error=log_error,
+            dry_run=dry_run,
+        )
         shutil.rmtree(clone_dir, ignore_errors=True)
 
 
