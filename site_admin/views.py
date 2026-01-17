@@ -54,6 +54,7 @@ from core.themes import (
     resolve_theme_settings,
     save_theme_file,
     sync_themes_from_storage,
+    theme_storage_healthcheck,
 )
 from micropub.models import Webmention
 from micropub.webmention import resend_webmention, send_webmention, send_webmentions_for_post
@@ -1623,6 +1624,29 @@ def theme_settings(request):
         elif not any([restored, storage_synced]):
             messages.info(request, "No themes found in installs or storage to sync.")
 
+        return redirect("site_admin:theme_settings")
+
+    if request.method == "POST" and request.POST.get("action") == "theme_storage_healthcheck":
+        write_test = request.POST.get("write_test") == "on"
+        result = theme_storage_healthcheck(write_test=write_test)
+        errors = result.get("errors") or []
+        if result.get("ok"):
+            if write_test:
+                messages.success(request, "Theme storage healthcheck succeeded (read/write).")
+            else:
+                messages.success(request, "Theme storage healthcheck succeeded (read-only).")
+        elif not errors:
+            messages.error(request, "Theme storage healthcheck failed.")
+        else:
+            for error in errors:
+                operation = error.get("operation") or "check"
+                detail = error.get("message") or "Unknown error"
+                hint = error.get("hint")
+                hint_suffix = f" Hint: {hint}" if hint else ""
+                messages.error(
+                    request,
+                    f"Theme storage healthcheck failed during {operation}: {detail}.{hint_suffix}",
+                )
         return redirect("site_admin:theme_settings")
 
     if request.method == "POST" and request.POST.get("action") == "install_git":

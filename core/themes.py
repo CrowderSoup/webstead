@@ -9,7 +9,8 @@ import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
-from typing import Iterable, Optional, Sequence
+from typing import Any, Iterable, Optional, Sequence
+from uuid import uuid4
 
 from django.core.files import File
 from django.core.files.base import ContentFile
@@ -129,6 +130,93 @@ def _is_missing_storage_key_error(exc: Exception) -> bool:
         if code == "NoSuchKey":
             return True
     return "NoSuchKey" in str(exc)
+
+
+def _classify_storage_error(exc: Exception) -> str:
+    response = getattr(exc, "response", None)
+    if isinstance(response, dict):
+        code = response.get("Error", {}).get("Code")
+        if code in {"AccessDenied", "InvalidAccessKeyId", "SignatureDoesNotMatch", "ExpiredToken"}:
+            return "auth"
+        if code == "NoSuchBucket":
+            return "missing_bucket"
+        if code == "NoSuchKey":
+            return "missing_prefix"
+    if isinstance(exc, FileNotFoundError) or _is_missing_storage_key_error(exc):
+        return "missing_prefix"
+    message = str(exc).lower()
+    if "timeout" in message or "timed out" in message:
+        return "network"
+    if "connection refused" in message or "temporary failure" in message:
+        return "network"
+    if "endpointconnectionerror" in exc.__class__.__name__.lower():
+        return "network"
+    if "connection" in message and "error" in message:
+        return "network"
+    return "unknown"
+
+
+def _storage_error_hint(error_type: str) -> str:
+    hints = {
+        "auth": "Check storage credentials and permissions.",
+        "missing_bucket": "Verify the bucket exists and the configured name is correct.",
+        "missing_prefix": "Ensure the theme storage prefix exists or run a write test to create it.",
+        "network": "Check network connectivity and storage endpoint settings.",
+        "unknown": "Review the error message for details.",
+    }
+    return hints.get(error_type, "Review the error message for details.")
+
+
+def _format_storage_error(exc: Exception, *, operation: str) -> dict[str, Any]:
+    error_type = _classify_storage_error(exc)
+    return {
+        "operation": operation,
+        "type": error_type,
+        "message": truncate_error(str(exc)),
+        "hint": _storage_error_hint(error_type),
+    }
+
+
+def theme_storage_healthcheck(*, write_test: bool = False) -> dict[str, Any]:
+    """Check connectivity to the configured theme storage."""
+    storage = get_theme_storage()
+    prefix = get_theme_storage_prefix().rstrip("/")
+    list_prefix = f"{prefix}/" if prefix else ""
+    result: dict[str, Any] = {
+        "ok": False,
+        "storage": storage.__class__.__name__,
+        "prefix": list_prefix,
+        "read_ok": False,
+        "write_ok": False,
+        "write_test": write_test,
+        "errors": [],
+    }
+
+    try:
+        storage.listdir(list_prefix)
+        result["read_ok"] = True
+    except Exception as exc:
+        result["errors"].append(_format_storage_error(exc, operation="list"))
+        return result
+
+    if write_test:
+        marker_name = f"{list_prefix.rstrip('/')}/.healthcheck-{uuid4().hex}.txt".lstrip("/")
+        saved = False
+        try:
+            storage.save(marker_name, ContentFile("healthcheck"))
+            saved = True
+            storage.delete(marker_name)
+            result["write_ok"] = True
+        except Exception as exc:
+            if saved:
+                try:
+                    storage.delete(marker_name)
+                except Exception:
+                    pass
+            result["errors"].append(_format_storage_error(exc, operation="write"))
+
+    result["ok"] = result["read_ok"] and (not write_test or result["write_ok"])
+    return result
 
 
 def download_theme_from_storage(slug: str, *, base_dir: Optional[Path] = None) -> bool:
