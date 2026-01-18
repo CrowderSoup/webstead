@@ -110,6 +110,36 @@
         {{ form.robots_txt }}
         {{ form.robots_txt.errors }}
       </div>
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+          Bridgy Publish links
+        </p>
+        <p class="mt-1 text-xs text-[color:var(--admin-muted)]">
+          Toggle each hidden link used for Bridgy Publish webmentions.
+        </p>
+        <div class="mt-3 space-y-2 text-sm text-[color:var(--admin-ink)]">
+          <label for="{{ form.bridgy_publish_bluesky.id_for_label }}" class="flex items-center gap-2">
+            {{ form.bridgy_publish_bluesky }}
+            <span>Bluesky</span>
+          </label>
+          {{ form.bridgy_publish_bluesky.errors }}
+          <label for="{{ form.bridgy_publish_flickr.id_for_label }}" class="flex items-center gap-2">
+            {{ form.bridgy_publish_flickr }}
+            <span>Flickr</span>
+          </label>
+          {{ form.bridgy_publish_flickr.errors }}
+          <label for="{{ form.bridgy_publish_github.id_for_label }}" class="flex items-center gap-2">
+            {{ form.bridgy_publish_github }}
+            <span>GitHub</span>
+          </label>
+          {{ form.bridgy_publish_github.errors }}
+          <label for="{{ form.bridgy_publish_mastodon.id_for_label }}" class="flex items-center gap-2">
+            {{ form.bridgy_publish_mastodon }}
+            <span>Mastodon</span>
+          </label>
+          {{ form.bridgy_publish_mastodon.errors }}
+        </div>
+      </div>
     </div>
   </div>
   <div class="flex flex-wrap items-center gap-3">

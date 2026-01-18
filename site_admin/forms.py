@@ -334,6 +334,10 @@ class SiteConfigurationForm(forms.ModelForm):
             "active_theme",
             "main_menu",
             "footer_menu",
+            "bridgy_publish_bluesky",
+            "bridgy_publish_flickr",
+            "bridgy_publish_github",
+            "bridgy_publish_mastodon",
             "robots_txt",
         ]
         widgets = {

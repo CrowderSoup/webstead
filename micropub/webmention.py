@@ -14,6 +14,13 @@ from .models import Webmention
 
 logger = logging.getLogger(__name__)
 
+BRIDGY_PUBLISH_TARGETS = (
+    ("bridgy_publish_bluesky", "https://brid.gy/publish/bluesky"),
+    ("bridgy_publish_flickr", "https://brid.gy/publish/flickr"),
+    ("bridgy_publish_github", "https://brid.gy/publish/github"),
+    ("bridgy_publish_mastodon", "https://brid.gy/publish/mastodon"),
+)
+
 
 class _WebmentionDiscoveryParser(HTMLParser):
     def __init__(self):
@@ -268,5 +275,33 @@ def send_webmentions_for_post(post: Post, source_url: str) -> None:
             source_url,
             target,
             mention_type=mention_type,
+            source_post=post,
+        )
+
+
+def _bridgy_publish_targets(settings_obj) -> list[str]:
+    if not settings_obj:
+        return []
+    targets = []
+    for field_name, target_url in BRIDGY_PUBLISH_TARGETS:
+        if getattr(settings_obj, field_name, False):
+            targets.append(target_url)
+    return targets
+
+
+def send_bridgy_publish_webmentions(post: Post, source_url: str, settings_obj) -> None:
+    targets = _bridgy_publish_targets(settings_obj)
+    if not targets:
+        return
+    existing_targets = set(
+        Webmention.objects.filter(source=source_url, target__in=targets).values_list("target", flat=True)
+    )
+    for target in targets:
+        if target in existing_targets:
+            continue
+        send_webmention(
+            source_url,
+            target,
+            mention_type=Webmention.MENTION,
             source_post=post,
         )

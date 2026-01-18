@@ -168,6 +168,10 @@ class SiteConfiguration(SingletonModel):
     robots_txt = models.TextField(default="", blank=True)
     main_menu = models.ForeignKey(Menu, null=True, on_delete=models.SET_NULL)
     footer_menu = models.ForeignKey(Menu, null=True, on_delete=models.SET_NULL, related_name="footer_siteconfigurations")
+    bridgy_publish_bluesky = models.BooleanField("Bridgy Publish: Bluesky", default=True)
+    bridgy_publish_flickr = models.BooleanField("Bridgy Publish: Flickr", default=True)
+    bridgy_publish_github = models.BooleanField("Bridgy Publish: GitHub", default=True)
+    bridgy_publish_mastodon = models.BooleanField("Bridgy Publish: Mastodon", default=True)
 
     def __str__(self):
         return "Site Configuration"

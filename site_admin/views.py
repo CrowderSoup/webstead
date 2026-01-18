@@ -58,7 +58,12 @@ from core.themes import (
     theme_storage_healthcheck,
 )
 from micropub.models import Webmention
-from micropub.webmention import resend_webmention, send_webmention, send_webmentions_for_post
+from micropub.webmention import (
+    resend_webmention,
+    send_bridgy_publish_webmentions,
+    send_webmention,
+    send_webmentions_for_post,
+)
 
 from .forms import (
     HCardEmailForm,
@@ -1221,6 +1226,7 @@ def post_edit(request, slug=None):
     if slug:
         post = get_object_or_404(Post, slug=slug)
     is_new = post is None
+    was_published = post.is_published() if post else False
 
     if request.method == "POST":
         form = PostForm(request.POST, instance=post)
@@ -1475,6 +1481,12 @@ def post_edit(request, slug=None):
             saved_post.save(update_fields=["mf2"])
             source_url = request.build_absolute_uri(saved_post.get_absolute_url())
             send_webmentions_for_post(saved_post, source_url)
+            if saved_post.published_on and (is_new or not was_published):
+                send_bridgy_publish_webmentions(
+                    saved_post,
+                    source_url,
+                    SiteConfiguration.get_solo(),
+                )
             if request.headers.get("HX-Request"):
                 if is_new:
                     response = HttpResponse(status=204)
@@ -1575,10 +1587,13 @@ def theme_settings(request):
         else None
     )
 
+    action = request.POST.get("action") if request.method == "POST" else ""
     install_source = request.POST.get("install_source") if request.method == "POST" else ""
+    if action == "install_git":
+        install_source = "git"
     if install_source not in {"upload", "git"}:
         install_source = "git"
-    is_install_action = request.method == "POST" and request.POST.get("action") == "install_theme"
+    is_install_action = request.method == "POST" and action in {"install_theme", "install_git"}
 
     upload_form = ThemeUploadForm()
     git_form = ThemeGitInstallForm()
@@ -1598,7 +1613,30 @@ def theme_settings(request):
             clear_template_caches()
             messages.success(request, f"Saved settings for {active_theme.label}.")
             return redirect("site_admin:theme_settings")
-    if request.method == "POST" and request.POST.get("action") == "check_theme_storage":
+    if request.method == "POST" and action == "theme_storage_healthcheck":
+        write_test = request.POST.get("write_test") == "on"
+        result = theme_storage_healthcheck(write_test=write_test)
+        errors = result.get("errors") or []
+        if result.get("ok"):
+            if write_test:
+                messages.success(request, "Theme storage healthcheck succeeded (read/write).")
+            else:
+                messages.success(request, "Theme storage healthcheck succeeded (read-only).")
+        elif not errors:
+            messages.error(request, "Theme storage healthcheck failed.")
+        else:
+            for error in errors:
+                operation = error.get("operation") or "check"
+                detail = error.get("message") or "Unknown error"
+                hint = error.get("hint")
+                hint_suffix = f" Hint: {hint}" if hint else ""
+                messages.error(
+                    request,
+                    f"Theme storage healthcheck failed during {operation}: {detail}.{hint_suffix}",
+                )
+        return redirect("site_admin:theme_settings")
+
+    if request.method == "POST" and action == "check_theme_storage":
         restored = []
         failures = []
         storage_synced = []
