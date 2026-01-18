@@ -172,6 +172,7 @@ class SiteConfiguration(SingletonModel):
     bridgy_publish_flickr = models.BooleanField("Bridgy Publish: Flickr", default=True)
     bridgy_publish_github = models.BooleanField("Bridgy Publish: GitHub", default=True)
     bridgy_publish_mastodon = models.BooleanField("Bridgy Publish: Mastodon", default=True)
+    comments_enabled = models.BooleanField("Comments enabled", default=False)
 
     def __str__(self):
         return "Site Configuration"

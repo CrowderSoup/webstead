@@ -20,7 +20,7 @@ from django.urls import reverse
 from django.forms import inlineformset_factory
 from django.views.decorators.http import require_http_methods, require_GET, require_POST
 
-from blog.models import Post
+from blog.models import Comment, Post
 from analytics.models import Visit
 
 from files.models import Attachment, File
@@ -58,6 +58,7 @@ from core.themes import (
     theme_storage_healthcheck,
 )
 from micropub.models import Webmention
+from blog.comments import AkismetError, submit_ham, submit_spam
 from micropub.webmention import (
     resend_webmention,
     send_bridgy_publish_webmentions,
@@ -78,6 +79,7 @@ from .forms import (
     PostForm,
     RedirectForm,
     SiteConfigurationForm,
+    CommentFilterForm,
     ThemeGitInstallForm,
     ThemeFileForm,
     ThemeSettingsForm,
@@ -891,6 +893,49 @@ def _filtered_webmentions(request):
     return form, webmentions
 
 
+def _akismet_payload_for_comment(comment, request):
+    return {
+        "blog": request.build_absolute_uri("/"),
+        "user_ip": comment.ip_address or "",
+        "user_agent": comment.user_agent or "",
+        "referrer": comment.referrer or "",
+        "permalink": request.build_absolute_uri(comment.post.get_absolute_url()),
+        "comment_type": "comment",
+        "comment_author": comment.author_name,
+        "comment_author_email": comment.author_email or "",
+        "comment_author_url": comment.author_url or "",
+        "comment_content": comment.content,
+        "comment_date_gmt": comment.created_at.isoformat(),
+    }
+
+
+def _filtered_comments(request):
+    form = CommentFilterForm(request.GET or None)
+    comments = Comment.objects.select_related("post").order_by("-created_at", "-id")
+    if form.is_valid():
+        query = form.cleaned_data.get("q")
+        status = form.cleaned_data.get("status")
+        post = form.cleaned_data.get("post")
+        start_date = form.cleaned_data.get("start_date")
+        end_date = form.cleaned_data.get("end_date")
+        if query:
+            comments = comments.filter(
+                Q(author_name__icontains=query)
+                | Q(author_email__icontains=query)
+                | Q(author_url__icontains=query)
+                | Q(content__icontains=query)
+            )
+        if status:
+            comments = comments.filter(status=status)
+        if post:
+            comments = comments.filter(post=post)
+        if start_date:
+            comments = comments.filter(created_at__date__gte=start_date)
+        if end_date:
+            comments = comments.filter(created_at__date__lte=end_date)
+    return form, comments
+
+
 @require_http_methods(["GET"])
 def webmention_list(request):
     guard = _staff_guard(request)
@@ -1091,6 +1136,121 @@ def webmention_reject(request, mention_id):
     mention.save(update_fields=["status", "error", "updated_at"])
     messages.success(request, "Webmention rejected.")
     return redirect("site_admin:webmention_detail", mention_id=mention.id)
+
+
+@require_http_methods(["GET"])
+def comment_list(request):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    filter_form, comments = _filtered_comments(request)
+    paginator = Paginator(comments, 20)
+    page_number = request.GET.get("page")
+    try:
+        page_obj = paginator.page(page_number)
+    except PageNotAnInteger:
+        page_obj = paginator.page(1)
+    except EmptyPage:
+        page_obj = paginator.page(paginator.num_pages)
+
+    context = {
+        "filter_form": filter_form,
+        "page_obj": page_obj,
+        "paginator": paginator,
+        "base_query": _strip_page_query(request),
+    }
+
+    if request.headers.get("HX-Request"):
+        return render(request, "site_admin/comments/_list.html", context)
+
+    return render(request, "site_admin/comments/index.html", context)
+
+
+@require_http_methods(["GET"])
+def comment_detail(request, comment_id):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    comment = get_object_or_404(Comment.objects.select_related("post"), pk=comment_id)
+    can_approve = comment.status in (Comment.PENDING, Comment.SPAM, Comment.REJECTED)
+    can_spam = comment.status in (Comment.PENDING, Comment.APPROVED, Comment.REJECTED)
+    can_delete = comment.status != Comment.DELETED
+    return render(
+        request,
+        "site_admin/comments/detail.html",
+        {
+            "comment": comment,
+            "can_approve": can_approve,
+            "can_spam": can_spam,
+            "can_delete": can_delete,
+        },
+    )
+
+
+@require_POST
+def comment_approve(request, comment_id):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    comment = get_object_or_404(Comment, pk=comment_id)
+    if comment.status == Comment.DELETED:
+        messages.error(request, "Deleted comments cannot be approved.")
+        return redirect("site_admin:comment_detail", comment_id=comment.id)
+
+    comment.status = Comment.APPROVED
+    comment.akismet_classification = "ham"
+    comment.save(update_fields=["status", "akismet_classification"])
+    try:
+        submit_ham(_akismet_payload_for_comment(comment, request))
+    except AkismetError:
+        messages.warning(request, "Comment approved, but Akismet could not be notified.")
+    else:
+        messages.success(request, "Comment approved.")
+    return redirect("site_admin:comment_detail", comment_id=comment.id)
+
+
+@require_POST
+def comment_mark_spam(request, comment_id):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    comment = get_object_or_404(Comment, pk=comment_id)
+    if comment.status == Comment.DELETED:
+        messages.error(request, "Deleted comments cannot be marked as spam.")
+        return redirect("site_admin:comment_detail", comment_id=comment.id)
+
+    comment.status = Comment.SPAM
+    comment.akismet_classification = "spam"
+    comment.save(update_fields=["status", "akismet_classification"])
+    try:
+        submit_spam(_akismet_payload_for_comment(comment, request))
+    except AkismetError:
+        messages.warning(request, "Comment marked as spam, but Akismet could not be notified.")
+    else:
+        messages.success(request, "Comment marked as spam.")
+    return redirect("site_admin:comment_detail", comment_id=comment.id)
+
+
+@require_POST
+def comment_delete(request, comment_id):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    comment = get_object_or_404(Comment, pk=comment_id)
+    if comment.status == Comment.DELETED:
+        messages.error(request, "Comment is already deleted.")
+        return redirect("site_admin:comment_detail", comment_id=comment.id)
+
+    comment.status = Comment.DELETED
+    comment.akismet_classification = "deleted"
+    comment.save(update_fields=["status", "akismet_classification"])
+    messages.success(request, "Comment deleted.")
+    return redirect("site_admin:comment_list")
 
 
 @require_http_methods(["GET"])

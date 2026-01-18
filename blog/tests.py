@@ -1,9 +1,11 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase, RequestFactory
+from django.test.utils import override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Post, Tag
+from .models import Comment, Post, Tag
+from core.models import SiteConfiguration
 from micropub.models import Webmention
 from .views import _interaction_payload
 import copy
@@ -18,6 +20,7 @@ from .mf2 import (
     normalize_interaction_properties,
     parse_target_from_html,
 )
+from .comments import AkismetError, AkismetResult
 
 
 class TagModelTests(TestCase):
@@ -520,3 +523,185 @@ class PostFilterTests(TestCase):
 
         self.assertEqual(response.status_code, 301)
         self.assertEqual(response["Location"], "/blog?tag=arcane")
+
+
+class CommentSubmissionTests(TestCase):
+    def setUp(self):
+        self.post = Post.objects.create(
+            title="Comment Post",
+            slug="comment-post",
+            content="text",
+            published_on=timezone.now(),
+        )
+
+    def _enable_comments(self):
+        settings_obj = SiteConfiguration.get_solo()
+        settings_obj.comments_enabled = True
+        settings_obj.save(update_fields=["comments_enabled"])
+
+    def test_comments_disabled_blocks_post_and_hides_form(self):
+        response = self.client.get(reverse("post", kwargs={"slug": self.post.slug}))
+        self.assertNotContains(response, "Leave a comment")
+
+        response = self.client.post(
+            reverse("comment_create", kwargs={"slug": self.post.slug}),
+            {
+                "author_name": "Ada",
+                "content": "Hello",
+            },
+        )
+        self.assertEqual(response.status_code, 404)
+
+    @override_settings(
+        AKISMET_API_KEY="test",
+        TURNSTILE_SITE_KEY="site",
+        TURNSTILE_SECRET_KEY="secret",
+    )
+    def test_turnstile_failure_rejects_comment(self):
+        self._enable_comments()
+        with patch("blog.views.verify_turnstile", return_value=(False, ["invalid-input-response"])):
+            response = self.client.post(
+                reverse("comment_create", kwargs={"slug": self.post.slug}),
+                {
+                    "author_name": "Ada",
+                    "content": "Hello",
+                    "cf-turnstile-response": "token",
+                },
+            )
+
+        self.assertEqual(Comment.objects.count(), 0)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Turnstile verification failed")
+
+    @override_settings(
+        AKISMET_API_KEY="test",
+        TURNSTILE_SITE_KEY="site",
+        TURNSTILE_SECRET_KEY="secret",
+    )
+    def test_akismet_spam_response_saves_spam_comment(self):
+        self._enable_comments()
+        with patch("blog.views.verify_turnstile", return_value=(True, [])):
+            with patch(
+                "blog.views.check_comment",
+                return_value=AkismetResult(True, "spam", "hash", None),
+            ):
+                response = self.client.post(
+                    reverse("comment_create", kwargs={"slug": self.post.slug}),
+                    {
+                        "author_name": "Ada",
+                        "content": "Spammy",
+                        "cf-turnstile-response": "token",
+                    },
+                )
+
+        self.assertEqual(response.status_code, 302)
+        comment = Comment.objects.get()
+        self.assertEqual(comment.status, Comment.SPAM)
+
+    @override_settings(
+        AKISMET_API_KEY="test",
+        TURNSTILE_SITE_KEY="site",
+        TURNSTILE_SECRET_KEY="secret",
+    )
+    def test_akismet_error_rejects_comment(self):
+        self._enable_comments()
+        with patch("blog.views.verify_turnstile", return_value=(True, [])):
+            with patch("blog.views.check_comment", side_effect=AkismetError("Boom")):
+                response = self.client.post(
+                    reverse("comment_create", kwargs={"slug": self.post.slug}),
+                    {
+                        "author_name": "Ada",
+                        "content": "Hello",
+                        "cf-turnstile-response": "token",
+                    },
+                )
+
+        self.assertEqual(Comment.objects.count(), 0)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Unable to verify comment content")
+
+    @override_settings(
+        AKISMET_API_KEY="test",
+        TURNSTILE_SITE_KEY="site",
+        TURNSTILE_SECRET_KEY="secret",
+    )
+    def test_invalid_referrer_is_dropped(self):
+        self._enable_comments()
+        with patch("blog.views.verify_turnstile", return_value=(True, [])):
+            with patch(
+                "blog.views.check_comment",
+                return_value=AkismetResult(False, "ham", "hash", None),
+            ):
+                response = self.client.post(
+                    reverse("comment_create", kwargs={"slug": self.post.slug}),
+                    {
+                        "author_name": "Ada",
+                        "content": "Hello",
+                        "cf-turnstile-response": "token",
+                    },
+                    HTTP_REFERER="not a url",
+                )
+
+        self.assertEqual(response.status_code, 302)
+        comment = Comment.objects.get()
+        self.assertEqual(comment.referrer, "")
+
+    @override_settings(
+        AKISMET_API_KEY="test",
+        TURNSTILE_SITE_KEY="site",
+        TURNSTILE_SECRET_KEY="secret",
+    )
+    def test_referrer_is_truncated_to_field_limit(self):
+        self._enable_comments()
+        max_length = Comment._meta.get_field("referrer").max_length
+        long_referrer = "https://example.com/" + ("a" * (max_length + 50))
+        with patch("blog.views.verify_turnstile", return_value=(True, [])):
+            with patch(
+                "blog.views.check_comment",
+                return_value=AkismetResult(False, "ham", "hash", None),
+            ):
+                response = self.client.post(
+                    reverse("comment_create", kwargs={"slug": self.post.slug}),
+                    {
+                        "author_name": "Ada",
+                        "content": "Hello",
+                        "cf-turnstile-response": "token",
+                    },
+                    HTTP_REFERER=long_referrer,
+                )
+
+        self.assertEqual(response.status_code, 302)
+        comment = Comment.objects.get()
+        self.assertTrue(comment.referrer.startswith("https://example.com/"))
+        self.assertLessEqual(len(comment.referrer), max_length)
+
+    @override_settings(
+        AKISMET_API_KEY="test",
+        TURNSTILE_SITE_KEY="site",
+        TURNSTILE_SECRET_KEY="secret",
+    )
+    def test_only_approved_comments_render_on_post(self):
+        self._enable_comments()
+        Comment.objects.create(
+            post=self.post,
+            author_name="Approved",
+            content="Visible",
+            status=Comment.APPROVED,
+        )
+        Comment.objects.create(
+            post=self.post,
+            author_name="Pending",
+            content="Hidden",
+            status=Comment.PENDING,
+        )
+        Comment.objects.create(
+            post=self.post,
+            author_name="Spam",
+            content="Also hidden",
+            status=Comment.SPAM,
+        )
+
+        response = self.client.get(reverse("post", kwargs={"slug": self.post.slug}))
+        self.assertContains(response, "Visible")
+        self.assertNotContains(response, "Hidden")
+        self.assertNotContains(response, "Also hidden")

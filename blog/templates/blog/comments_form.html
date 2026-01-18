@@ -1,0 +1,54 @@
+{% if comments_enabled %}
+<section class="comments-form" aria-labelledby="comments-form-title">
+  <h2 id="comments-form-title">Leave a comment</h2>
+
+  {% if not comments_configured and not comments_debug %}
+    <p>Comments are enabled but spam protection keys are missing.</p>
+  {% else %}
+    {% if messages %}
+      <div class="comment-messages">
+        {% for message in messages %}
+          <p>{{ message }}</p>
+        {% endfor %}
+      </div>
+    {% endif %}
+    {% if comment_form.non_field_errors %}
+      <div class="comment-errors">
+        {{ comment_form.non_field_errors }}
+      </div>
+    {% endif %}
+    <form method="post" action="{% url 'comment_create' slug=post.slug %}">
+      {% csrf_token %}
+      <div class="comment-field-group">
+        <label for="{{ comment_form.author_name.id_for_label }}">Name</label>
+        {{ comment_form.author_name }}
+        {{ comment_form.author_name.errors }}
+      </div>
+      <div class="comment-field-group">
+        <label for="{{ comment_form.author_email.id_for_label }}">Email (optional)</label>
+        {{ comment_form.author_email }}
+        {{ comment_form.author_email.errors }}
+      </div>
+      <div class="comment-field-group">
+        <label for="{{ comment_form.author_url.id_for_label }}">Website (optional)</label>
+        {{ comment_form.author_url }}
+        {{ comment_form.author_url.errors }}
+      </div>
+      <div class="comment-field-group">
+        <label for="{{ comment_form.content.id_for_label }}">Comment</label>
+        {{ comment_form.content }}
+        {{ comment_form.content.errors }}
+      </div>
+      {% if not comments_debug %}
+        <div class="comment-turnstile">
+          <div class="cf-turnstile" data-sitekey="{{ turnstile_site_key }}"></div>
+        </div>
+      {% endif %}
+      <button type="submit">Submit comment</button>
+    </form>
+    {% if not comments_debug %}
+      <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    {% endif %}
+  {% endif %}
+</section>
+{% endif %}

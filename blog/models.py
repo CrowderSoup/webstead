@@ -98,3 +98,44 @@ class Post(models.Model):
     
     class Meta:
         ordering = ['-published_on']
+
+
+class Comment(models.Model):
+    PENDING = "pending"
+    APPROVED = "approved"
+    SPAM = "spam"
+    REJECTED = "rejected"
+    DELETED = "deleted"
+    STATUS_CHOICES = [
+        (PENDING, "Pending"),
+        (APPROVED, "Approved"),
+        (SPAM, "Spam"),
+        (REJECTED, "Rejected"),
+        (DELETED, "Deleted"),
+    ]
+
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="comments")
+    author_name = models.CharField(max_length=255)
+    author_email = models.EmailField(blank=True, null=True)
+    author_url = models.URLField(max_length=2000, blank=True)
+    content = models.TextField()
+    excerpt = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True, default="")
+    referrer = models.URLField(max_length=2000, blank=True)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=PENDING)
+    akismet_score = models.FloatField(null=True, blank=True)
+    akismet_classification = models.CharField(max_length=32, blank=True, default="")
+    akismet_submit_hash = models.CharField(max_length=255, blank=True, default="")
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status"]),
+            models.Index(fields=["created_at"]),
+            models.Index(fields=["post"]),
+        ]
+
+    def __str__(self):
+        return f"Comment by {self.author_name} on {self.post}"

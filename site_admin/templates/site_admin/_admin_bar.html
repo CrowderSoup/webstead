@@ -333,6 +333,12 @@
         Posts
       </a>
       <a
+        href="{% url 'site_admin:comment_list' %}"
+        class="site-admin-bar__nav-pill"
+      >
+        Comments
+      </a>
+      <a
         href="{% url 'site_admin:webmention_list' %}"
         class="site-admin-bar__nav-pill"
       >
@@ -381,6 +387,12 @@
             class="site-admin-bar__mobile-link"
           >
             Posts
+          </a>
+          <a
+            href="{% url 'site_admin:comment_list' %}"
+            class="site-admin-bar__mobile-link"
+          >
+            Comments
           </a>
           <a
             href="{% url 'site_admin:webmention_list' %}"

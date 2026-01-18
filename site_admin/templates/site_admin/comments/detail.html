@@ -1,0 +1,143 @@
+{% extends "site_admin/base.html" %}
+
+{% block title %}Comment details{% endblock %}
+
+{% block content %}
+  <div class="flex flex-col gap-6">
+    <section class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <div class="text-sm uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Comments</div>
+        <h1 class="text-2xl font-semibold">Comment details</h1>
+        <p class="mt-1 text-sm text-[color:var(--admin-muted)]">{{ comment.author_name }}</p>
+      </div>
+      <div class="flex flex-wrap items-center gap-3">
+        <a
+          href="{% url 'site_admin:comment_list' %}"
+          class="rounded-full border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+        >
+          Back to comments
+        </a>
+        {% if can_approve %}
+          <form method="post" action="{% url 'site_admin:comment_approve' comment_id=comment.id %}">
+            {% csrf_token %}
+            <button
+              type="submit"
+              class="rounded-full bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+            >
+              Approve comment
+            </button>
+          </form>
+        {% endif %}
+        {% if can_spam %}
+          <form method="post" action="{% url 'site_admin:comment_mark_spam' comment_id=comment.id %}">
+            {% csrf_token %}
+            <button
+              type="submit"
+              class="rounded-full border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
+            >
+              Mark spam
+            </button>
+          </form>
+        {% endif %}
+        {% if can_delete %}
+          <form method="post" action="{% url 'site_admin:comment_delete' comment_id=comment.id %}">
+            {% csrf_token %}
+            <button
+              type="submit"
+              class="rounded-full border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
+            >
+              Delete comment
+            </button>
+          </form>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+      {% if messages %}
+        <div class="mb-5 space-y-3">
+          {% for message in messages %}
+            <div class="rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] px-4 py-3 text-sm text-[color:var(--admin-ink)]">
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+      <div class="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div class="space-y-4">
+          <div class="rounded-2xl border border-[color:var(--admin-border)] bg-white p-4">
+            <div class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Comment</div>
+            <p class="mt-2 text-sm whitespace-pre-wrap">{{ comment.content }}</p>
+          </div>
+          <div class="rounded-2xl border border-[color:var(--admin-border)] bg-white p-4">
+            <div class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Post</div>
+            <a
+              href="{% url 'site_admin:post_edit' slug=comment.post.slug %}"
+              class="mt-2 block text-sm font-semibold text-[color:var(--admin-accent)]"
+            >
+              {{ comment.post.title|default:comment.post.slug }}
+            </a>
+          </div>
+          {% if comment.referrer %}
+            <div class="rounded-2xl border border-[color:var(--admin-border)] bg-white p-4 text-sm">
+              <div class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Referrer</div>
+              <a
+                href="{{ comment.referrer }}"
+                class="mt-2 block text-[color:var(--admin-accent)]"
+                target="_blank"
+                rel="noopener"
+              >
+                {{ comment.referrer }}
+              </a>
+            </div>
+          {% endif %}
+        </div>
+        <div class="space-y-4">
+          <div class="rounded-2xl border border-[color:var(--admin-border)] bg-white p-4 text-sm">
+            <div class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Status</div>
+            <div class="mt-2 font-semibold">{{ comment.get_status_display }}</div>
+          </div>
+          <div class="rounded-2xl border border-[color:var(--admin-border)] bg-white p-4 text-sm">
+            <div class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Submitted</div>
+            <div class="mt-2">{{ comment.created_at|date:"M j, Y" }}</div>
+          </div>
+          {% if comment.author_email %}
+            <div class="rounded-2xl border border-[color:var(--admin-border)] bg-white p-4 text-sm">
+              <div class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Email</div>
+              <div class="mt-2">{{ comment.author_email }}</div>
+            </div>
+          {% endif %}
+          {% if comment.author_url %}
+            <div class="rounded-2xl border border-[color:var(--admin-border)] bg-white p-4 text-sm">
+              <div class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Website</div>
+              <a
+                href="{{ comment.author_url }}"
+                class="mt-2 block text-[color:var(--admin-accent)]"
+                target="_blank"
+                rel="noopener"
+              >
+                {{ comment.author_url }}
+              </a>
+            </div>
+          {% endif %}
+          <div class="rounded-2xl border border-[color:var(--admin-border)] bg-white p-4 text-sm">
+            <div class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Akismet</div>
+            <div class="mt-2">{{ comment.akismet_classification|default:"—" }}</div>
+          </div>
+          {% if comment.ip_address %}
+            <div class="rounded-2xl border border-[color:var(--admin-border)] bg-white p-4 text-sm">
+              <div class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">IP address</div>
+              <div class="mt-2">{{ comment.ip_address }}</div>
+            </div>
+          {% endif %}
+          {% if comment.user_agent %}
+            <div class="rounded-2xl border border-[color:var(--admin-border)] bg-white p-4 text-sm">
+              <div class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">User agent</div>
+              <div class="mt-2 break-words">{{ comment.user_agent }}</div>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+  </div>
+{% endblock %}

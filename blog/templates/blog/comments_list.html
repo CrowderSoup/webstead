@@ -1,0 +1,26 @@
+{% if approved_comments %}
+<section class="comments" id="comments">
+  <h2>Comments ({{ approved_comments|length }})</h2>
+  <ul class="comments-list">
+    {% for comment in approved_comments %}
+      <li class="comment">
+        <article>
+          <header class="comment-meta">
+            <strong>{{ comment.author_name }}</strong>
+            {% if comment.author_url %}
+              <a href="{{ comment.author_url }}">{{ comment.author_url }}</a>
+            {% endif %}
+            <time datetime="{{ comment.created_at|date:'c' }}">{{ comment.created_at|date:"M j, Y" }}</time>
+          </header>
+          <p class="comment-body">{{ comment.content|linebreaksbr }}</p>
+        </article>
+      </li>
+    {% endfor %}
+  </ul>
+</section>
+{% elif comments_enabled %}
+<section class="comments" id="comments">
+  <h2>Comments</h2>
+  <p>No comments yet.</p>
+</section>
+{% endif %}

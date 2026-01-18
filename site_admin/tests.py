@@ -11,7 +11,7 @@ from django.test.utils import override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from blog.models import Post
+from blog.models import Comment, Post
 from core.models import HCard, HCardPhoto, SiteConfiguration, ThemeInstall
 from core.themes import ThemeDefinition, ThemeUpdateResult
 from core.test_utils import build_test_theme
@@ -592,3 +592,58 @@ class SiteAdminWebmentionModerationTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.context["can_moderate"])
+
+
+class SiteAdminCommentModerationTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.staff = get_user_model().objects.create_user(
+            username="editor",
+            email="editor@example.com",
+            password="password",
+            is_staff=True,
+        )
+        self.post = Post.objects.create(
+            title="Comment Post",
+            slug="comment-post",
+            content="text",
+            published_on=timezone.now(),
+        )
+
+    def test_comment_approve_marks_status(self):
+        self.client.force_login(self.staff)
+        comment = Comment.objects.create(
+            post=self.post,
+            author_name="Ada",
+            content="Hello",
+            status=Comment.PENDING,
+        )
+
+        with mock.patch("site_admin.views.submit_ham") as submit_ham:
+            response = self.client.post(
+                reverse("site_admin:comment_approve", kwargs={"comment_id": comment.id})
+            )
+
+        self.assertEqual(response.status_code, 302)
+        comment.refresh_from_db()
+        self.assertEqual(comment.status, Comment.APPROVED)
+        submit_ham.assert_called_once()
+
+    def test_comment_mark_spam_updates_status(self):
+        self.client.force_login(self.staff)
+        comment = Comment.objects.create(
+            post=self.post,
+            author_name="Ada",
+            content="Hello",
+            status=Comment.PENDING,
+        )
+
+        with mock.patch("site_admin.views.submit_spam") as submit_spam:
+            response = self.client.post(
+                reverse("site_admin:comment_mark_spam", kwargs={"comment_id": comment.id})
+            )
+
+        self.assertEqual(response.status_code, 302)
+        comment.refresh_from_db()
+        self.assertEqual(comment.status, Comment.SPAM)
+        submit_spam.assert_called_once()

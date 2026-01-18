@@ -1,0 +1,83 @@
+{% extends "site_admin/base.html" %}
+
+{% block title %}Comments{% endblock %}
+
+{% block content %}
+  <div class="flex flex-col gap-6">
+    <section class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h1 class="text-2xl font-semibold">Comments</h1>
+        <p class="mt-1 text-sm text-[color:var(--admin-muted)]">
+          Review and moderate blog comments.
+        </p>
+      </div>
+    </section>
+
+    <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+      <form
+        id="comment-filter"
+        method="get"
+        class="flex flex-col gap-4 md:flex-row md:items-end"
+        hx-get="{% url 'site_admin:comment_list' %}"
+        hx-target="#comment-list"
+        hx-push-url="true"
+        hx-trigger="keyup delay:400ms, change"
+      >
+        <div class="flex-1">
+          <label
+            for="{{ filter_form.q.id_for_label }}"
+            class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+          >
+            Search
+          </label>
+          {{ filter_form.q }}
+        </div>
+        <div>
+          <label
+            for="{{ filter_form.status.id_for_label }}"
+            class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+          >
+            Status
+          </label>
+          {{ filter_form.status }}
+        </div>
+        <div>
+          <label
+            for="{{ filter_form.post.id_for_label }}"
+            class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+          >
+            Post
+          </label>
+          {{ filter_form.post }}
+        </div>
+        <div>
+          <label
+            for="{{ filter_form.start_date.id_for_label }}"
+            class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+          >
+            From
+          </label>
+          {{ filter_form.start_date }}
+        </div>
+        <div>
+          <label
+            for="{{ filter_form.end_date.id_for_label }}"
+            class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+          >
+            To
+          </label>
+          {{ filter_form.end_date }}
+        </div>
+        <button
+          type="submit"
+          class="rounded-full border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+        >
+          Filter
+        </button>
+      </form>
+      <div id="comment-list" class="mt-6">
+        {% include "site_admin/comments/_list.html" %}
+      </div>
+    </section>
+  </div>
+{% endblock %}

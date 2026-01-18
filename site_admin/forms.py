@@ -4,7 +4,7 @@ from django.core.validators import EmailValidator, URLValidator
 from django.utils import timezone
 from django.utils.text import slugify
 
-from blog.models import Post, Tag
+from blog.models import Comment, Post, Tag
 from core.models import (
     HCard,
     HCardEmail,
@@ -221,6 +221,39 @@ class WebmentionFilterForm(forms.Form):
             )
 
 
+class CommentFilterForm(forms.Form):
+    q = forms.CharField(required=False, label="Search")
+    status = forms.ChoiceField(
+        required=False,
+        choices=[("", "Any status"), *Comment.STATUS_CHOICES],
+        label="Status",
+    )
+    post = forms.ModelChoiceField(
+        required=False,
+        queryset=Post.objects.none(),
+        label="Post",
+    )
+    start_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date"}),
+        label="From",
+    )
+    end_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date"}),
+        label="To",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["post"].queryset = Post.objects.order_by("-published_on", "-id")
+        for field in self.fields.values():
+            field.widget.attrs.setdefault(
+                "class",
+                "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+            )
+
+
 class WebmentionCreateForm(forms.Form):
     source = forms.URLField(label="Source URL")
     target = forms.URLField(label="Target URL")
@@ -334,6 +367,7 @@ class SiteConfigurationForm(forms.ModelForm):
             "active_theme",
             "main_menu",
             "footer_menu",
+            "comments_enabled",
             "bridgy_publish_bluesky",
             "bridgy_publish_flickr",
             "bridgy_publish_github",

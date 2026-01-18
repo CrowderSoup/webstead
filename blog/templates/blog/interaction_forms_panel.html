@@ -1,0 +1,129 @@
+<section class="interaction-form-card" data-interaction-card data-interaction-default="{{ interaction_default }}">
+  <header class="interaction-form-header">
+    <h2 class="interaction-form-title">Respond</h2>
+    {% if comments_enabled %}
+      <div class="interaction-form-toggle" role="tablist" aria-label="Choose response type">
+        <button
+          type="button"
+          class="interaction-toggle-button{% if interaction_default == 'comment' %} is-active{% endif %}"
+          id="interaction-comment-button"
+          data-interaction-toggle="comment"
+          aria-controls="interaction-comment-panel"
+          aria-selected="{% if interaction_default == 'comment' %}true{% else %}false{% endif %}"
+        >
+          Comment
+        </button>
+        <button
+          type="button"
+          class="interaction-toggle-button{% if interaction_default == 'webmention' %} is-active{% endif %}"
+          id="interaction-webmention-button"
+          data-interaction-toggle="webmention"
+          aria-controls="interaction-webmention-panel"
+          aria-selected="{% if interaction_default == 'webmention' %}true{% else %}false{% endif %}"
+        >
+          Webmention
+        </button>
+      </div>
+    {% endif %}
+  </header>
+  <div class="interaction-form-panels">
+    {% if comments_enabled %}
+      <div
+        class="interaction-form-panel"
+        data-interaction-panel="comment"
+        id="interaction-comment-panel"
+        role="tabpanel"
+        aria-labelledby="interaction-comment-title"
+      >
+        <h3 id="interaction-comment-title">Leave a comment</h3>
+
+        {% if not comments_configured and not comments_debug %}
+          <p>Comments are enabled but spam protection keys are missing.</p>
+        {% else %}
+          {% if messages %}
+            <div class="comment-messages">
+              {% for message in messages %}
+                <p>{{ message }}</p>
+              {% endfor %}
+            </div>
+          {% endif %}
+          {% if comment_form.non_field_errors %}
+            <div class="comment-errors">
+              {{ comment_form.non_field_errors }}
+            </div>
+          {% endif %}
+          <form method="post" action="{% url 'comment_create' slug=post.slug %}">
+            {% csrf_token %}
+            <div class="comment-field-group">
+              <label for="{{ comment_form.author_name.id_for_label }}">Name</label>
+              {{ comment_form.author_name }}
+              {{ comment_form.author_name.errors }}
+            </div>
+            <div class="comment-field-group">
+              <label for="{{ comment_form.author_email.id_for_label }}">Email (optional)</label>
+              {{ comment_form.author_email }}
+              {{ comment_form.author_email.errors }}
+            </div>
+            <div class="comment-field-group">
+              <label for="{{ comment_form.author_url.id_for_label }}">Website (optional)</label>
+              {{ comment_form.author_url }}
+              {{ comment_form.author_url.errors }}
+            </div>
+            <div class="comment-field-group">
+              <label for="{{ comment_form.content.id_for_label }}">Comment</label>
+              {{ comment_form.content }}
+              {{ comment_form.content.errors }}
+            </div>
+            {% if not comments_debug %}
+              <div class="comment-turnstile">
+                <div class="cf-turnstile" data-sitekey="{{ turnstile_site_key }}"></div>
+              </div>
+            {% endif %}
+            <button type="submit">Submit comment</button>
+          </form>
+          {% if not comments_debug %}
+            <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+          {% endif %}
+        {% endif %}
+      </div>
+    {% endif %}
+
+    <div
+      class="interaction-form-panel"
+      data-interaction-panel="webmention"
+      id="interaction-webmention-panel"
+      role="tabpanel"
+      aria-labelledby="interaction-webmention-title"
+    >
+      <h3 id="interaction-webmention-title">Send a Webmention</h3>
+      {% if indieauth_me %}
+        <p>Your site is authenticated. Send a mention for this post.</p>
+        <form method="post" action="{% url 'webmention-submit' %}">
+          {% csrf_token %}
+          <input type="hidden" name="target" value="{{ webmention_target }}" />
+          <input type="hidden" name="next" value="{{ webmention_next }}" />
+          <label for="webmention-type">Mention type</label>
+          <select id="webmention-type" name="mention_type">
+            <option value="mention" selected>Mention</option>
+            <option value="reply">Reply</option>
+            <option value="like">Like</option>
+            <option value="repost">Repost</option>
+          </select>
+          <label for="webmention-source">Your post URL</label>
+          <input
+            id="webmention-source"
+            name="source"
+            type="url"
+            inputmode="url"
+            autocomplete="url"
+            required
+          />
+          <button type="submit">Send Webmention</button>
+        </form>
+      {% else %}
+        <p>Log in with your website to send a webmention.</p>
+        <a href="{{ indieauth_login_url }}">Login with your website</a>
+      {% endif %}
+    </div>
+  </div>
+</section>

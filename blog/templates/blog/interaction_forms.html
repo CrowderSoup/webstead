@@ -1,0 +1,45 @@
+{% if comments_enabled %}
+  {% with interaction_default="comment" %}
+    {% include "blog/interaction_forms_panel.html" %}
+  {% endwith %}
+{% else %}
+  {% with interaction_default="webmention" %}
+    {% include "blog/interaction_forms_panel.html" %}
+  {% endwith %}
+{% endif %}
+
+<script>
+  (() => {
+    document.documentElement.classList.add("js-enabled");
+    const cards = Array.from(document.querySelectorAll("[data-interaction-card]"));
+    cards.forEach((card) => {
+      const buttons = Array.from(card.querySelectorAll("[data-interaction-toggle]"));
+      const panels = Array.from(card.querySelectorAll("[data-interaction-panel]"));
+      if (!buttons.length || !panels.length) {
+        return;
+      }
+
+      const activatePanel = (selection) => {
+        panels.forEach((panel) => {
+          const isActive = panel.dataset.interactionPanel === selection;
+          panel.classList.toggle("is-hidden", !isActive);
+        });
+        buttons.forEach((button) => {
+          const isActive = button.dataset.interactionToggle === selection;
+          button.classList.toggle("is-active", isActive);
+          button.setAttribute("aria-selected", isActive ? "true" : "false");
+        });
+      };
+
+      const defaultPanel =
+        card.dataset.interactionDefault || buttons[0].dataset.interactionToggle;
+      activatePanel(defaultPanel);
+
+      buttons.forEach((button) => {
+        button.addEventListener("click", () => {
+          activatePanel(button.dataset.interactionToggle);
+        });
+      });
+    });
+  })();
+</script>

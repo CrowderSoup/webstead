@@ -72,6 +72,7 @@
           <figure id="photo-{{ photo.asset.id }}">
             <div class="photo-container" style="--photo-image: url('{{ photo.asset.file.url }}')">
               <img
+                class="u-photo"
                 src="{{ photo.asset.file.url }}"
                 alt="{{ photo.asset.alt_text }}"
                 loading="lazy"

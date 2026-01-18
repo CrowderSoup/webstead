@@ -1,16 +1,23 @@
+from django.conf import settings as django_settings
+from django.contrib import messages
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.core.validators import URLValidator
 from django.db.models import Count, Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render, get_object_or_404
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.utils.text import Truncator
+from django.utils import timezone
 
 from urllib.parse import urlencode, urlparse
 
-from .models import Post, Tag
+from .models import Comment, Post, Tag
+from .forms import CommentForm
 from .mf2 import DEFAULT_AVATAR_URL, fetch_target_from_url
+from .comments import AkismetError, check_comment, comments_configured, verify_turnstile
 from core.models import SiteConfiguration
 from core.og import absolute_url, first_attachment_image_url
 from micropub.models import Webmention
@@ -175,6 +182,78 @@ def _webmentions_for_post(post, request=None):
 
     return replies, likes, reposts
 
+
+def _comments_for_post(post):
+    return Comment.objects.filter(post=post, status=Comment.APPROVED).order_by("created_at")
+
+
+def _sanitize_referrer(referrer):
+    if not referrer:
+        return ""
+    referrer = referrer.strip()
+    max_length = Comment._meta.get_field("referrer").max_length or 2000
+    if len(referrer) > max_length:
+        referrer = referrer[:max_length]
+    validator = URLValidator()
+    try:
+        validator(referrer)
+    except ValidationError:
+        return ""
+    return referrer
+
+
+def _comment_context(request, post, *, comment_form=None):
+    settings_obj = SiteConfiguration.get_solo()
+    enabled = settings_obj.comments_enabled
+    configured = enabled and comments_configured()
+    if comment_form is None and enabled and configured:
+        comment_form = CommentForm()
+    return {
+        "comment_form": comment_form,
+        "comments_enabled": enabled,
+        "comments_configured": configured,
+        "turnstile_site_key": django_settings.TURNSTILE_SITE_KEY,
+        "comments_debug": django_settings.DEBUG,
+        "approved_comments": _comments_for_post(post),
+    }
+
+
+def _post_context(request, post, *, comment_form=None):
+    activity = _activity_from_mf2(post) if post.kind == Post.ACTIVITY else None
+    if post.kind in (Post.LIKE, Post.REPLY, Post.REPOST):
+        post.interaction = _interaction_payload(post, request=request)
+    activity_photos = list(post.photo_attachments) if post.kind == Post.ACTIVITY else []
+    webmention_replies, webmention_likes, webmention_reposts = _webmentions_for_post(post, request=request)
+    og_image = ""
+    og_image_alt = ""
+    if activity_photos:
+        og_image = activity_photos[0].asset.file.url
+        og_image_alt = activity_photos[0].asset.alt_text or ""
+    else:
+        og_image, og_image_alt = first_attachment_image_url(post.attachments.all())
+
+    context = {
+        "post": post,
+        "activity": activity,
+        "activity_photos": activity_photos,
+        "webmention_replies": webmention_replies,
+        "webmention_likes": webmention_likes,
+        "webmention_reposts": webmention_reposts,
+        "webmention_total": len(webmention_replies) + len(webmention_likes) + len(webmention_reposts),
+        "indieauth_me": request.session.get("indieauth_me"),
+        "indieauth_login_url": f"{reverse('indieauth-login')}?{urlencode({'next': post.get_absolute_url()})}",
+        "webmention_target": request.build_absolute_uri(post.get_absolute_url()),
+        "webmention_next": post.get_absolute_url(),
+        "og_title": post.title,
+        "og_description": Truncator(post.summary()).chars(200, truncate="..."),
+        "og_image": absolute_url(request, og_image),
+        "og_image_alt": og_image_alt or post.title,
+        "og_url": request.build_absolute_uri(post.get_absolute_url()),
+        "og_type": "article" if post.kind == Post.ARTICLE else "website",
+    }
+    context.update(_comment_context(request, post, comment_form=comment_form))
+    return context
+
 def _split_filter_values(values):
     items = []
     for value in values:
@@ -294,43 +373,98 @@ def post(request, slug):
     )
     if not post.is_published() and not request.user.is_authenticated:
         raise Http404
+    return render(request, "blog/post.html", _post_context(request, post))
 
-    activity = _activity_from_mf2(post) if post.kind == Post.ACTIVITY else None
-    if post.kind in (Post.LIKE, Post.REPLY, Post.REPOST):
-        post.interaction = _interaction_payload(post, request=request)
-    activity_photos = list(post.photo_attachments) if post.kind == Post.ACTIVITY else []
-    webmention_replies, webmention_likes, webmention_reposts = _webmentions_for_post(post, request=request)
-    og_image = ""
-    og_image_alt = ""
-    if activity_photos:
-        og_image = activity_photos[0].asset.file.url
-        og_image_alt = activity_photos[0].asset.alt_text or ""
-    else:
-        og_image, og_image_alt = first_attachment_image_url(post.attachments.all())
 
-    return render(
-        request,
-        "blog/post.html",
-        {
-            "post": post,
-            "activity": activity,
-            "activity_photos": activity_photos,
-            "webmention_replies": webmention_replies,
-            "webmention_likes": webmention_likes,
-            "webmention_reposts": webmention_reposts,
-            "webmention_total": len(webmention_replies) + len(webmention_likes) + len(webmention_reposts),
-            "indieauth_me": request.session.get("indieauth_me"),
-            "indieauth_login_url": f"{reverse('indieauth-login')}?{urlencode({'next': request.get_full_path()})}",
-            "webmention_target": request.build_absolute_uri(post.get_absolute_url()),
-            "webmention_next": request.get_full_path(),
-            "og_title": post.title,
-            "og_description": Truncator(post.summary()).chars(200, truncate="..."),
-            "og_image": absolute_url(request, og_image),
-            "og_image_alt": og_image_alt or post.title,
-            "og_url": request.build_absolute_uri(post.get_absolute_url()),
-            "og_type": "article" if post.kind == Post.ARTICLE else "website",
-        },
+@require_POST
+def comment_create(request, slug):
+    post = get_object_or_404(
+        Post.objects.select_related("author").prefetch_related(
+            "author__hcards",
+            "tags",
+            "attachments__asset",
+        ),
+        slug=slug,
+        deleted=False,
     )
+    if not post.is_published():
+        raise Http404
+
+    settings_obj = SiteConfiguration.get_solo()
+    if not settings_obj.comments_enabled:
+        return HttpResponse(status=404)
+
+    form = CommentForm(request.POST)
+    if not comments_configured():
+        form.add_error(None, "Comments are enabled but missing spam protection keys.")
+    if form.is_valid() and not django_settings.DEBUG:
+        turnstile_token = request.POST.get("cf-turnstile-response", "")
+        if not turnstile_token:
+            form.add_error(None, "Please complete the Turnstile challenge.")
+        else:
+            remote_ip = request.META.get("REMOTE_ADDR")
+            turnstile_ok, _ = verify_turnstile(turnstile_token, remoteip=remote_ip)
+            if not turnstile_ok:
+                form.add_error(None, "Turnstile verification failed. Please try again.")
+
+    if not form.is_valid():
+        return render(request, "blog/post.html", _post_context(request, post, comment_form=form))
+
+    author_name = form.cleaned_data["author_name"].strip()
+    author_email = form.cleaned_data.get("author_email") or ""
+    author_url = form.cleaned_data.get("author_url") or ""
+    content = form.cleaned_data["content"].strip()
+    ip_address = request.META.get("REMOTE_ADDR")
+    user_agent = request.META.get("HTTP_USER_AGENT", "")
+    referrer = _sanitize_referrer(request.META.get("HTTP_REFERER", ""))
+    excerpt = Truncator(content).chars(240, truncate="...")
+
+    akismet_payload = {
+        "blog": request.build_absolute_uri("/"),
+        "user_ip": ip_address or "",
+        "user_agent": user_agent or "",
+        "referrer": referrer or "",
+        "permalink": request.build_absolute_uri(post.get_absolute_url()),
+        "comment_type": "comment",
+        "comment_author": author_name,
+        "comment_author_email": author_email,
+        "comment_author_url": author_url,
+        "comment_content": content,
+        "comment_date_gmt": timezone.now().isoformat(),
+    }
+
+    if django_settings.DEBUG:
+        akismet_result = None
+    else:
+        try:
+            akismet_result = check_comment(akismet_payload)
+        except AkismetError:
+            form.add_error(None, "Unable to verify comment content right now. Please try again later.")
+            return render(request, "blog/post.html", _post_context(request, post, comment_form=form))
+
+    status = Comment.PENDING if django_settings.DEBUG else (Comment.SPAM if akismet_result.is_spam else Comment.PENDING)
+    comment = Comment.objects.create(
+        post=post,
+        author_name=author_name,
+        author_email=author_email or None,
+        author_url=author_url,
+        content=content,
+        excerpt=excerpt,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        referrer=referrer,
+        status=status,
+        akismet_score=akismet_result.score if akismet_result else None,
+        akismet_classification=akismet_result.classification if akismet_result else "",
+        akismet_submit_hash=akismet_result.submit_hash if akismet_result else "",
+    )
+
+    if comment.status == Comment.SPAM:
+        messages.warning(request, "Thanks! Your comment is pending moderation.")
+    else:
+        messages.success(request, "Thanks! Your comment is awaiting moderation.")
+
+    return redirect(f"{post.get_absolute_url()}#comments")
 
 
 @require_POST
