@@ -1,0 +1,16 @@
+{% if settings.bridgy_publish_bluesky or settings.bridgy_publish_flickr or settings.bridgy_publish_github or settings.bridgy_publish_mastodon %}
+  <div class="bridgy-publish-links" hidden aria-hidden="true">
+    {% if settings.bridgy_publish_bluesky %}
+      <a href="https://brid.gy/publish/bluesky" tabindex="-1"></a>
+    {% endif %}
+    {% if settings.bridgy_publish_flickr %}
+      <a href="https://brid.gy/publish/flickr" tabindex="-1"></a>
+    {% endif %}
+    {% if settings.bridgy_publish_github %}
+      <a href="https://brid.gy/publish/github" tabindex="-1"></a>
+    {% endif %}
+    {% if settings.bridgy_publish_mastodon %}
+      <a href="https://brid.gy/publish/mastodon" tabindex="-1"></a>
+    {% endif %}
+  </div>
+{% endif %}

@@ -26,10 +26,10 @@ from django.conf import settings
 from markdownify import markdownify as html_to_markdown
 
 from blog.models import Post, Tag
-from core.models import Page
+from core.models import Page, SiteConfiguration
 from files.models import Attachment, File
 from .models import Webmention
-from .webmention import send_webmentions_for_post, verify_webmention_source
+from .webmention import send_bridgy_publish_webmentions, send_webmentions_for_post, verify_webmention_source
 
 TOKEN_ENDPOINT = "https://tokens.indieauth.com/token"
 logger = logging.getLogger(__name__)
@@ -507,6 +507,7 @@ def _handle_create_action(request, data):
 
     location = request.build_absolute_uri(post.get_absolute_url())
     send_webmentions_for_post(post, location)
+    send_bridgy_publish_webmentions(post, location, SiteConfiguration.get_solo())
 
     response = HttpResponse(status=201)
     response["Location"] = location
