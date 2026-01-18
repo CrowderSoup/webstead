@@ -37,4 +37,7 @@
   {% else %}
     {% include 'blog/article.html' %}
   {% endif %}
+
+  {% include 'blog/webmention_form.html' %}
+  {% include 'blog/webmentions.html' %}
 {% endblock %}

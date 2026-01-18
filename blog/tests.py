@@ -4,6 +4,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import Post, Tag
+from micropub.models import Webmention
 from .views import _interaction_payload
 import copy
 import json
@@ -109,6 +110,104 @@ class PostViewTests(TestCase):
         response = self.client.get(reverse("post", kwargs={"slug": post.slug}))
 
         self.assertEqual(response.status_code, 200)
+
+
+class WebmentionFormDisplayTests(TestCase):
+    def setUp(self):
+        self.post = Post.objects.create(
+            title="Webmention Post",
+            slug="webmention-post",
+            content="text",
+            published_on=timezone.now(),
+        )
+
+    def test_renders_login_cta_when_unauthenticated(self):
+        response = self.client.get(reverse("post", kwargs={"slug": self.post.slug}))
+
+        self.assertContains(response, "Send a Webmention")
+        self.assertContains(response, "Login with your website")
+        self.assertNotContains(response, "Your post URL")
+
+    def test_renders_form_when_authenticated(self):
+        session = self.client.session
+        session["indieauth_me"] = "https://example.com/"
+        session.save()
+
+        response = self.client.get(reverse("post", kwargs={"slug": self.post.slug}))
+
+        self.assertContains(response, "Your post URL")
+        self.assertContains(response, "Send Webmention")
+
+
+class WebmentionDisplayTests(TestCase):
+    def setUp(self):
+        self.post = Post.objects.create(
+            title="Webmention Post",
+            slug="webmention-post",
+            content="text",
+            published_on=timezone.now(),
+        )
+
+    def test_replies_render_with_mf2_data(self):
+        Webmention.objects.create(
+            source="https://example.com/reply-1",
+            target="https://testserver/blog/post/webmention-post",
+            mention_type=Webmention.REPLY,
+            status=Webmention.ACCEPTED,
+            target_post=self.post,
+        )
+
+        payload = {
+            "author_name": "Indie Reply",
+            "author_url": "https://example.com/",
+            "author_photo": "https://example.com/avatar.png",
+            "summary_excerpt": "Hello from the webmention.",
+        }
+
+        with patch("blog.views.fetch_target_from_url", return_value=payload):
+            response = self.client.get(reverse("post", kwargs={"slug": self.post.slug}))
+
+        self.assertContains(response, "Indie Reply")
+        self.assertContains(response, "Hello from the webmention.")
+        self.assertContains(response, "https://example.com/avatar.png")
+
+    def test_reply_fallback_when_mf2_missing(self):
+        Webmention.objects.create(
+            source="https://example.com/reply-2",
+            target="https://testserver/blog/post/webmention-post",
+            mention_type=Webmention.REPLY,
+            status=Webmention.ACCEPTED,
+            target_post=self.post,
+        )
+
+        with patch("blog.views.fetch_target_from_url", return_value=None):
+            response = self.client.get(reverse("post", kwargs={"slug": self.post.slug}))
+
+        self.assertContains(response, "https://example.com/reply-2")
+        self.assertContains(response, DEFAULT_AVATAR_URL)
+
+    def test_likes_and_reposts_render_counts_and_links(self):
+        Webmention.objects.create(
+            source="https://example.com/like-1",
+            target="https://testserver/blog/post/webmention-post",
+            mention_type=Webmention.MENTION,
+            status=Webmention.ACCEPTED,
+            target_post=self.post,
+        )
+        Webmention.objects.create(
+            source="https://example.com/repost-1",
+            target="https://testserver/blog/post/webmention-post",
+            mention_type=Webmention.REPOST,
+            status=Webmention.ACCEPTED,
+            target_post=self.post,
+        )
+
+        response = self.client.get(reverse("post", kwargs={"slug": self.post.slug}))
+
+        self.assertContains(response, "Likes (1)")
+        self.assertContains(response, "Reposts (1)")
+        self.assertContains(response, "https://example.com/like-1")
+        self.assertContains(response, "https://example.com/repost-1")
 
 
 class Mf2ParsingTests(TestCase):

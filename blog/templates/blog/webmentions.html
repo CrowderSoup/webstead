@@ -1,0 +1,49 @@
+{% if webmention_total %}
+<section class="webmentions">
+  <h2>Webmentions</h2>
+
+  {% if webmention_replies %}
+    <div class="webmentions-replies">
+      <h3>Replies</h3>
+      <ul class="webmentions-replies-list">
+        {% for reply in webmention_replies %}
+          <li class="webmentions-reply">
+            <article>
+              <div class="webmentions-author">
+                <img src="{{ reply.author_photo }}" alt="{{ reply.author_name }} avatar" loading="lazy" />
+                <a href="{{ reply.author_url }}">{{ reply.author_name }}</a>
+              </div>
+              {% if reply.excerpt %}
+                <p class="webmentions-excerpt">{{ reply.excerpt }}</p>
+              {% endif %}
+              <a class="webmentions-source" href="{{ reply.source }}">{{ reply.source }}</a>
+            </article>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  {% if webmention_likes %}
+    <div class="webmentions-likes">
+      <h3>Likes ({{ webmention_likes|length }})</h3>
+      <ul class="webmentions-links">
+        {% for like in webmention_likes %}
+          <li><a href="{{ like.source }}">{{ like.source }}</a></li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  {% if webmention_reposts %}
+    <div class="webmentions-reposts">
+      <h3>Reposts ({{ webmention_reposts|length }})</h3>
+      <ul class="webmentions-links">
+        {% for repost in webmention_reposts %}
+          <li><a href="{{ repost.source }}">{{ repost.source }}</a></li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+</section>
+{% endif %}

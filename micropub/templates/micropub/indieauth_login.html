@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="indieauth-login">
+    <h1>Login with your website</h1>
+    <p>Enter your website URL to authenticate with IndieAuth.</p>
+    <form method="post" action="{% url 'indieauth-login' %}">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ next }}" />
+      <label for="indieauth-me">Your website</label>
+      <input
+        id="indieauth-me"
+        name="me"
+        type="url"
+        inputmode="url"
+        autocomplete="url"
+        required
+      />
+      <button type="submit">Login with your website</button>
+    </form>
+  </section>
+{% endblock %}

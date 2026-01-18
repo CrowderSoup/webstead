@@ -1,0 +1,31 @@
+<section class="webmention-send">
+  <h2>Send a Webmention</h2>
+  {% if indieauth_me %}
+    <p>Your site is authenticated. Send a mention for this post.</p>
+    <form method="post" action="{% url 'webmention-submit' %}">
+      {% csrf_token %}
+      <input type="hidden" name="target" value="{{ webmention_target }}" />
+      <input type="hidden" name="next" value="{{ webmention_next }}" />
+      <label for="webmention-type">Mention type</label>
+      <select id="webmention-type" name="mention_type">
+        <option value="mention" selected>Mention</option>
+        <option value="reply">Reply</option>
+        <option value="like">Like</option>
+        <option value="repost">Repost</option>
+      </select>
+      <label for="webmention-source">Your post URL</label>
+      <input
+        id="webmention-source"
+        name="source"
+        type="url"
+        inputmode="url"
+        autocomplete="url"
+        required
+      />
+      <button type="submit">Send Webmention</button>
+    </form>
+  {% else %}
+    <p>Log in with your website to send a webmention.</p>
+    <a href="{{ indieauth_login_url }}">Login with your website</a>
+  {% endif %}
+</section>

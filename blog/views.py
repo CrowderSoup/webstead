@@ -1,5 +1,6 @@
+from django.core.cache import cache
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render, get_object_or_404
 from django.urls import reverse
@@ -9,9 +10,10 @@ from django.utils.text import Truncator
 from urllib.parse import urlencode, urlparse
 
 from .models import Post, Tag
-from .mf2 import fetch_target_from_url
+from .mf2 import DEFAULT_AVATAR_URL, fetch_target_from_url
 from core.models import SiteConfiguration
 from core.og import absolute_url, first_attachment_image_url
+from micropub.models import Webmention
 
 
 def _activity_from_mf2(post):
@@ -118,6 +120,60 @@ def _interaction_payload(post, request=None):
         "target": target,
         "show_content": not _is_default_interaction_content(post, target_url),
     }
+
+
+def _normalize_webmention_reply(source_url, created_at, payload):
+    author_name = payload.get("author_name") or payload.get("author_url") or source_url
+    author_url = payload.get("author_url") or source_url
+    author_photo = payload.get("author_photo") or DEFAULT_AVATAR_URL
+    excerpt = (
+        payload.get("summary_excerpt")
+        or payload.get("summary_text")
+        or payload.get("title")
+        or ""
+    )
+    return {
+        "source": source_url,
+        "created_at": created_at,
+        "author_name": author_name,
+        "author_url": author_url,
+        "author_photo": author_photo,
+        "excerpt": excerpt,
+    }
+
+
+def _webmentions_for_post(post, request=None):
+    target_urls = {post.get_absolute_url()}
+    if request:
+        target_urls.add(request.build_absolute_uri(post.get_absolute_url()))
+
+    mentions = (
+        Webmention.objects.filter(status=Webmention.ACCEPTED)
+        .filter(Q(target_post=post) | Q(target__in=target_urls))
+        .only("source", "mention_type", "created_at")
+    )
+
+    replies = []
+    likes = []
+    reposts = []
+    for mention in mentions:
+        if mention.mention_type == Webmention.REPLY:
+            cache_key = f"webmention:source:{mention.source}"
+            payload = cache.get(cache_key)
+            if payload is None:
+                payload = fetch_target_from_url(mention.source) or {}
+                cache.set(cache_key, payload, timeout=60 * 10)
+            replies.append(_normalize_webmention_reply(mention.source, mention.created_at, payload))
+        elif mention.mention_type == Webmention.REPOST:
+            reposts.append(mention)
+        else:
+            likes.append(mention)
+
+    replies.sort(key=lambda item: item["created_at"], reverse=True)
+    likes.sort(key=lambda item: item.created_at)
+    reposts.sort(key=lambda item: item.created_at)
+
+    return replies, likes, reposts
 
 def _split_filter_values(values):
     items = []
@@ -243,6 +299,7 @@ def post(request, slug):
     if post.kind in (Post.LIKE, Post.REPLY, Post.REPOST):
         post.interaction = _interaction_payload(post, request=request)
     activity_photos = list(post.photo_attachments) if post.kind == Post.ACTIVITY else []
+    webmention_replies, webmention_likes, webmention_reposts = _webmentions_for_post(post, request=request)
     og_image = ""
     og_image_alt = ""
     if activity_photos:
@@ -258,6 +315,14 @@ def post(request, slug):
             "post": post,
             "activity": activity,
             "activity_photos": activity_photos,
+            "webmention_replies": webmention_replies,
+            "webmention_likes": webmention_likes,
+            "webmention_reposts": webmention_reposts,
+            "webmention_total": len(webmention_replies) + len(webmention_likes) + len(webmention_reposts),
+            "indieauth_me": request.session.get("indieauth_me"),
+            "indieauth_login_url": f"{reverse('indieauth-login')}?{urlencode({'next': request.get_full_path()})}",
+            "webmention_target": request.build_absolute_uri(post.get_absolute_url()),
+            "webmention_next": request.get_full_path(),
             "og_title": post.title,
             "og_description": Truncator(post.summary()).chars(200, truncate="..."),
             "og_image": absolute_url(request, og_image),

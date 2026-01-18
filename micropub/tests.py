@@ -1,4 +1,5 @@
 import json
+from urllib.parse import parse_qs, urlparse
 from unittest.mock import patch
 
 from django.test import TestCase
@@ -130,6 +131,97 @@ class MicropubViewTests(TestCase):
         self.assertIn("tag1", props.get("category", []))
 
 
+class IndieAuthLoginTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.login_url = reverse("indieauth-login")
+        self.callback_url = reverse("indieauth-callback")
+
+    @patch("micropub.views._discover_indieauth_endpoints", return_value=("https://auth.example/authorize", None))
+    def test_login_start_redirects_to_endpoint(self, _discover):
+        response = self.client.get(
+            self.login_url,
+            data={"me": "https://example.com", "next": "/blog/post/hello/"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        location = response["Location"]
+        parsed = urlparse(location)
+        self.assertEqual(parsed.netloc, "auth.example")
+        params = parse_qs(parsed.query)
+        self.assertEqual(params["me"][0], "https://example.com/")
+        self.assertEqual(params["response_type"][0], "code")
+        self.assertEqual(params["client_id"][0], "http://testserver/")
+        self.assertEqual(params["redirect_uri"][0], "http://testserver/indieauth/callback")
+        self.assertEqual(params["state"][0], self.client.session.get("indieauth_state"))
+
+    @patch("micropub.views.urlopen")
+    def test_callback_stores_session_on_success(self, mocked_urlopen):
+        class DummyResponse:
+            def __init__(self, body):
+                self._body = body
+                self.headers = {"Content-Type": "application/json"}
+
+            def read(self):
+                return self._body
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        mocked_urlopen.return_value = DummyResponse(json.dumps({"me": "https://example.com/"}).encode("utf-8"))
+        session = self.client.session
+        session["indieauth_state"] = "state123"
+        session["indieauth_pending_me"] = "https://example.com/"
+        session["indieauth_next"] = "/blog/post/hello/"
+        session["indieauth_token_endpoint"] = "https://tokens.example/token"
+        session.save()
+
+        response = self.client.get(
+            self.callback_url,
+            data={"code": "code123", "state": "state123", "me": "https://example.com/"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/blog/post/hello/")
+        self.assertEqual(self.client.session.get("indieauth_me"), "https://example.com/")
+
+    @patch("micropub.views.urlopen")
+    def test_callback_logs_and_ignores_invalid_response(self, mocked_urlopen):
+        class DummyResponse:
+            def __init__(self, body):
+                self._body = body
+                self.headers = {"Content-Type": "application/json"}
+
+            def read(self):
+                return self._body
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        mocked_urlopen.return_value = DummyResponse(json.dumps({"me": "https://wrong.example/"}).encode("utf-8"))
+        session = self.client.session
+        session["indieauth_state"] = "state456"
+        session["indieauth_pending_me"] = "https://example.com/"
+        session["indieauth_next"] = "/blog/post/hello/"
+        session["indieauth_token_endpoint"] = "https://tokens.example/token"
+        session.save()
+
+        with self.assertLogs("micropub.views", level="INFO"):
+            response = self.client.get(
+                self.callback_url,
+                data={"code": "code456", "state": "state456", "me": "https://example.com/"},
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIsNone(self.client.session.get("indieauth_me"))
+
+
 @override_settings(ALLOWED_HOSTS=["testserver"])
 class WebmentionViewTests(TestCase):
     def setUp(self):
@@ -191,3 +283,103 @@ class WebmentionViewTests(TestCase):
         self.assertEqual(response.status_code, 202)
         mention = Webmention.objects.get()
         self.assertEqual(mention.status, Webmention.PENDING)
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+class WebmentionSubmissionTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.post = Post.objects.create(title="Hello", slug="hello", content="Hello world")
+        self.endpoint = reverse("webmention-submit")
+        self.target_url = "http://testserver/blog/post/hello/"
+
+    @patch("micropub.views.verify_webmention_source", return_value=(True, "", False))
+    def test_authenticated_submission_creates_webmention(self, _verify):
+        session = self.client.session
+        session["indieauth_me"] = "https://example.com/"
+        session.save()
+
+        response = self.client.post(
+            self.endpoint,
+            data={
+                "source": "https://blog.example.com/post",
+                "target": self.target_url,
+                "mention_type": Webmention.REPOST,
+                "next": "/blog/post/hello/",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Webmention.objects.count(), 1)
+        self.assertEqual(Webmention.objects.first().mention_type, Webmention.REPOST)
+
+    def test_unauthenticated_submission_is_rejected(self):
+        with self.assertLogs("micropub.views", level="INFO"):
+            response = self.client.post(
+                self.endpoint,
+                data={
+                    "source": "https://source.example/post",
+                    "target": self.target_url,
+                    "next": "/blog/post/hello/",
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Webmention.objects.count(), 0)
+
+    @patch("micropub.views.verify_webmention_source", return_value=(True, "", False))
+    def test_submission_rejected_when_source_not_owned(self, _verify):
+        session = self.client.session
+        session["indieauth_me"] = "https://example.com/"
+        session.save()
+
+        with self.assertLogs("micropub.views", level="INFO"):
+            response = self.client.post(
+                self.endpoint,
+                data={
+                    "source": "https://not-example.com/post",
+                    "target": self.target_url,
+                    "next": "/blog/post/hello/",
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Webmention.objects.count(), 0)
+
+    @patch("micropub.views.verify_webmention_source", return_value=(True, "", False))
+    def test_invalid_mention_type_defaults(self, _verify):
+        session = self.client.session
+        session["indieauth_me"] = "https://example.com/"
+        session.save()
+
+        response = self.client.post(
+            self.endpoint,
+            data={
+                "source": "https://example.com/post",
+                "target": self.target_url,
+                "mention_type": "unknown",
+                "next": "/blog/post/hello/",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Webmention.objects.count(), 1)
+        self.assertEqual(Webmention.objects.first().mention_type, Webmention.MENTION)
+
+    def test_missing_source_logs_error(self):
+        session = self.client.session
+        session["indieauth_me"] = "https://example.com/"
+        session.save()
+
+        with self.assertLogs("micropub.views", level="INFO"):
+            response = self.client.post(
+                self.endpoint,
+                data={
+                    "source": "",
+                    "target": self.target_url,
+                    "next": "/blog/post/hello/",
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Webmention.objects.count(), 0)

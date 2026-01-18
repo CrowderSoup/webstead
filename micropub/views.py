@@ -3,9 +3,10 @@ import logging
 import mimetypes
 import os
 from datetime import datetime
+from html.parser import HTMLParser
 from typing import Optional
 from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 from urllib.request import Request, urlopen
 from uuid import uuid4
 from django.http import (
@@ -22,6 +23,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.urls import reverse, resolve
 from django.core.files.base import ContentFile
 from django.conf import settings
+from django.shortcuts import redirect, render
 
 from markdownify import markdownify as html_to_markdown
 
@@ -40,6 +42,93 @@ def _first_value(data: dict, key: str, default=None):
     if isinstance(value, list):
         return value[0] if value else default
     return value or default
+
+
+class _IndieAuthEndpointParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.authorization_endpoint = None
+        self.token_endpoint = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag.lower() not in ("a", "link"):
+            return
+        attr_map = {key.lower(): value for key, value in attrs}
+        rel_value = attr_map.get("rel", "")
+        href = attr_map.get("href")
+        if not rel_value or not href:
+            return
+        rels = {rel.strip() for rel in rel_value.split() if rel.strip()}
+        if "authorization_endpoint" in rels and not self.authorization_endpoint:
+            self.authorization_endpoint = href
+        if "token_endpoint" in rels and not self.token_endpoint:
+            self.token_endpoint = href
+
+
+def _parse_link_header_for_rel(header_value: str, rel_name: str) -> Optional[str]:
+    for part in header_value.split(","):
+        segment = part.strip()
+        if not segment.startswith("<") or ">" not in segment:
+            continue
+        url, _, params = segment.partition(">")
+        rel = None
+        for param in params.split(";"):
+            name, _, value = param.strip().partition("=")
+            if name.lower() == "rel":
+                rel = value.strip('"')
+                break
+        if rel and rel_name in rel.split():
+            return url[1:]
+    return None
+
+
+def _normalize_me_url(me_value: str) -> Optional[str]:
+    if not me_value:
+        return None
+    me_value = me_value.strip()
+    parsed = urlparse(me_value)
+    if not parsed.scheme:
+        parsed = urlparse(f"https://{me_value}")
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return None
+    path = parsed.path or "/"
+    if me_value.endswith("/") and not path.endswith("/"):
+        path = f"{path}/"
+    return parsed._replace(path=path, fragment="").geturl()
+
+
+def _discover_indieauth_endpoints(me_url: str) -> tuple[Optional[str], Optional[str]]:
+    request = Request(me_url, headers={"User-Agent": "django-blog-indieauth"})
+    try:
+        with urlopen(request, timeout=10) as response:
+            link_header = response.headers.get("Link")
+            auth_endpoint = None
+            token_endpoint = None
+            if link_header:
+                auth_endpoint = _parse_link_header_for_rel(link_header, "authorization_endpoint")
+                token_endpoint = _parse_link_header_for_rel(link_header, "token_endpoint")
+
+            content_type = response.headers.get("Content-Type", "")
+            if "html" in content_type:
+                parser = _IndieAuthEndpointParser()
+                parser.feed(response.read().decode("utf-8", errors="ignore"))
+                if not auth_endpoint:
+                    auth_endpoint = parser.authorization_endpoint
+                if not token_endpoint:
+                    token_endpoint = parser.token_endpoint
+
+            if auth_endpoint:
+                auth_endpoint = urljoin(me_url, auth_endpoint)
+            if token_endpoint:
+                token_endpoint = urljoin(me_url, token_endpoint)
+
+            return auth_endpoint, token_endpoint
+    except (HTTPError, URLError, TimeoutError) as exc:
+        logger.info(
+            "IndieAuth discovery failed",
+            extra={"indieauth_me": me_url, "indieauth_error": str(exc)},
+        )
+        return None, None
 
 
 def _parse_scope(scope_value):
@@ -130,6 +219,66 @@ def _allowed_webmention_hosts(request):
     if not allowed_hosts:
         allowed_hosts = [request.get_host()]
     return allowed_hosts
+
+
+def _safe_next_url(request, next_url: str) -> str:
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts=_allowed_webmention_hosts(request),
+        require_https=False,
+    ):
+        return next_url
+    return "/"
+
+
+def _source_matches_indieauth_me(indieauth_me: str, source_url: str) -> bool:
+    normalized_me = _normalize_me_url(indieauth_me or "")
+    if not normalized_me:
+        return False
+
+    parsed_me = urlparse(normalized_me)
+    parsed_source = urlparse(source_url or "")
+    if not parsed_source.scheme:
+        parsed_source = urlparse(f"https://{source_url}")
+    if parsed_source.scheme not in ("http", "https"):
+        return False
+
+    me_host = (parsed_me.hostname or "").lower()
+    source_host = (parsed_source.hostname or "").lower()
+    if not me_host or not source_host:
+        return False
+    return source_host == me_host or source_host.endswith(f".{me_host}")
+
+
+def _start_indieauth_login(request, me_value: str, next_url: str):
+    normalized_me = _normalize_me_url(me_value)
+    if not normalized_me:
+        logger.info("IndieAuth start rejected invalid me", extra={"indieauth_me": me_value})
+        return redirect(_safe_next_url(request, next_url))
+
+    auth_endpoint, token_endpoint = _discover_indieauth_endpoints(normalized_me)
+    if not auth_endpoint:
+        logger.info("IndieAuth start missing authorization endpoint", extra={"indieauth_me": normalized_me})
+        return redirect(_safe_next_url(request, next_url))
+
+    state = uuid4().hex
+    request.session["indieauth_state"] = state
+    request.session["indieauth_pending_me"] = normalized_me
+    request.session["indieauth_next"] = _safe_next_url(request, next_url)
+    if token_endpoint:
+        request.session["indieauth_token_endpoint"] = token_endpoint
+    else:
+        request.session["indieauth_token_endpoint"] = TOKEN_ENDPOINT
+
+    params = {
+        "me": normalized_me,
+        "client_id": request.build_absolute_uri("/"),
+        "redirect_uri": request.build_absolute_uri(reverse("indieauth-callback")),
+        "state": state,
+        "response_type": "code",
+    }
+    target = f"{auth_endpoint}?{urlencode(params)}"
+    return redirect(target)
 
 
 def _target_is_valid(request, target_url: str) -> tuple[Optional[Post], Optional[HttpResponse]]:
@@ -692,6 +841,101 @@ class MicropubMediaView(View):
         return response
 
 
+class IndieAuthLoginView(View):
+    http_method_names = ["get", "post"]
+
+    def get(self, request):
+        me_value = request.GET.get("me", "").strip()
+        next_url = request.GET.get("next", "").strip()
+        if not me_value:
+            return render(request, "micropub/indieauth_login.html", {"next": _safe_next_url(request, next_url)})
+        return _start_indieauth_login(request, me_value, next_url)
+
+    def post(self, request):
+        me_value = request.POST.get("me", "").strip()
+        next_url = request.POST.get("next", "").strip()
+        if not me_value:
+            return render(request, "micropub/indieauth_login.html", {"next": _safe_next_url(request, next_url)})
+        return _start_indieauth_login(request, me_value, next_url)
+
+
+class IndieAuthCallbackView(View):
+    http_method_names = ["get"]
+
+    def get(self, request):
+        next_url = _safe_next_url(request, request.session.get("indieauth_next", "/"))
+        expected_state = request.session.get("indieauth_state")
+        pending_me = request.session.get("indieauth_pending_me")
+        token_endpoint = request.session.get("indieauth_token_endpoint", TOKEN_ENDPOINT)
+        code = request.GET.get("code")
+        state = request.GET.get("state")
+        returned_me = request.GET.get("me")
+
+        for key in ("indieauth_state", "indieauth_pending_me", "indieauth_next", "indieauth_token_endpoint"):
+            request.session.pop(key, None)
+
+        if not code or not state or not expected_state or state != expected_state:
+            logger.info(
+                "IndieAuth callback state mismatch",
+                extra={"indieauth_me": pending_me, "indieauth_state": state},
+            )
+            return redirect(next_url)
+
+        if not returned_me:
+            logger.info("IndieAuth callback missing me", extra={"indieauth_me": pending_me})
+            return redirect(next_url)
+
+        try:
+            body = urlencode(
+                {
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "client_id": request.build_absolute_uri("/"),
+                    "redirect_uri": request.build_absolute_uri(reverse("indieauth-callback")),
+                }
+            ).encode("utf-8")
+            token_request = Request(
+                token_endpoint,
+                data=body,
+                headers={
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+            )
+            with urlopen(token_request, timeout=10) as response:
+                content_type = response.headers.get("Content-Type", "")
+                response_body = response.read().decode("utf-8", errors="ignore")
+                if "json" in content_type:
+                    token_data = json.loads(response_body or "{}")
+                else:
+                    token_data = parse_qs(response_body)
+        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
+            logger.info(
+                "IndieAuth token exchange failed",
+                extra={"indieauth_me": pending_me, "indieauth_error": str(exc)},
+            )
+            return redirect(next_url)
+
+        token_me = _first_value(token_data, "me")
+        normalized_me = _normalize_me_url(token_me)
+        pending_normalized = _normalize_me_url(pending_me or "")
+        returned_normalized = _normalize_me_url(returned_me)
+
+        if not normalized_me or normalized_me != pending_normalized or normalized_me != returned_normalized:
+            logger.info(
+                "IndieAuth token verification failed",
+                extra={
+                    "indieauth_me": pending_me,
+                    "indieauth_token_me": token_me,
+                    "indieauth_returned_me": returned_me,
+                },
+            )
+            return redirect(next_url)
+
+        request.session["indieauth_me"] = normalized_me
+        return redirect(next_url)
+
+
 @method_decorator(csrf_exempt, name="dispatch")
 class WebmentionView(View):
     http_method_names = ["post"]
@@ -740,3 +984,85 @@ class WebmentionView(View):
         )
 
         return HttpResponse(status=response_status)
+
+
+class WebmentionSubmitView(View):
+    http_method_names = ["post"]
+
+    def post(self, request):
+        source = (request.POST.get("source") or "").strip()
+        target = (request.POST.get("target") or "").strip()
+        mention_type = (request.POST.get("mention_type") or "").strip()
+        next_url = _safe_next_url(request, request.POST.get("next", ""))
+        indieauth_me = request.session.get("indieauth_me")
+
+        if not indieauth_me:
+            logger.info(
+                "Webmention submission rejected without IndieAuth",
+                extra={"webmention_source": source, "webmention_target": target},
+            )
+            return redirect(next_url)
+
+        if not source or not target:
+            logger.info(
+                "Webmention submission missing fields",
+                extra={
+                    "webmention_source": source,
+                    "webmention_target": target,
+                    "indieauth_me": indieauth_me,
+                },
+            )
+            return redirect(next_url)
+
+        if not _source_matches_indieauth_me(indieauth_me, source):
+            logger.info(
+                "Webmention submission source mismatch",
+                extra={
+                    "webmention_source": source,
+                    "webmention_target": target,
+                    "indieauth_me": indieauth_me,
+                },
+            )
+            return redirect(next_url)
+
+        target_post, error = _target_is_valid(request, target)
+        if error:
+            logger.info(
+                "Webmention submission invalid target",
+                extra={
+                    "webmention_source": source,
+                    "webmention_target": target,
+                    "indieauth_me": indieauth_me,
+                },
+            )
+            return redirect(next_url)
+
+        verified, verify_error, fetch_failed = verify_webmention_source(source, target)
+        if not verified:
+            if fetch_failed:
+                status = Webmention.PENDING
+            else:
+                status = Webmention.REJECTED
+            logger.info(
+                "Webmention verification failed",
+                extra={
+                    "webmention_source": source,
+                    "webmention_target": target,
+                    "webmention_error": verify_error,
+                    "indieauth_me": indieauth_me,
+                },
+            )
+        else:
+            status = Webmention.ACCEPTED if _is_trusted_domain(source) else Webmention.PENDING
+
+        mention_type = mention_type if mention_type in dict(Webmention.MENTION_CHOICES) else Webmention.MENTION
+        Webmention.objects.create(
+            source=source,
+            target=target,
+            mention_type=mention_type,
+            status=status,
+            target_post=target_post,
+            error=verify_error or "",
+        )
+
+        return redirect(next_url)
