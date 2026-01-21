@@ -57,7 +57,7 @@ from core.themes import (
     sync_themes_from_storage,
     theme_storage_healthcheck,
 )
-from micropub.models import Webmention
+from micropub.models import MicropubRequestLog, Webmention
 from blog.comments import AkismetError, submit_ham, submit_spam
 from micropub.webmention import (
     resend_webmention,
@@ -86,6 +86,7 @@ from .forms import (
     ThemeUploadForm,
     WebmentionCreateForm,
     WebmentionFilterForm,
+    MicropubErrorFilterForm,
 )
 
 logger = logging.getLogger(__name__)
@@ -893,6 +894,23 @@ def _filtered_webmentions(request):
     return form, webmentions
 
 
+def _filtered_micropub_errors(request):
+    form = MicropubErrorFilterForm(request.GET or None)
+    logs = MicropubRequestLog.objects.order_by("-created_at", "-id")
+    if form.is_valid():
+        query = form.cleaned_data.get("q")
+        status_code = form.cleaned_data.get("status_code")
+        if query:
+            logs = logs.filter(
+                Q(path__icontains=query)
+                | Q(error__icontains=query)
+                | Q(request_body__icontains=query)
+            )
+        if status_code:
+            logs = logs.filter(status_code=int(status_code))
+    return form, logs
+
+
 def _akismet_payload_for_comment(comment, request):
     return {
         "blog": request.build_absolute_uri("/"),
@@ -964,6 +982,56 @@ def webmention_list(request):
         return render(request, "site_admin/webmentions/_list.html", context)
 
     return render(request, "site_admin/webmentions/index.html", context)
+
+
+@require_http_methods(["GET"])
+def micropub_error_list(request):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    filter_form, logs = _filtered_micropub_errors(request)
+    paginator = Paginator(logs, 20)
+    page_number = request.GET.get("page")
+    try:
+        page_obj = paginator.page(page_number)
+    except PageNotAnInteger:
+        page_obj = paginator.page(1)
+    except EmptyPage:
+        page_obj = paginator.page(paginator.num_pages)
+
+    context = {
+        "filter_form": filter_form,
+        "page_obj": page_obj,
+        "paginator": paginator,
+        "base_query": _strip_page_query(request),
+        "endpoint_url": request.build_absolute_uri(reverse("micropub-endpoint")),
+    }
+
+    if request.headers.get("HX-Request"):
+        return render(request, "site_admin/micropub_errors/_list.html", context)
+
+    return render(request, "site_admin/micropub_errors/index.html", context)
+
+
+@require_http_methods(["GET"])
+def micropub_error_detail(request, log_id):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    log_entry = get_object_or_404(MicropubRequestLog, pk=log_id)
+    headers_text = json.dumps(log_entry.request_headers or {}, indent=2, sort_keys=True)
+    query_text = json.dumps(log_entry.request_query or {}, indent=2, sort_keys=True)
+    return render(
+        request,
+        "site_admin/micropub_errors/detail.html",
+        {
+            "log": log_entry,
+            "headers_text": headers_text,
+            "query_text": query_text,
+        },
+    )
 
 
 @require_http_methods(["GET", "POST"])

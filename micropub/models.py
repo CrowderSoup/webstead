@@ -40,3 +40,24 @@ class Webmention(models.Model):
 
     def __str__(self):
         return f"{self.source} -> {self.target}"
+
+
+class MicropubRequestLog(models.Model):
+    method = models.CharField(max_length=10)
+    path = models.CharField(max_length=255)
+    status_code = models.PositiveSmallIntegerField()
+    error = models.TextField(blank=True)
+    request_headers = models.JSONField(default=dict)
+    request_query = models.JSONField(default=dict)
+    request_body = models.TextField(blank=True)
+    response_body = models.TextField(blank=True)
+    remote_addr = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    content_type = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.method} {self.path} -> {self.status_code}"
