@@ -141,22 +141,25 @@ def _parse_scope(scope_value):
 
 def _has_token_conflict(request):
     auth_header = request.META.get("HTTP_AUTHORIZATION", "")
-    has_header = auth_header.startswith("Bearer ")
-    has_body_token = False
+    header_token = None
+    if auth_header.startswith("Bearer "):
+        header_token = auth_header[7:].strip()
+    body_token = None
 
     if request.content_type and "json" in request.content_type:
         try:
             raw = json.loads(request.body or "{}")
             if isinstance(raw, dict) and raw.get("access_token"):
-                has_body_token = True
+                body_token = raw.get("access_token")
         except json.JSONDecodeError:
-            has_body_token = False
+            body_token = None
     else:
-        has_body_token = bool(request.POST.get("access_token"))
+        body_token = request.POST.get("access_token")
 
-    has_query_token = bool(request.GET.get("access_token"))
+    query_token = request.GET.get("access_token")
 
-    return has_header and (has_body_token or has_query_token)
+    tokens = [token for token in (header_token, body_token, query_token) if token]
+    return len(set(tokens)) > 1
 
 
 SENSITIVE_HEADER_NAMES = {"authorization", "cookie"}

@@ -30,6 +30,16 @@ class MicropubViewTests(TestCase):
         self.assertEqual(log_entry.error, "invalid_request")
         self.assertEqual(log_entry.path, MICROPUB_URL)
 
+    @patch("micropub.views._authorized", return_value=(True, ["create"]))
+    def test_matching_tokens_in_header_and_body_allowed(self, _authorized):
+        response = self.client.post(
+            MICROPUB_URL,
+            data={"access_token": "token", "content": "Hello world"},
+            HTTP_AUTHORIZATION="Bearer token",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Post.objects.count(), 1)
+
     @patch("micropub.views._authorized", return_value=(True, []))
     def test_create_requires_scope(self, _authorized):
         response = self.client.post(
