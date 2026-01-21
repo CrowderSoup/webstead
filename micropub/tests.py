@@ -8,7 +8,7 @@ from django.test.utils import override_settings
 from django.urls import reverse
 
 from blog.models import Post, Tag
-from micropub.models import Webmention
+from micropub.models import MicropubRequestLog, Webmention
 from micropub.webmention import send_bridgy_publish_webmentions
 
 
@@ -24,6 +24,11 @@ class MicropubViewTests(TestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"error": "invalid_request"})
+        self.assertEqual(MicropubRequestLog.objects.count(), 1)
+        log_entry = MicropubRequestLog.objects.first()
+        self.assertEqual(log_entry.status_code, 400)
+        self.assertEqual(log_entry.error, "invalid_request")
+        self.assertEqual(log_entry.path, MICROPUB_URL)
 
     @patch("micropub.views._authorized", return_value=(True, []))
     def test_create_requires_scope(self, _authorized):

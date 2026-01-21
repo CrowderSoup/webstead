@@ -65,6 +65,12 @@ urlpatterns = [
     path("comments/<int:comment_id>/spam/", views.comment_mark_spam, name="comment_mark_spam"),
     path("comments/<int:comment_id>/delete/", views.comment_delete, name="comment_delete"),
     path("webmentions/", views.webmention_list, name="webmention_list"),
+    path("micropub/errors/", views.micropub_error_list, name="micropub_error_list"),
+    path(
+        "micropub/errors/<int:log_id>/",
+        views.micropub_error_detail,
+        name="micropub_error_detail",
+    ),
     path("webmentions/new/", views.webmention_create, name="webmention_create"),
     path("webmentions/<int:mention_id>/", views.webmention_detail, name="webmention_detail"),
     path(

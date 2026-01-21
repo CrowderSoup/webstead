@@ -144,7 +144,8 @@
           root.classList.toggle("admin-theme-dark", isDark);
           toggles().forEach((button) => {
             const next = isDark ? "Light mode" : "Dark mode";
-            button.textContent = next;
+            button.setAttribute("aria-label", next);
+            button.setAttribute("title", next);
             button.setAttribute("aria-pressed", String(isDark));
           });
         }

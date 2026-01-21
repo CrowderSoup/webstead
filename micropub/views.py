@@ -30,7 +30,7 @@ from markdownify import markdownify as html_to_markdown
 from blog.models import Post, Tag
 from core.models import Page, SiteConfiguration
 from files.models import Attachment, File
-from .models import Webmention
+from .models import MicropubRequestLog, Webmention
 from .webmention import send_bridgy_publish_webmentions, send_webmentions_for_post, verify_webmention_source
 
 TOKEN_ENDPOINT = "https://tokens.indieauth.com/token"
@@ -157,6 +157,136 @@ def _has_token_conflict(request):
     has_query_token = bool(request.GET.get("access_token"))
 
     return has_header and (has_body_token or has_query_token)
+
+
+SENSITIVE_HEADER_NAMES = {"authorization", "cookie"}
+SENSITIVE_FIELD_NAMES = {"access_token", "refresh_token", "client_secret"}
+MAX_LOG_BODY_CHARS = 10000
+
+
+def _redact_secret(value: str) -> str:
+    if not value:
+        return value
+    if len(value) <= 12:
+        return "***"
+    return f"{value[:6]}...{value[-4:]}"
+
+
+def _redact_payload(value):
+    if isinstance(value, dict):
+        redacted = {}
+        for key, item in value.items():
+            if str(key).lower() in SENSITIVE_FIELD_NAMES and isinstance(item, str):
+                redacted[key] = _redact_secret(item)
+            else:
+                redacted[key] = _redact_payload(item)
+        return redacted
+    if isinstance(value, list):
+        return [_redact_payload(item) for item in value]
+    return value
+
+
+def _truncate_body(body: str) -> str:
+    if len(body) <= MAX_LOG_BODY_CHARS:
+        return body
+    return f"{body[:MAX_LOG_BODY_CHARS]}\n...(truncated)"
+
+
+def _capture_request_body(request) -> str:
+    content_type = request.content_type or ""
+    if content_type.startswith("multipart/"):
+        fields = {key: request.POST.getlist(key) for key in request.POST.keys()}
+        files = {}
+        for key, items in request.FILES.lists():
+            files[key] = [
+                {
+                    "name": item.name,
+                    "size": item.size,
+                    "content_type": item.content_type,
+                }
+                for item in items
+            ]
+        payload = {"fields": _redact_payload(fields), "files": files}
+        return json.dumps(payload, indent=2, sort_keys=True)
+
+    body_bytes = request.body or b""
+    if not body_bytes:
+        return ""
+    body_text = body_bytes.decode("utf-8", errors="replace")
+
+    if "application/json" in content_type:
+        try:
+            parsed = json.loads(body_text)
+        except json.JSONDecodeError:
+            return _truncate_body(body_text)
+        return _truncate_body(json.dumps(_redact_payload(parsed), indent=2, sort_keys=True))
+
+    if "application/x-www-form-urlencoded" in content_type:
+        parsed = parse_qs(body_text, keep_blank_values=True)
+        return _truncate_body(json.dumps(_redact_payload(parsed), indent=2, sort_keys=True))
+
+    return _truncate_body(body_text)
+
+
+def _capture_request_headers(request) -> dict:
+    headers = dict(request.headers)
+    redacted = {}
+    for key, value in headers.items():
+        if key.lower() in SENSITIVE_HEADER_NAMES and isinstance(value, str):
+            redacted[key] = _redact_secret(value)
+        else:
+            redacted[key] = value
+    return redacted
+
+
+def _extract_response_error(response) -> tuple[str, str]:
+    content_type = response.get("Content-Type", "")
+    body = ""
+    if hasattr(response, "content"):
+        body = response.content.decode("utf-8", errors="replace")
+    if "application/json" in content_type and body:
+        try:
+            payload = json.loads(body)
+        except json.JSONDecodeError:
+            return "", body
+        if isinstance(payload, dict):
+            error = payload.get("error") or payload.get("error_description") or ""
+            return str(error), body
+    if body and response.status_code >= 400:
+        return body.strip(), body
+    return "", body
+
+
+def _client_ip(request) -> Optional[str]:
+    forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR")
+
+
+def _log_micropub_error(request, response):
+    if response.status_code < 400:
+        return
+    try:
+        error, response_body = _extract_response_error(response)
+        MicropubRequestLog.objects.create(
+            method=request.method,
+            path=request.path,
+            status_code=response.status_code,
+            error=error or "",
+            request_headers=_capture_request_headers(request),
+            request_query={key: request.GET.getlist(key) for key in request.GET.keys()},
+            request_body=_capture_request_body(request),
+            response_body=response_body or "",
+            remote_addr=_client_ip(request),
+            user_agent=request.META.get("HTTP_USER_AGENT", ""),
+            content_type=request.content_type or "",
+        )
+    except Exception:
+        logger.exception(
+            "Micropub error log failed",
+            extra={"micropub_path": request.path, "micropub_status": response.status_code},
+        )
 
 
 def _normalize_property(key: str, values):
@@ -746,12 +876,18 @@ class MicropubView(View):
 
     def dispatch(self, request, *args, **kwargs):
         if _has_token_conflict(request):
-            return JsonResponse({"error": "invalid_request"}, status=400)
+            response = JsonResponse({"error": "invalid_request"}, status=400)
+            _log_micropub_error(request, response)
+            return response
         authorized, scopes = _authorized(request)
         if not authorized:
-            return JsonResponse({"error": "unauthorized"}, status=401)
+            response = JsonResponse({"error": "unauthorized"}, status=401)
+            _log_micropub_error(request, response)
+            return response
         request.micropub_scopes = scopes
-        return super().dispatch(request, *args, **kwargs)
+        response = super().dispatch(request, *args, **kwargs)
+        _log_micropub_error(request, response)
+        return response
 
     def get(self, request):
         query = request.GET.get("q")
@@ -819,12 +955,18 @@ class MicropubMediaView(View):
 
     def dispatch(self, request, *args, **kwargs):
         if _has_token_conflict(request):
-            return JsonResponse({"error": "invalid_request"}, status=400)
+            response = JsonResponse({"error": "invalid_request"}, status=400)
+            _log_micropub_error(request, response)
+            return response
         authorized, scopes = _authorized(request)
         if not authorized:
-            return JsonResponse({"error": "unauthorized"}, status=401)
+            response = JsonResponse({"error": "unauthorized"}, status=401)
+            _log_micropub_error(request, response)
+            return response
         request.micropub_scopes = scopes
-        return super().dispatch(request, *args, **kwargs)
+        response = super().dispatch(request, *args, **kwargs)
+        _log_micropub_error(request, response)
+        return response
 
     def post(self, request):
         insufficient = _require_scope(request, "create")
