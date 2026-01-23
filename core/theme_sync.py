@@ -73,7 +73,12 @@ def rehydrate_theme_from_git(install: ThemeInstall, *, base_dir: Optional[Path] 
         )
 
         theme_root = _find_git_theme_root(clone_dir, install.slug)
-        validation = validate_theme_dir(theme_root, expected_slug=install.slug, meta_filename=THEME_META_FILENAME)
+        validation = validate_theme_dir(
+            theme_root,
+            expected_slug=install.slug,
+            meta_filename=THEME_META_FILENAME,
+            require_directory_slug=False,
+        )
         if not validation.is_valid:
             raise ThemeUploadError(validation.summary())
 
