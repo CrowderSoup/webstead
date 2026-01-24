@@ -3,7 +3,7 @@ import time
 from django.db import DatabaseError, transaction
 from django.utils.deprecation import MiddlewareMixin
 
-from .models import Visit
+from .models import UserAgentIgnore, Visit
 from .utils import get_client_ip, geolocate_ip  # you write these
 from .user_agents import enqueue_user_agent_lookup
 
@@ -30,6 +30,10 @@ class AnalyticsMiddleware(MiddlewareMixin):
                 request.session.save()
                 session_key = request.session.session_key
 
+            user_agent = request.META.get("HTTP_USER_AGENT", "")
+            if UserAgentIgnore.objects.filter(user_agent=user_agent).exists():
+                return response
+
             ip = get_client_ip(request)
             geo = geolocate_ip(ip) if ip else {}
 
@@ -37,7 +41,7 @@ class AnalyticsMiddleware(MiddlewareMixin):
                 session_key=session_key,
                 user=request.user if request.user.is_authenticated else None,
                 ip_address=ip,
-                user_agent=request.META.get("HTTP_USER_AGENT", ""),
+                user_agent=user_agent,
                 path=request.path,
                 referrer=request.META.get("HTTP_REFERER", ""),
                 duration_seconds=duration,

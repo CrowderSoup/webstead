@@ -27,3 +27,11 @@ class Visit(models.Model):
             models.Index(fields=["path"]),
             models.Index(fields=["session_key", "started_at"]),
         ]
+
+
+class UserAgentIgnore(models.Model):
+    user_agent = models.TextField(unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.user_agent

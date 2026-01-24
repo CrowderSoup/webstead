@@ -10,6 +10,11 @@ urlpatterns = [
     path("bar/", views.admin_bar, name="admin_bar"),
     path("", views.dashboard, name="dashboard"),
     path("analytics/", views.analytics_dashboard, name="analytics_dashboard"),
+    path(
+        "analytics/ignore-user-agent/",
+        views.analytics_ignore_user_agent,
+        name="analytics_ignore_user_agent",
+    ),
     path("settings/", views.site_settings, name="site_settings"),
     path("settings/themes/", views.theme_settings, name="theme_settings"),
     path("settings/themes/git-refs/", views.theme_git_refs, name="theme_git_refs"),

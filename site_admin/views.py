@@ -21,7 +21,7 @@ from django.forms import inlineformset_factory
 from django.views.decorators.http import require_http_methods, require_GET, require_POST
 
 from blog.models import Comment, Post
-from analytics.models import Visit
+from analytics.models import UserAgentIgnore, Visit
 
 from files.models import Attachment, File
 from files.gpx import GpxAnonymizeError, GpxAnonymizeOptions, anonymize_gpx
@@ -555,6 +555,17 @@ def analytics_dashboard(request):
         .annotate(count=Count("id"))
         .order_by("-count")[:8]
     )
+    top_user_agents = list(
+        qs.exclude(user_agent="")
+        .values("user_agent")
+        .annotate(count=Count("id"))
+        .order_by("-count")[:10]
+    )
+    ignored_user_agents = set(
+        UserAgentIgnore.objects.filter(
+            user_agent__in=[row["user_agent"] for row in top_user_agents]
+        ).values_list("user_agent", flat=True)
+    )
     countries = list(
         qs.exclude(country="")
         .values("country")
@@ -578,6 +589,8 @@ def analytics_dashboard(request):
             "daily_sessions": daily_sessions,
             "top_paths": top_paths,
             "top_referrers": top_referrers,
+            "top_user_agents": top_user_agents,
+            "ignored_user_agents": ignored_user_agents,
             "countries": countries,
             "error_visits": error_visits,
             "window_days": window_days,
@@ -586,6 +599,37 @@ def analytics_dashboard(request):
             "presets": presets,
         },
     )
+
+
+@require_POST
+def analytics_ignore_user_agent(request):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    user_agent = (request.POST.get("user_agent") or "").strip()
+    if not user_agent:
+        messages.error(request, "Provide a user agent to ignore.")
+    else:
+        ignore_entry, created = UserAgentIgnore.objects.get_or_create(
+            user_agent=user_agent
+        )
+        if created:
+            messages.success(request, "User agent added to ignore list.")
+        else:
+            messages.info(request, "User agent is already ignored.")
+
+    params = {}
+    start = request.POST.get("start")
+    end = request.POST.get("end")
+    if start:
+        params["start"] = start
+    if end:
+        params["end"] = end
+    url = reverse("site_admin:analytics_dashboard")
+    if params:
+        url = f"{url}?{urlencode(params)}"
+    return redirect(url)
 
 
 @require_http_methods(["GET"])
