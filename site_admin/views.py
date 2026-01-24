@@ -618,6 +618,14 @@ def analytics_ignore_user_agent(request):
             messages.success(request, "User agent added to ignore list.")
         else:
             messages.info(request, "User agent is already ignored.")
+        deleted, _ = Visit.objects.filter(user_agent=user_agent).delete()
+        if deleted:
+            messages.success(
+                request,
+                f"Removed {deleted} visit{'s' if deleted != 1 else ''} for that user agent.",
+            )
+        else:
+            messages.info(request, "No visits matched that user agent.")
 
     params = {}
     start = request.POST.get("start")

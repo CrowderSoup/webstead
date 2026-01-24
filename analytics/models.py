@@ -7,7 +7,7 @@ class Visit(models.Model):
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL
     )
     ip_address = models.GenericIPAddressField(null=True, blank=True)
-    user_agent = models.TextField(blank=True)
+    user_agent = models.TextField(blank=True, db_index=True)
     path = models.CharField(max_length=512)
     referrer = models.TextField(blank=True)
     started_at = models.DateTimeField(auto_now_add=True)
