@@ -4,10 +4,14 @@ from unittest.mock import MagicMock, patch
 from django.test import TestCase
 from django.utils import timezone
 
+from blog.models import Post
+from core.models import SiteConfiguration
 from mastodon_integration.client import status_to_jf2
 from mastodon_integration.models import MastodonAccount, MastodonApp
-from mastodon_integration.tasks import poll_mastodon_timeline
+from mastodon_integration.subscriptions import ensure_managed_subscription, sync_managed_subscriptions
+from mastodon_integration.tasks import _build_canonical_url, poll_mastodon_timeline
 from microsub.models import Channel, Entry
+from microsub.views import _entry_json
 
 
 class StatusToJf2Tests(TestCase):
@@ -114,3 +118,79 @@ class PollMastodonTimelineReplyFilterTests(TestCase):
         poll_mastodon_timeline()
 
         self.assertFalse(Entry.objects.filter(channel=self.channel).exists())
+
+    @patch("mastodon_integration.client.get_client")
+    def test_timeline_entries_are_attached_to_managed_subscription(self, mock_get_client):
+        mock_client = MagicMock()
+        mock_client.timeline_home.return_value = [self._status("5")]
+        mock_get_client.return_value = mock_client
+
+        poll_mastodon_timeline()
+
+        entry = Entry.objects.get(channel=self.channel)
+        self.assertIsNotNone(entry.subscription)
+        self.assertEqual(entry.subscription.managed_by, "mastodon")
+        payload = _entry_json(entry)
+        self.assertEqual(payload["_source"]["name"], "Mastodon home timeline")
+        self.assertTrue(payload["_source"]["_is_managed"])
+        self.assertEqual(payload["_source"]["_provider"], "mastodon")
+
+
+class ManagedSubscriptionTests(TestCase):
+    def setUp(self):
+        self.timeline_channel = Channel.objects.create(uid="social", name="Social")
+        self.notifications_channel, _ = Channel.objects.get_or_create(
+            uid="notifications",
+            defaults={"name": "Notifications"},
+        )
+        self.app = MastodonApp.objects.create(
+            instance_url="https://social.example",
+            client_id="client-id",
+            client_secret="client-secret",
+        )
+        self.account = MastodonAccount.objects.create(
+            app=self.app,
+            access_token="access-token",
+            account_id="10",
+            username="alice@social.example",
+            display_name="Alice",
+            avatar_url="https://social.example/media/alice.jpg",
+            timeline_channel=self.timeline_channel,
+            notifications_channel=self.notifications_channel,
+        )
+
+    def test_ensure_managed_subscription_creates_virtual_feed(self):
+        sub = ensure_managed_subscription(self.account, "timeline")
+
+        self.assertIsNotNone(sub)
+        self.assertEqual(sub.channel, self.timeline_channel)
+        self.assertEqual(sub.name, "Mastodon home timeline")
+        self.assertEqual(sub.photo, self.account.avatar_url)
+        self.assertEqual(sub.managed_by, "mastodon")
+        self.assertEqual(sub.managed_key, "timeline")
+        self.assertTrue(sub.is_active)
+
+    def test_sync_moves_feed_when_channel_changes(self):
+        original = ensure_managed_subscription(self.account, "timeline")
+        new_channel = Channel.objects.create(uid="news", name="News")
+        self.account.timeline_channel = new_channel
+        self.account.save(update_fields=["timeline_channel"])
+
+        synced = sync_managed_subscriptions(self.account)["timeline"]
+
+        original.refresh_from_db()
+        self.assertFalse(original.is_active)
+        self.assertIsNotNone(synced)
+        self.assertEqual(synced.channel, new_channel)
+
+
+class CanonicalUrlTests(TestCase):
+    def test_uses_site_configuration_site_url(self):
+        config = SiteConfiguration.get_solo()
+        config.site_url = "https://example.com"
+        config.save(update_fields=["site_url"])
+        post = Post.objects.create(title="Hello", slug="hello", kind=Post.NOTE, content="Hi")
+
+        canonical = _build_canonical_url(post)
+
+        self.assertEqual(canonical, "https://example.com/blog/post/hello/")

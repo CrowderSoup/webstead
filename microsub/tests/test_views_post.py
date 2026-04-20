@@ -305,6 +305,22 @@ class PostUnfollowTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
     @authorized
+    def test_managed_subscription_cannot_be_unfollowed_here(self, _auth):
+        self.sub.managed_by = "mastodon"
+        self.sub.managed_key = "timeline"
+        self.sub.save(update_fields=["managed_by", "managed_key"])
+
+        response = self.client.post(
+            MICROSUB_URL,
+            {"action": "unfollow", "channel": "news", "url": "https://example.com/feed"},
+            HTTP_AUTHORIZATION="Bearer token",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.sub.refresh_from_db()
+        self.assertTrue(self.sub.is_active)
+
+    @authorized
     @patch("microsub.views._unsubscribe_from_websub")
     def test_unfollow_attempts_websub_unsubscribe(self, mock_unsubscribe, _auth):
         self.sub.websub_hub = "https://hub.example/"

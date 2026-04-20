@@ -10,10 +10,12 @@ import logging
 import re
 
 from celery import shared_task
+from django.conf import settings
 from django.db import IntegrityError
 from mastodon import MastodonNetworkError, MastodonRatelimitError, MastodonServerError
 
 from ._utils import _get
+from .subscriptions import ensure_managed_subscription
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +45,12 @@ def _build_canonical_url(post) -> str:
     try:
         from core.models import SiteConfiguration
         site = SiteConfiguration.get_solo()
-        domain = getattr(site, "domain", None) or getattr(site, "base_url", None)
+        domain = (
+            getattr(site, "site_url", None)
+            or getattr(site, "domain", None)
+            or getattr(site, "base_url", None)
+            or getattr(settings, "MICROSUB_BASE_URL", "")
+        )
         if domain:
             domain = domain.rstrip("/")
             if not domain.startswith(("http://", "https://")):
@@ -230,6 +237,10 @@ def poll_mastodon_timeline():
     if not channel:
         logger.debug("poll_mastodon_timeline: no timeline channel configured")
         return
+    subscription = ensure_managed_subscription(account, "timeline")
+    if not subscription:
+        logger.debug("poll_mastodon_timeline: no managed timeline feed available")
+        return
 
     from .client import get_client, status_to_jf2
     from microsub.views import _store_entries
@@ -278,7 +289,7 @@ def poll_mastodon_timeline():
             jf2["_source"] = source
 
         try:
-            created_count += _store_entries(channel, None, [jf2])
+            created_count += _store_entries(channel, subscription, [jf2])
         except IntegrityError:
             pass
         except Exception as exc:
@@ -341,6 +352,7 @@ def poll_mastodon_notifications():
         return
 
     notifications_channel = account.notifications_channel
+    subscription = ensure_managed_subscription(account, "notifications") if notifications_channel else None
     webmention_count = 0
     entry_count = 0
     latest_id = account.last_notification_id
@@ -413,7 +425,7 @@ def poll_mastodon_notifications():
                     )
 
         # --- Microsub entries for all notification types ---
-        if notifications_channel:
+        if notifications_channel and subscription:
             uid = f"mastodon:notification:{notif_id}"
             jf2 = _notification_to_jf2(
                 notif_type=notif_type,
@@ -435,7 +447,7 @@ def poll_mastodon_notifications():
                 jf2["_source"] = source
 
             try:
-                entry_count += _store_entries(notifications_channel, None, [jf2])
+                entry_count += _store_entries(notifications_channel, subscription, [jf2])
             except IntegrityError:
                 pass
             except Exception as exc:

@@ -21,6 +21,7 @@ from django.views.decorators.http import require_POST, require_GET
 from mastodon import Mastodon  # installed Mastodon.py library
 
 from .models import MastodonApp, MastodonAccount
+from .subscriptions import sync_managed_subscriptions
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +190,7 @@ def oauth_callback(request):
                 "is_active": True,
             },
         )
+        sync_managed_subscriptions(account_obj)
 
     except Exception as exc:
         logger.exception("Mastodon OAuth callback failed for %s", instance_url)

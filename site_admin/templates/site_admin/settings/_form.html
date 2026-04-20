@@ -29,6 +29,19 @@
       </div>
       <div>
         <label
+          for="{{ form.site_url.id_for_label }}"
+          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+        >
+          Canonical site URL
+        </label>
+        {{ form.site_url }}
+        {% if form.site_url.help_text %}
+          <p class="mt-1 text-xs text-[color:var(--admin-muted)]">{{ form.site_url.help_text }}</p>
+        {% endif %}
+        {{ form.site_url.errors }}
+      </div>
+      <div>
+        <label
           for="{{ form.home_page.id_for_label }}"
           class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
         >

@@ -551,6 +551,7 @@ class SiteConfigurationForm(forms.ModelForm):
         fields = [
             "title",
             "tagline",
+            "site_url",
             "home_page",
             "favicon",
             "site_author",

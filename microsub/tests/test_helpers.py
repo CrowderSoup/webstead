@@ -88,6 +88,20 @@ class EntryJsonTests(TestCase):
         self.assertEqual(result["_source"]["name"], "Example")
         self.assertEqual(result["_source"]["photo"], "https://example.com/photo.jpg")
 
+    def test_managed_subscription_source_includes_provider_metadata(self):
+        self.sub.managed_by = "mastodon"
+        self.sub.managed_key = "timeline"
+        self.sub.save(update_fields=["managed_by", "managed_key"])
+        entry = Entry.objects.create(
+            channel=self.channel, uid="e1", data={}, published=timezone.now(), subscription=self.sub
+        )
+
+        result = _entry_json(entry)
+
+        self.assertTrue(result["_source"]["_is_managed"])
+        self.assertEqual(result["_source"]["_provider"], "mastodon")
+        self.assertEqual(result["_source"]["_managed_key"], "timeline")
+
     def test_does_not_mutate_original_data(self):
         original_data = {"type": "entry", "name": "Hello"}
         entry = Entry.objects.create(

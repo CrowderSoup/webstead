@@ -207,6 +207,12 @@ class PluginInstall(models.Model):
 class SiteConfiguration(SingletonModel):
     title = models.CharField(max_length=255, default="", blank=True)
     tagline = models.CharField(max_length=1024, default="", blank=True)
+    site_url = models.URLField(
+        max_length=2000,
+        default="",
+        blank=True,
+        help_text="Canonical base URL used when background jobs need to build absolute links.",
+    )
     home_page = models.ForeignKey(
         "Page",
         null=True,

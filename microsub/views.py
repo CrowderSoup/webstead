@@ -150,12 +150,17 @@ def _entry_json(entry: Entry) -> dict:
     data["_is_read"] = entry.is_read
     data["published"] = entry.published.isoformat()
     if entry.subscription:
-        data["_source"] = {
+        source = {
             "_id": str(entry.subscription.pk),
             "url": entry.subscription.url,
             "name": entry.subscription.name or entry.subscription.url,
             "photo": entry.subscription.photo,
         }
+        if entry.subscription.managed_by:
+            source["_is_managed"] = True
+            source["_provider"] = entry.subscription.managed_by
+            source["_managed_key"] = entry.subscription.managed_key
+        data["_source"] = source
     elif entry.source_url:
         source = data.get("_source")
         if not isinstance(source, dict):
@@ -512,6 +517,10 @@ def _channel_feed_items(channel: Channel) -> list[dict]:
         }
         if sub.pk:
             item["_id"] = str(sub.pk)
+        if sub.managed_by:
+            item["_is_managed"] = True
+            item["_provider"] = sub.managed_by
+            item["_managed_key"] = sub.managed_key
         items.append(item)
     return items
 
@@ -753,6 +762,12 @@ class MicrosubView(View):
             return _json_error("invalid_request", status=400, description="Unfollow requires channel and URL")
         sub = Subscription.objects.filter(channel=channel, url=url).first()
         if sub:
+            if sub.managed_by:
+                return _json_error(
+                    "forbidden",
+                    status=403,
+                    description=f"This feed is managed by the {sub.managed_by} integration.",
+                )
             sub.is_active = False
             sub.websub_subscribed_at = None
             sub.websub_requested_at = None

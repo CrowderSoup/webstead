@@ -130,6 +130,24 @@ class GetFollowTests(TestCase):
         self.assertIn("photo", item)
 
     @authorized
+    def test_managed_items_include_provider_metadata(self, _auth):
+        Subscription.objects.create(
+            channel=self.channel,
+            url="https://a.example.com/feed",
+            name="Mastodon home timeline",
+            managed_by="mastodon",
+            managed_key="timeline",
+        )
+        response = self.client.get(
+            MICROSUB_URL, {"action": "follow", "channel": "news"}, HTTP_AUTHORIZATION="Bearer token"
+        )
+
+        item = response.json()["items"][0]
+        self.assertTrue(item["_is_managed"])
+        self.assertEqual(item["_provider"], "mastodon")
+        self.assertEqual(item["_managed_key"], "timeline")
+
+    @authorized
     def test_empty_channel_returns_empty_items(self, _auth):
         response = self.client.get(
             MICROSUB_URL, {"action": "follow", "channel": "news"}, HTTP_AUTHORIZATION="Bearer token"

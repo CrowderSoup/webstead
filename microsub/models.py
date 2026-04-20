@@ -22,6 +22,8 @@ class Subscription(models.Model):
     url = models.URLField(max_length=2000)
     name = models.CharField(max_length=255, blank=True)
     photo = models.URLField(max_length=2000, blank=True)
+    managed_by = models.CharField(max_length=32, blank=True, default="")
+    managed_key = models.CharField(max_length=64, blank=True, default="")
     is_active = models.BooleanField(default=True)
     last_fetched_at = models.DateTimeField(null=True, blank=True)
     fetch_error = models.TextField(blank=True)

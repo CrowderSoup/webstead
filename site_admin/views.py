@@ -4295,6 +4295,10 @@ def microsub_feed_remove(request, uid, feed_id):
 
     channel = get_object_or_404(Channel, uid=uid)
     sub = get_object_or_404(Subscription, pk=feed_id, channel=channel)
+    if sub.managed_by:
+        provider = sub.managed_by.capitalize()
+        messages.info(request, f"This feed is managed from the {provider} integration settings.")
+        return redirect("site_admin:microsub_channel_detail", uid=channel.uid)
     sub.is_active = False
     sub.websub_subscribed_at = None
     sub.websub_requested_at = None
@@ -4466,6 +4470,9 @@ def mastodon_settings(request):
                 account.notifications_channel_id = int(notif_channel_id) if notif_channel_id else None
                 account.timeline_reply_filter = timeline_reply_filter
                 account.save(update_fields=["timeline_channel", "notifications_channel", "timeline_reply_filter"])
+                from mastodon_integration.subscriptions import sync_managed_subscriptions
+
+                sync_managed_subscriptions(account)
             messages.success(request, "Mastodon settings saved.")
             return redirect("site_admin:mastodon_settings")
 
@@ -4489,6 +4496,8 @@ def mastodon_disconnect(request):
     if guard:
         return guard
 
+    from mastodon_integration.subscriptions import deactivate_managed_subscriptions
+
     account = MastodonAccount.get_active()
     if account:
         try:
@@ -4497,6 +4506,7 @@ def mastodon_disconnect(request):
             client.revoke_access_token()
         except Exception:
             pass  # Revocation is best-effort; always remove the local record
+        deactivate_managed_subscriptions()
         account.delete()
         messages.success(request, "Mastodon account disconnected.")
     else:
