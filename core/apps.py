@@ -20,9 +20,9 @@ def _in_management_cmd() -> bool:
 
 
 def _in_celery_worker() -> bool:
-    """True when running as a Celery worker process."""
+    """True when running as any Celery process (worker, beat, etc.)."""
     import sys
-    return bool(sys.argv) and sys.argv[0].endswith("celery") and "worker" in sys.argv
+    return bool(sys.argv) and sys.argv[0].endswith("celery")
 
 
 def _reset_startup_state() -> None:
