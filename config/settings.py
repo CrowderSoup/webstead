@@ -102,7 +102,6 @@ INSTALLED_APPS = [
     "solo",
     "storages",
     "django_celery_beat",
-    "django_celery_results",
     "encrypted_model_fields",
 ]
 
@@ -142,11 +141,24 @@ TEMPLATES = [
         "DIRS": [],
         "APP_DIRS": False,
         "OPTIONS": {
-            "loaders": [
-                "core.template_loaders.ThemeTemplateLoader",
-                "django.template.loaders.filesystem.Loader",
-                "django.template.loaders.app_directories.Loader",
-            ],
+            "loaders": (
+                [
+                    "core.template_loaders.ThemeTemplateLoader",
+                    "django.template.loaders.filesystem.Loader",
+                    "django.template.loaders.app_directories.Loader",
+                ]
+                if DEBUG or RUNNING_TESTS
+                else [
+                    (
+                        "django.template.loaders.cached.Loader",
+                        [
+                            "core.template_loaders.ThemeTemplateLoader",
+                            "django.template.loaders.filesystem.Loader",
+                            "django.template.loaders.app_directories.Loader",
+                        ],
+                    )
+                ]
+            ),
             "builtins": [
                 "core.templatetags.theme",
                 "site_admin.templatetags.site_admin_tags",
@@ -225,12 +237,29 @@ USE_I18N = True
 USE_TZ = True
 
 # ---------------------------------------------------------------------------
+# Cache
+# ---------------------------------------------------------------------------
+
+if RUNNING_TESTS:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": env("CACHE_URL", default="redis://localhost:6379/1"),
+        }
+    }
+
+# ---------------------------------------------------------------------------
 # Celery
 # ---------------------------------------------------------------------------
 
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://localhost:6379/0")
-CELERY_RESULT_BACKEND = "django-db"
-CELERY_RESULT_EXTENDED = True  # stores task_name, worker, date_created, etc.
+CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default="redis://localhost:6379/2")
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"

@@ -24,7 +24,6 @@ dependencies = [
   "Mastodon.py>=1.8",
   "django-encrypted-model-fields>=0.6",
   "requests>=2.32.5",
-  "django-celery-results>=2.5",
 ]
 
 [dependency-groups]

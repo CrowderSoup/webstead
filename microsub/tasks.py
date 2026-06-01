@@ -99,7 +99,7 @@ def poll_subscription(self, sub_id: int, *, force: bool = False, doctor: bool = 
     return {"new": new_count, "updated": updated_count, "url": sub.url}
 
 
-@shared_task
+@shared_task(ignore_result=True)
 def poll_microsub_feeds() -> None:
     from microsub.models import Subscription
 

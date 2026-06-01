@@ -54,7 +54,6 @@ dependencies = [
     { name = "celery", extra = ["redis"] },
     { name = "django" },
     { name = "django-celery-beat" },
-    { name = "django-celery-results" },
     { name = "django-debug-toolbar" },
     { name = "django-encrypted-model-fields" },
     { name = "django-environ" },
@@ -86,7 +85,6 @@ requires-dist = [
     { name = "celery", extras = ["redis"], specifier = ">=5.3" },
     { name = "django", specifier = ">=5.2.7" },
     { name = "django-celery-beat", specifier = ">=2.7" },
-    { name = "django-celery-results", specifier = ">=2.5" },
     { name = "django-debug-toolbar", specifier = ">=6.2.0" },
     { name = "django-encrypted-model-fields", specifier = ">=0.6" },
     { name = "django-environ", specifier = ">=0.12.0" },
@@ -395,19 +393,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/05/45/fc97bc1d9af8e7dc07f1e37044d9551a30e6793249864cef802341e2e3a8/django_celery_beat-2.9.0.tar.gz", hash = "sha256:92404650f52fcb44cf08e2b09635cb1558327c54b1a5d570f0e2d3a22130934c", size = 177667, upload-time = "2026-02-28T16:45:34.749Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/71/ae/9befa7ae37f5e5c41be636a254fcf47ff30dd5c88bd115070e252f6b9162/django_celery_beat-2.9.0-py3-none-any.whl", hash = "sha256:4a9e5ebe26d6f8d7215e1fc5c46e466016279dc102435a28141108649bdf2157", size = 105013, upload-time = "2026-02-28T16:45:32.822Z" },
-]
-
-[[package]]
-name = "django-celery-results"
-version = "2.6.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "celery" },
-    { name = "django" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a6/b5/9966c28e31014c228305e09d48b19b35522a8f941fe5af5f81f40dc8fa80/django_celery_results-2.6.0.tar.gz", hash = "sha256:9abcd836ae6b61063779244d8887a88fe80bbfaba143df36d3cb07034671277c", size = 83985, upload-time = "2025-04-10T08:23:52.677Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/2c/da/70f0f3c5364735344c4bc89e53413bcaae95b4fc1de4e98a7a3b9fb70c88/django_celery_results-2.6.0-py3-none-any.whl", hash = "sha256:b9ccdca2695b98c7cbbb8dea742311ba9a92773d71d7b4944a676e69a7df1c73", size = 38351, upload-time = "2025-04-10T08:23:49.965Z" },
 ]
 
 [[package]]

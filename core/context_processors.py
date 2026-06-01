@@ -1,5 +1,6 @@
 import markdown
 
+from django.core.cache import cache
 from django.urls import NoReverseMatch, reverse
 from django.utils.safestring import mark_safe
 from django.db.models import Q
@@ -106,6 +107,11 @@ def interactions_counts(request):
             "admin_profile_initials": "",
         }
 
+    cache_key = f"interactions_counts_{user.pk}"
+    cached_result = cache.get(cache_key)
+    if cached_result is not None:
+        return cached_result
+
     host = request.get_host()
     if not host:
         return {
@@ -141,9 +147,11 @@ def interactions_counts(request):
         .filter(target_query)
         .count()
     )
-    return {
+    result = {
         "interactions_pending_count": pending_comments + pending_webmentions,
         "admin_profile_photo_url": hcard.primary_photo_url if hcard else "",
         "admin_profile_display_name": display_name,
         "admin_profile_initials": initials,
     }
+    cache.set(cache_key, result, 30)
+    return result
