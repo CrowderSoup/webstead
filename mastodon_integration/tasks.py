@@ -216,7 +216,7 @@ def publish_post_to_mastodon(self, post_id: int):
         close_old_connections()
 
 
-@shared_task
+@shared_task(ignore_result=True)
 def poll_mastodon_timeline():
     """
     Fetch the Mastodon home timeline since the last seen status ID and write
@@ -310,7 +310,7 @@ def poll_mastodon_timeline():
     close_old_connections()
 
 
-@shared_task
+@shared_task(ignore_result=True)
 def poll_mastodon_notifications():
     """
     Fetch Mastodon notifications since the last seen notification ID.

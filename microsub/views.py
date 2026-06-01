@@ -615,6 +615,24 @@ class MicrosubView(View):
         if source_url:
             qs = qs.filter(source_url=source_url)
 
+        author_url = normalize_profile_url(request.GET.get("author", ""))
+        if author_url:
+            qs = qs.filter(author_url=author_url)
+
+        categories = normalize_repeated_values(request.GET.getlist("category"))
+        if categories:
+            qs = qs.filter(search_categories__value__in=categories).distinct()
+
+        kinds = normalize_repeated_values(request.GET.getlist("kind"))
+        if kinds:
+            kind_query = Q()
+            for kind in kinds:
+                field_name = KIND_FIELD_MAP.get(kind)
+                if field_name:
+                    kind_query |= Q(**{field_name: True})
+            if kind_query:
+                qs = qs.filter(kind_query)
+
         qs = _apply_paging(
             qs,
             before_cursor=request.GET.get("before", ""),
