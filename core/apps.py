@@ -77,13 +77,19 @@ class CoreConfig(AppConfig):
         if reconcile_enabled:
             post_migrate.connect(_run_startup_reconcile, dispatch_uid="core.startup_reconcile_migrate")
             if not _in_management_cmd() and not _in_celery_worker():
-                from core.tasks import reconcile_themes
-                reconcile_themes.delay()
+                try:
+                    from core.tasks import reconcile_themes
+                    reconcile_themes.apply_async(ignore_result=True)
+                except Exception as exc:
+                    logger.warning("Could not queue startup theme reconciliation: %s", exc)
         elif startup_sync_enabled:
             post_migrate.connect(_run_startup_sync, dispatch_uid="core.startup_sync_migrate")
             if not _in_management_cmd() and not _in_celery_worker():
-                from core.tasks import sync_themes
-                sync_themes.delay()
+                try:
+                    from core.tasks import sync_themes
+                    sync_themes.apply_async(ignore_result=True)
+                except Exception as exc:
+                    logger.warning("Could not queue startup theme sync: %s", exc)
         else:  # pragma: no cover - defensive
             logger.info("Theme startup sync disabled via THEME_STARTUP_SYNC_ENABLED.")
 
