@@ -251,6 +251,10 @@ else:
         "default": {
             "BACKEND": "django.core.cache.backends.redis.RedisCache",
             "LOCATION": env("CACHE_URL", default="redis://localhost:6379/1"),
+            "OPTIONS": {
+                "socket_connect_timeout": 5,
+                "socket_timeout": 5,
+            },
         }
     }
 
@@ -267,6 +271,7 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_DEFAULT_QUEUE = env("CELERY_TASK_DEFAULT_QUEUE", default="webstead")
 CELERY_WORKER_POOL = env("CELERY_WORKER_POOL", default="prefork")
 CELERY_WORKER_CONCURRENCY = env.int("CELERY_WORKER_CONCURRENCY", default=None)
+CELERY_TASK_IGNORE_RESULT = True
 
 if RUNNING_TESTS:
     # These use the CELERY_ namespace prefix, which config/celery.py strips and
