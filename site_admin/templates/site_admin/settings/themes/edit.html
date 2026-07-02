@@ -17,12 +17,11 @@
 {% endblock %}
 
 {% block content %}
-  <div class="site-settings-layout grid gap-6 lg:grid-cols-[220px_1fr]">
-    {% include "site_admin/settings/_sidebar.html" %}
-    <div class="flex flex-col gap-6">
+  <div class="flex flex-col gap-6">
+    {% include "site_admin/_section_subnav.html" with section="settings" %}
       <section class="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <div class="text-sm uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Site settings</div>
+          <div class="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Site settings</div>
           <h1 class="text-2xl font-semibold">Theme files</h1>
           <p class="mt-1 text-sm text-[color:var(--admin-muted)]">
             Edit templates and assets. Changes sync to storage.
@@ -31,14 +30,13 @@
         <div class="flex flex-wrap items-center gap-3">
           <a
             href="{% url 'site_admin:theme_settings' %}"
-            class="rounded-full border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+            class="rounded-xl border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
           >
             Back to themes
           </a>
         </div>
       </section>
 
-      {% include "site_admin/_messages.html" with wrapper_class="space-y-2" %}
 
       <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
         {% if not theme_choices %}
@@ -83,7 +81,7 @@
                   <button
                     type="button"
                     id="new-file-btn"
-                    class="rounded-full border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+                    class="rounded-xl border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
                   >
                     New file
                   </button>
@@ -105,14 +103,14 @@
                     type="submit"
                     name="save"
                     value="1"
-                    class="rounded-full bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+                    class="rounded-xl bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
                   >
                     Save file
                   </button>
                   <button
                     type="button"
                     id="delete-button"
-                    class="rounded-full border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+                    class="rounded-xl border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
                   >
                     Delete
                   </button>
@@ -135,24 +133,23 @@
       <div class="mt-4 flex flex-wrap justify-end gap-3">
         <button
           id="unsaved-cancel"
-          class="rounded-full border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+          class="rounded-xl border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
         >
           Cancel
         </button>
         <button
           id="unsaved-discard"
-          class="rounded-full border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+          class="rounded-xl border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
         >
           Discard changes
         </button>
         <button
           id="unsaved-save"
-          class="rounded-full bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+          class="rounded-xl bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
         >
           Save changes
         </button>
       </div>
-    </div>
   </div>
 {% endblock %}
 

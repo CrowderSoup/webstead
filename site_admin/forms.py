@@ -136,6 +136,7 @@ class PostForm(forms.ModelForm):
             "repost_of",
             "in_reply_to",
             "bookmark_of",
+            "mastodon_syndicate",
         ]
         widgets = {
             "content": EasyMDETextarea(),
@@ -143,6 +144,13 @@ class PostForm(forms.ModelForm):
             "repost_of": forms.URLInput(attrs={"placeholder": "https://"}),
             "in_reply_to": forms.URLInput(attrs={"placeholder": "https://"}),
             "bookmark_of": forms.URLInput(attrs={"placeholder": "https://"}),
+            "mastodon_syndicate": forms.Select(
+                choices=[
+                    ("", "Default (use per-kind setting)"),
+                    ("true", "Publish to Mastodon"),
+                    ("false", "Don't publish to Mastodon"),
+                ]
+            ),
         }
 
     def __init__(self, *args, **kwargs):
@@ -197,6 +205,15 @@ class PostForm(forms.ModelForm):
                 self.fields["checkin_name"].initial = checkin_data.get("name", "")
                 self.fields["checkin_latitude"].initial = checkin_data.get("latitude")
                 self.fields["checkin_longitude"].initial = checkin_data.get("longitude")
+        # Mastodon syndicate select: map bool/None model value to string choice
+        if self.instance.pk:
+            ms = self.instance.mastodon_syndicate
+            if ms is True:
+                self.fields["mastodon_syndicate"].initial = "true"
+            elif ms is False:
+                self.fields["mastodon_syndicate"].initial = "false"
+            else:
+                self.fields["mastodon_syndicate"].initial = ""
         if self.instance.pk and self.instance.published_on:
             local_time = timezone.localtime(self.instance.published_on)
             self.fields["published_on"].initial = local_time.strftime("%Y-%m-%dT%H:%M")
@@ -205,6 +222,15 @@ class PostForm(forms.ModelForm):
             # browser's local time (server TIME_ZONE is UTC which is
             # unlikely to match the author).
             self.fields["published_on"].widget.attrs["data-default-now"] = "true"
+
+    def clean_mastodon_syndicate(self):
+        """Convert the Select string value back to True / False / None."""
+        value = self.cleaned_data.get("mastodon_syndicate")
+        if value == "true":
+            return True
+        if value == "false":
+            return False
+        return None
 
     def clean_published_on(self):
         value = self.cleaned_data.get("published_on")
@@ -315,6 +341,44 @@ class ErrorLogFilterForm(forms.Form):
         ],
         label="Status",
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.setdefault(
+                "class",
+                "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+            )
+
+
+class TaskLogFilterForm(forms.Form):
+    task = forms.ChoiceField(
+        required=False,
+        choices=[
+            ("", "All tasks"),
+            ("analytics.tasks.lookup_user_agent", "analytics.tasks.lookup_user_agent"),
+            ("core.tasks.reconcile_themes", "core.tasks.reconcile_themes"),
+            ("core.tasks.sync_themes", "core.tasks.sync_themes"),
+            ("micropub.tasks.dispatch_webmentions", "micropub.tasks.dispatch_webmentions"),
+            ("microsub.tasks.poll_microsub_feeds", "microsub.tasks.poll_microsub_feeds"),
+        ],
+        label="Task",
+    )
+    worker = forms.CharField(required=False, label="Worker")
+    status = forms.ChoiceField(
+        required=False,
+        choices=[
+            ("", "All statuses"),
+            ("SUCCESS", "Success"),
+            ("FAILURE", "Failure"),
+            ("STARTED", "Started"),
+            ("RETRY", "Retry"),
+            ("REVOKED", "Revoked"),
+        ],
+        label="Status",
+    )
+    date_from = forms.DateField(required=False, label="From", widget=forms.DateInput(attrs={"type": "date"}))
+    date_to = forms.DateField(required=False, label="To", widget=forms.DateInput(attrs={"type": "date"}))
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -487,6 +551,7 @@ class SiteConfigurationForm(forms.ModelForm):
         fields = [
             "title",
             "tagline",
+            "site_url",
             "home_page",
             "favicon",
             "site_author",
@@ -494,12 +559,12 @@ class SiteConfigurationForm(forms.ModelForm):
             "main_menu",
             "footer_menu",
             "default_feed_kinds",
+            "microsub_unfollow_removes_entries",
             "comments_enabled",
             "developer_tools_enabled",
             "bridgy_publish_bluesky",
             "bridgy_publish_flickr",
             "bridgy_publish_github",
-            "bridgy_publish_mastodon",
             "robots_txt",
         ]
         widgets = {

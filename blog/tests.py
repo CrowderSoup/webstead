@@ -265,6 +265,26 @@ class Mf2ParsingTests(TestCase):
 
         self.assertIsNone(target)
 
+    def test_parse_target_from_html_falls_back_to_open_graph_metadata(self):
+        html = """
+        <html>
+          <head>
+            <meta property="og:title" content="Original Post Title" />
+            <meta property="og:description" content="A plain HTML page without microformats." />
+            <meta property="og:site_name" content="Example Social" />
+          </head>
+          <body><p>No microformats here either.</p></body>
+        </html>
+        """
+
+        target = parse_target_from_html(html, "https://example.com/post/3")
+
+        self.assertEqual(target["original_url"], "https://example.com/post/3")
+        self.assertEqual(target["title"], "Original Post Title")
+        self.assertEqual(target["summary_text"], "A plain HTML page without microformats.")
+        self.assertEqual(target["author_name"], "Example Social")
+        self.assertEqual(target["author_url"], "https://example.com")
+
     def test_parse_target_from_html_supports_h_event(self):
         html = """
         <article class="h-event">

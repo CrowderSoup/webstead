@@ -561,6 +561,35 @@ class ParseRssAtomTests(SimpleTestCase):
     <id>https://example.com/1</id>
     <link href="https://example.com/1"/>
     <content type="text">&lt;b&gt;bold&lt;/b&gt; text</content>
+    </entry>
+</feed>"""
+
+    YOUTUBE_ATOM_FEED = b"""<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015"
+      xmlns:media="http://search.yahoo.com/mrss/"
+      xmlns="http://www.w3.org/2005/Atom">
+  <title>Video Channel</title>
+  <link rel="alternate" href="https://www.youtube.com/channel/CHANNEL123"/>
+  <author>
+    <name>Video Channel</name>
+    <uri>https://www.youtube.com/channel/CHANNEL123</uri>
+  </author>
+  <entry>
+    <id>yt:video:abc123</id>
+    <yt:videoId>abc123</yt:videoId>
+    <link rel="alternate" href="https://www.youtube.com/watch?v=abc123"/>
+    <author>
+      <name>Video Channel</name>
+      <uri>https://www.youtube.com/channel/CHANNEL123</uri>
+    </author>
+    <published>2026-03-24T10:00:00+00:00</published>
+    <updated>2026-03-24T10:05:00+00:00</updated>
+    <media:group>
+      <media:thumbnail url="https://img.example.com/thumb.jpg" width="480" height="360"/>
+      <media:description>First line
+
+Second line</media:description>
+    </media:group>
   </entry>
 </feed>"""
 
@@ -591,6 +620,24 @@ class ParseRssAtomTests(SimpleTestCase):
         # The raw value contains HTML tags; text should be stripped
         self.assertNotIn("<b>", entries[0]["content"]["text"])
         self.assertIn("bold", entries[0]["content"]["text"])
+        self.assertNotIn("<b>", entries[0]["content"]["html"])
+        self.assertIn("&lt;b&gt;bold&lt;/b&gt;", entries[0]["content"]["html"])
+
+    def test_youtube_entries_include_reader_friendly_media_fields(self):
+        entries, meta = _parse_rss_atom(
+            self.YOUTUBE_ATOM_FEED,
+            "https://www.youtube.com/feeds/videos.xml?channel_id=CHANNEL123",
+        )
+        self.assertEqual(meta["name"], "Video Channel")
+        self.assertEqual(meta["url"], "https://www.youtube.com/channel/CHANNEL123")
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["url"], "https://www.youtube.com/watch?v=abc123")
+        self.assertEqual(entries[0]["photo"], ["https://img.example.com/thumb.jpg"])
+        self.assertEqual(entries[0]["summary"], "First line\n\nSecond line")
+        self.assertEqual(entries[0]["content"]["text"], "First line\n\nSecond line")
+        self.assertIn("<p>First line</p><p>Second line</p>", entries[0]["content"]["html"])
+        self.assertEqual(entries[0]["updated"], "2026-03-24T10:05:00+00:00")
+        self.assertEqual(entries[0]["author"]["url"], "https://www.youtube.com/channel/CHANNEL123")
 
 
 class FetchAndParseFeedTests(SimpleTestCase):

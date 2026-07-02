@@ -1,6 +1,6 @@
 # Deployment Guide (Docker + GHCR)
 
-This guide covers deploying Webstead with the published GHCR image and a Docker Compose stack that includes Postgres and MinIO. It also calls out gaps discovered while writing this guide so we can harden the deployment story.
+This guide covers deploying Webstead with the published GHCR image and a Docker Compose stack.
 
 > Webstead is alpha software. Expect breaking changes and data loss risks.
 
@@ -14,6 +14,18 @@ This guide covers deploying Webstead with the published GHCR image and a Docker 
 
 ---
 
+## Recommended hardware
+
+For a personal site, a cheap VPS is sufficient. The full stack (web + Celery worker + beat + Postgres + Redis + MinIO) fits comfortably in 1–2 GB of RAM.
+
+**Recommended: [Hetzner CAX11](https://www.hetzner.com/cloud/)** (~€4/mo)
+- 2 ARM vCPU, 4 GB RAM, 40 GB SSD
+- Plenty of headroom for the full stack with room to grow
+
+Any provider works. If you prefer a more managed experience and less to operate yourself, DigitalOcean App Platform with managed Postgres and Valkey (Redis) is a solid option — easier to run but costs more.
+
+---
+
 ## 1) Create a deployment directory
 
 Create a fresh folder (not this repo) for your deployment assets:
@@ -23,6 +35,8 @@ webstead-deploy/
   docker-compose.yml
   .env
 ```
+
+Copy `docs/docker-compose.example.yml` from this repo as your starting point.
 
 ---
 
@@ -46,6 +60,9 @@ DB_PASS=webstead
 DB_HOST=postgres
 DB_PORT=5432
 
+# Redis / Celery broker
+CELERY_BROKER_URL=redis://redis:6379/0
+
 # S3/MinIO storage
 AWS_ACCESS_KEY_ID=minio
 AWS_SECRET_ACCESS_KEY=minio12345
@@ -66,79 +83,25 @@ Notes:
 
 - `SECRET_KEY` must be unique and kept private.
 - `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS` are required when `DEBUG=False`.
-- The MinIO bucket must exist before `collectstatic` runs.
+- The MinIO bucket must exist before `collectstatic` runs (Webstead creates it automatically on startup).
 - `AWS_S3_ENDPOINT_URL` is also used in public media URLs; set it to a public domain if you expect users to load assets from the internet.
 
 ---
 
 ## 3) Create `docker-compose.yml`
 
-This compose file runs Postgres, MinIO, and Webstead (from GHCR).
+Start from `docs/docker-compose.example.yml`. It runs the full stack:
 
-```yaml
-version: "3.9"
+| Service | Purpose |
+|---|---|
+| `postgres` | Primary database |
+| `redis` | Celery broker |
+| `minio` | S3-compatible object storage for media and static files |
+| `webstead` | Django/Gunicorn web server |
+| `celery-worker` | Async task worker (webmentions, feed polling, etc.) |
+| `celery-beat` | Periodic task scheduler |
 
-services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: webstead
-      POSTGRES_USER: webstead
-      POSTGRES_PASSWORD: webstead
-    volumes:
-      - db_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-    restart: unless-stopped
-
-  minio:
-    image: quay.io/minio/minio:latest
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: minio
-      MINIO_ROOT_PASSWORD: minio12345
-    volumes:
-      - minio_data:/data
-    ports:
-      - "9000:9000" # S3 API (optional)
-      - "9001:9001" # MinIO console (optional)
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "wget -qO- http://localhost:9000/minio/health/ready || exit 1"
-        ]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-    restart: unless-stopped
-
-  webstead:
-    image: ghcr.io/crowdersoup/webstead:latest
-    env_file:
-      - .env
-    ports:
-      - "8000:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-    restart: unless-stopped
-
-volumes:
-  db_data:
-  minio_data:
-```
-
-Image tags:
-
-- `ghcr.io/crowdersoup/webstead:latest` (main branch)
-- `ghcr.io/crowdersoup/webstead:main` or `:dev` (branch tags)
-- `ghcr.io/crowdersoup/webstead:<short-sha>` (pinned builds)
+The `celery-worker` and `celery-beat` services start after `webstead` passes its health check, so migrations are guaranteed to be complete before workers come up.
 
 ---
 
@@ -152,7 +115,7 @@ docker compose up -d
 
 Health checks:
 
-- The container now binds to `PORT` (falling back to `8000`), which is required by many PaaS providers.
+- The container binds to `PORT` (falling back to `8000`).
 - Use `/healthz` as the HTTP health check path for a lightweight readiness probe.
 
 ---
@@ -183,7 +146,7 @@ STORAGE_BUCKET_PUBLIC_READ=true
 
 ---
 
-## 7) Create a Django superuser
+## 6) Create a Django superuser
 
 ```
 docker compose exec webstead uv run manage.py createsuperuser
@@ -196,7 +159,6 @@ Log in at `http://<your-host>/admin`.
 ## Reverse proxy + TLS example
 
 Webstead expects `X-Forwarded-Proto` and `X-Forwarded-Host` to be set correctly by your proxy.
-Below are minimal examples you can adapt.
 
 ### Caddy (recommended)
 
@@ -240,6 +202,7 @@ Required in production:
 - `ALLOWED_HOSTS`
 - `CSRF_TRUSTED_ORIGINS`
 - `DB_NAME`, `DB_USER`, `DB_PASS`, `DB_HOST`, `DB_PORT`
+- `CELERY_BROKER_URL`
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
 - `AWS_STORAGE_BUCKET_NAME`, `AWS_S3_ENDPOINT_URL`, `AWS_S3_REGION_NAME`
 
@@ -253,6 +216,4 @@ Optional:
 
 ## Deployment readiness notes
 
-As of this guide, the container startup flow handles DB wait, migrations,
-bucket bootstrap, and `collectstatic`. If you need to disable any of those,
-use the startup environment variables in step 5.
+As of this guide, the container startup flow handles DB wait, migrations, bucket bootstrap, and `collectstatic`. If you need to disable any of those, use the startup environment variables in step 5.

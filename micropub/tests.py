@@ -163,7 +163,6 @@ class MicropubViewTests(TestCase):
         settings_obj.bridgy_publish_bluesky = False
         settings_obj.bridgy_publish_flickr = True
         settings_obj.bridgy_publish_github = False
-        settings_obj.bridgy_publish_mastodon = False
         settings_obj.save()
 
         response = self.client.get(
@@ -188,7 +187,6 @@ class MicropubViewTests(TestCase):
         settings_obj.bridgy_publish_bluesky = True
         settings_obj.bridgy_publish_flickr = False
         settings_obj.bridgy_publish_github = False
-        settings_obj.bridgy_publish_mastodon = False
         settings_obj.save()
 
         response = self.client.get(
@@ -313,42 +311,46 @@ class WebmentionViewTests(TestCase):
         self.assertEqual(Webmention.objects.count(), 0)
 
     @override_settings(WEBMENTION_TRUSTED_DOMAINS=[])
-    @patch("micropub.views.verify_webmention_source", return_value=(True, "", False))
+    @patch("micropub.webmention.verify_webmention_source", return_value=(True, "", False))
     def test_verified_webmention_is_pending_by_default(self, _verify):
-        response = self.client.post(
-            self.endpoint,
-            data={"source": "https://source.example", "target": "http://testserver/blog/post/hello/"},
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                self.endpoint,
+                data={"source": "https://source.example", "target": "http://testserver/blog/post/hello/"},
+            )
 
         self.assertEqual(response.status_code, 202)
         mention = Webmention.objects.get()
         self.assertEqual(mention.status, Webmention.PENDING)
 
     @override_settings(WEBMENTION_TRUSTED_DOMAINS=["trusted.example"])
-    @patch("micropub.views.verify_webmention_source", return_value=(True, "", False))
+    @patch("micropub.webmention.verify_webmention_source", return_value=(True, "", False))
     def test_trusted_domain_auto_approves(self, _verify):
-        response = self.client.post(
-            self.endpoint,
-            data={"source": "https://trusted.example/post", "target": "http://testserver/blog/post/hello/"},
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                self.endpoint,
+                data={"source": "https://trusted.example/post", "target": "http://testserver/blog/post/hello/"},
+            )
 
         self.assertEqual(response.status_code, 202)
         mention = Webmention.objects.get()
         self.assertEqual(mention.status, Webmention.ACCEPTED)
 
-    @patch("micropub.views.verify_webmention_source", return_value=(False, "No link found", False))
+    @patch("micropub.webmention.verify_webmention_source", return_value=(False, "No link found", False))
     def test_missing_link_rejects(self, _verify):
-        response = self.client.post(
-            self.endpoint,
-            data={"source": "https://source.example", "target": "http://testserver/blog/post/hello/"},
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                self.endpoint,
+                data={"source": "https://source.example", "target": "http://testserver/blog/post/hello/"},
+            )
 
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 202)
         mention = Webmention.objects.get()
         self.assertEqual(mention.status, Webmention.REJECTED)
 
-    @patch("micropub.views.verify_webmention_source", return_value=(False, "Fetch failed", True))
-    def test_fetch_failures_stay_pending(self, _verify):
+    def test_fetch_failures_stay_pending(self):
+        # The view always creates PENDING immediately; transient failures keep it PENDING
+        # because the async task retries without updating the status on failure.
         response = self.client.post(
             self.endpoint,
             data={"source": "https://source.example", "target": "http://testserver/blog/post/hello/"},
@@ -367,8 +369,7 @@ class WebmentionSubmissionTests(TestCase):
         self.endpoint = reverse("webmention-submit")
         self.target_url = "http://testserver/blog/post/hello/"
 
-    @patch("micropub.views.verify_webmention_source", return_value=(True, "", False))
-    def test_authenticated_submission_creates_webmention(self, _verify):
+    def test_authenticated_submission_creates_webmention(self):
         session = self.client.session
         session["indieauth_me"] = "https://example.com/"
         session.save()
@@ -402,8 +403,7 @@ class WebmentionSubmissionTests(TestCase):
         self.assertEqual(Webmention.objects.count(), 0)
 
 
-    @patch("micropub.views.verify_webmention_source", return_value=(True, "", False))
-    def test_submission_rejected_when_source_not_owned(self, _verify):
+    def test_submission_rejected_when_source_not_owned(self):
         session = self.client.session
         session["indieauth_me"] = "https://example.com/"
         session.save()
@@ -421,9 +421,7 @@ class WebmentionSubmissionTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(Webmention.objects.count(), 0)
 
-
-    @patch("micropub.views.verify_webmention_source", return_value=(True, "", False))
-    def test_invalid_mention_type_defaults(self, _verify):
+    def test_invalid_mention_type_defaults(self):
         session = self.client.session
         session["indieauth_me"] = "https://example.com/"
         session.save()
@@ -462,21 +460,40 @@ class WebmentionSubmissionTests(TestCase):
 
 
 class BridgyPublishWebmentionTests(TestCase):
-    @patch("micropub.webmention.send_webmention")
-    def test_bridgy_publish_skips_like_reply_repost(self, send_webmention_mock):
-        settings_obj = SimpleNamespace(
-            bridgy_publish_bluesky=True,
-            bridgy_publish_flickr=False,
-            bridgy_publish_github=False,
-            bridgy_publish_mastodon=False,
-        )
+    @patch("micropub.tasks.send_single_webmention")
+    def test_bridgy_publish_skips_like_reply_repost(self, mock_task):
+        """dispatch_webmentions must not send bridgy webmentions for likes, replies, and reposts.
+
+        The guard lives in dispatch_webmentions (micropub/tasks.py), not in
+        send_bridgy_publish_webmentions which no longer contains this check.
+        """
+        from micropub.tasks import dispatch_webmentions
+
+        config = SiteConfiguration.get_solo()
+        config.bridgy_publish_bluesky = True
+        config.bridgy_publish_flickr = False
+        config.bridgy_publish_github = False
+        config.save()
+
         source_url = "http://testserver/blog/post/hello/"
         for kind in (Post.LIKE, Post.REPLY, Post.REPOST):
             with self.subTest(kind=kind):
-                post = Post.objects.create(title="Hello", slug=f"hello-{kind}", content="Hello world", kind=kind)
-                send_bridgy_publish_webmentions(post, source_url, settings_obj)
+                mock_task.delay.reset_mock()
+                post = Post.objects.create(
+                    title="Hello",
+                    slug=f"hello-{kind}",
+                    content="Hello world",
+                    kind=kind,
+                )
+                dispatch_webmentions(post.id, source_url, include_bridgy=True)
 
-        send_webmention_mock.assert_not_called()
+                for call in mock_task.delay.call_args_list:
+                    target_url = call[0][2]  # positional arg: (post_id, source_url, target_url, ...)
+                    self.assertNotIn(
+                        "brid.gy",
+                        target_url,
+                        f"dispatch_webmentions sent a bridgy webmention for post kind={kind}",
+                    )
 
 
 class WebmentionDirectionTests(TestCase):
@@ -518,6 +535,35 @@ class WebmentionDirectionTests(TestCase):
         self.assertEqual(Entry.objects.filter(channel=channel).count(), 1)
 
 
+class GlobalBlockWebmentionTests(TestCase):
+    @patch("micropub.tasks.send_single_webmention")
+    def test_dispatch_webmentions_skips_globally_blocked_targets(self, mock_task):
+        from microsub.models import BlockedUser
+        from micropub.tasks import dispatch_webmentions
+
+        BlockedUser.objects.create(channel=None, url="https://blocked.example/")
+        post = Post.objects.create(
+            title="Blocked target",
+            slug="blocked-target",
+            content="A link to https://blocked.example/post/",
+        )
+
+        dispatch_webmentions(post.id, "http://testserver/blog/post/blocked-target/", include_bridgy=False)
+
+        mock_task.delay.assert_not_called()
+
+    @patch("micropub.webmention._send_webmention_request")
+    def test_send_webmention_does_not_send_to_globally_blocked_target(self, mock_send):
+        from microsub.models import BlockedUser
+
+        BlockedUser.objects.create(channel=None, url="https://blocked.example/")
+        wm = send_webmention("https://example.com/source/", "https://blocked.example/post/")
+
+        self.assertEqual(wm.status, Webmention.REJECTED)
+        self.assertIn("blocked", wm.error.lower())
+        mock_send.assert_not_called()
+
+
 class WebmentionResendTests(TestCase):
     """Tests for resend_webmention behaviour."""
 
@@ -541,8 +587,7 @@ class WebmentionDeduplicationTests(TestCase):
     """Tests for incoming-webmention deduplication via update_or_create."""
 
     @override_settings(ALLOWED_HOSTS=["testserver"], WEBMENTION_TRUSTED_DOMAINS=[])
-    @patch("micropub.views.verify_webmention_source", return_value=(True, "", False))
-    def test_duplicate_incoming_webmention_updates_not_duplicates(self, _verify):
+    def test_duplicate_incoming_webmention_updates_not_duplicates(self):
         post = Post.objects.create(title="Hello", slug="hello-dedup", content="Hello world")
         endpoint = reverse("webmention-endpoint")
         data = {

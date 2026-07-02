@@ -33,6 +33,8 @@ from analytics.models import (
 
 from files.models import Attachment, File
 from files.gpx import GpxAnonymizeError, GpxAnonymizeOptions, anonymize_gpx
+from mastodon_integration.models import MastodonAccount, MastodonSyndicationDefault
+from mastodon_integration.tasks import poll_mastodon_timeline, poll_mastodon_notifications
 
 from core.models import (
     HCard,
@@ -106,6 +108,7 @@ from .forms import (
     WebmentionCreateForm,
     WebmentionFilterForm,
     ErrorLogFilterForm,
+    TaskLogFilterForm,
     IndieAuthFilterForm,
     IndieAuthClientForm,
 )
@@ -1179,7 +1182,6 @@ def menu_edit(request, menu_id=None):
     if menu_id is not None:
         menu = get_object_or_404(Menu, pk=menu_id)
 
-    saved = False
     if request.method == "POST":
         form = MenuForm(request.POST, instance=menu)
         formset = MenuItemFormSet(request.POST, instance=menu, prefix="items")
@@ -1187,7 +1189,8 @@ def menu_edit(request, menu_id=None):
             menu = form.save()
             formset.instance = menu
             formset.save()
-            saved = True
+            messages.success(request, "Menu saved.")
+            return redirect("site_admin:menu_edit", menu_id=menu.id)
     else:
         form = MenuForm(instance=menu)
         formset = MenuItemFormSet(instance=menu, prefix="items")
@@ -1199,7 +1202,6 @@ def menu_edit(request, menu_id=None):
             "form": form,
             "formset": formset,
             "menu": menu,
-            "saved": saved,
         },
     )
 
@@ -1241,7 +1243,6 @@ def redirect_edit(request, redirect_id=None):
     if redirect_id is not None:
         redirect_obj = get_object_or_404(Redirect, pk=redirect_id)
 
-    saved = False
     initial = {}
     if redirect_obj is None:
         from_path = request.GET.get("from")
@@ -1254,7 +1255,8 @@ def redirect_edit(request, redirect_id=None):
         form = RedirectForm(request.POST, instance=redirect_obj)
         if form.is_valid():
             redirect_obj = form.save()
-            saved = True
+            messages.success(request, "Redirect saved.")
+            return redirect("site_admin:redirect_edit", redirect_id=redirect_obj.id)
     else:
         form = RedirectForm(instance=redirect_obj, initial=initial)
     form.fields["to_path"].widget.attrs["list"] = "redirect-path-options"
@@ -1266,7 +1268,6 @@ def redirect_edit(request, redirect_id=None):
         {
             "form": form,
             "redirect_obj": redirect_obj,
-            "saved": saved,
             "path_suggestions": path_suggestions,
         },
     )
@@ -1715,6 +1716,82 @@ def error_log_detail(request, log_id):
             "query_text": query_text,
         },
     )
+
+
+def _filtered_tasks(request):
+    from django_celery_results.models import TaskResult
+
+    form = TaskLogFilterForm(request.GET or None)
+    tasks = TaskResult.objects.order_by("-date_created")
+    if form.is_valid():
+        task = form.cleaned_data.get("task")
+        worker = form.cleaned_data.get("worker")
+        status = form.cleaned_data.get("status")
+        date_from = form.cleaned_data.get("date_from")
+        date_to = form.cleaned_data.get("date_to")
+        if task:
+            tasks = tasks.filter(task_name=task)
+        if worker:
+            tasks = tasks.filter(worker__icontains=worker)
+        if status:
+            tasks = tasks.filter(status=status)
+        if date_from:
+            tasks = tasks.filter(date_created__date__gte=date_from)
+        if date_to:
+            tasks = tasks.filter(date_created__date__lte=date_to)
+    return form, tasks
+
+
+@require_http_methods(["GET"])
+def task_log_list(request):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    settings_obj = SiteConfiguration.get_solo()
+    if not settings_obj.developer_tools_enabled:
+        messages.warning(request, "Enable developer tools to access task logs.")
+        return redirect("site_admin:site_settings")
+
+    filter_form, tasks = _filtered_tasks(request)
+
+    paginator = Paginator(tasks, 20)
+    page_number = request.GET.get("page")
+    try:
+        page_obj = paginator.page(page_number)
+    except PageNotAnInteger:
+        page_obj = paginator.page(1)
+    except EmptyPage:
+        page_obj = paginator.page(paginator.num_pages)
+
+    context = {
+        "page_obj": page_obj,
+        "paginator": paginator,
+        "base_query": _strip_page_query(request),
+        "filter_form": filter_form,
+    }
+
+    if request.headers.get("HX-Request"):
+        return render(request, "site_admin/settings/tasks/_list.html", context)
+
+    return render(request, "site_admin/settings/tasks/index.html", context)
+
+
+@require_http_methods(["GET"])
+def task_log_detail(request, task_id):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    settings_obj = SiteConfiguration.get_solo()
+    if not settings_obj.developer_tools_enabled:
+        messages.warning(request, "Enable developer tools to access task logs.")
+        return redirect("site_admin:site_settings")
+
+    from django_celery_results.models import TaskResult
+
+    task = get_object_or_404(TaskResult, task_id=task_id)
+    return render(request, "site_admin/settings/tasks/detail.html", {"task": task})
 
 
 @require_http_methods(["GET"])
@@ -2370,7 +2447,6 @@ def file_create(request):
     if guard:
         return guard
 
-    saved = False
     if request.method == "POST":
         form = FileForm(request.POST, request.FILES)
         if form.is_valid():
@@ -2378,8 +2454,8 @@ def file_create(request):
             if not asset.owner_id:
                 asset.owner = request.user
             asset.save()
-            form = FileForm(instance=asset)
-            saved = True
+            messages.success(request, "File uploaded.")
+            return redirect("site_admin:file_edit", file_id=asset.id)
     else:
         form = FileForm(initial={"owner": request.user})
 
@@ -2388,7 +2464,6 @@ def file_create(request):
         "site_admin/files/new.html",
         {
             "form": form,
-            "saved": saved,
         },
     )
 
@@ -2400,13 +2475,13 @@ def file_edit(request, file_id):
         return guard
 
     asset = get_object_or_404(File, pk=file_id)
-    saved = False
 
     if request.method == "POST":
         form = FileForm(request.POST, request.FILES, instance=asset)
         if form.is_valid():
             form.save()
-            saved = True
+            messages.success(request, "File updated.")
+            return redirect("site_admin:file_edit", file_id=asset.id)
     else:
         form = FileForm(instance=asset)
 
@@ -2416,7 +2491,6 @@ def file_edit(request, file_id):
         {
             "form": form,
             "asset": asset,
-            "saved": saved,
         },
     )
 
@@ -3415,12 +3489,12 @@ def site_settings(request):
         return guard
 
     settings_obj = SiteConfiguration.get_solo()
-    saved = False
     if request.method == "POST":
         form = SiteConfigurationForm(request.POST, instance=settings_obj)
         if form.is_valid():
             form.save()
-            saved = True
+            messages.success(request, "Settings saved.")
+            return redirect("site_admin:site_settings")
     else:
         form = SiteConfigurationForm(instance=settings_obj)
 
@@ -3429,7 +3503,6 @@ def site_settings(request):
         "site_admin/settings/edit.html",
         {
             "form": form,
-            "saved": saved,
         },
     )
 
@@ -3442,7 +3515,6 @@ def profile_edit(request):
 
     hcard = HCard.objects.filter(user=request.user).order_by("pk").first()
     parent_instance = hcard or HCard(user=request.user)
-    saved = False
     existing_meta = None
     uploaded_meta = None
     existing_remove_ids = None
@@ -3499,10 +3571,8 @@ def profile_edit(request):
                     "Unable to save your profile right now. Please try again.",
                 )
             else:
-                saved = True
-                existing_meta = None
-                uploaded_meta = None
-                existing_remove_ids = set()
+                messages.success(request, "Profile saved.")
+                return redirect("site_admin:profile_edit")
         elif not form.non_field_errors():
             form.add_error(None, "Please correct the errors below and try again.")
     else:
@@ -3531,7 +3601,6 @@ def profile_edit(request):
             ),
             "photo_upload_url": reverse("site_admin:profile_upload_photo"),
             "photo_delete_url": reverse("site_admin:profile_delete_photo"),
-            "saved": saved,
         },
     )
 
@@ -3732,6 +3801,7 @@ def _build_post_form_context(
         "gpx_trim_distance": gpx_defaults["gpx_trim_distance"],
         "gpx_blur_enabled": gpx_defaults["gpx_blur_enabled"],
         "gpx_remove_timestamps": gpx_defaults["gpx_remove_timestamps"],
+        "mastodon_connected": MastodonAccount.get_active() is not None,
     }
 
 
@@ -4063,6 +4133,7 @@ def microsub_channel_create(request):
         return guard
 
     from microsub.models import Channel
+    from microsub.views import CHANNEL_GLOBAL, CHANNEL_NOTIFICATIONS
     from site_admin.forms import ChannelForm
     from django.utils.text import slugify
 
@@ -4071,6 +4142,9 @@ def microsub_channel_create(request):
         if form.is_valid():
             name = form.cleaned_data["name"]
             base_slug = slugify(name) or "channel"
+            if base_slug in {CHANNEL_NOTIFICATIONS, CHANNEL_GLOBAL}:
+                form.add_error("name", "That channel name is reserved.")
+                return render(request, "site_admin/microsub/channel_form.html", {"form": form, "channel": None})
             uid = base_slug
             suffix = 1
             while Channel.objects.filter(uid=uid).exists():
@@ -4152,6 +4226,9 @@ def microsub_channel_delete(request, uid):
     if channel.uid == "notifications":
         messages.error(request, "The notifications channel cannot be deleted.")
         return redirect("site_admin:microsub_channel_detail", uid=uid)
+    if Channel.objects.exclude(uid="notifications").count() <= 1:
+        messages.error(request, "At least one non-notifications channel is required.")
+        return redirect("site_admin:microsub_channel_detail", uid=uid)
 
     if request.method == "POST":
         channel.delete()
@@ -4172,6 +4249,7 @@ def microsub_feed_add(request, uid):
         return guard
 
     from microsub.models import Channel, Subscription
+    from microsub.tasks import populate_subscription_metadata
     from site_admin.forms import SubscriptionForm
 
     channel = get_object_or_404(Channel, uid=uid)
@@ -4190,6 +4268,8 @@ def microsub_feed_add(request, uid):
                 sub.save(update_fields=["is_active"])
                 messages.info(request, "Feed already subscribed (reactivated).")
             else:
+                base_url = request.build_absolute_uri("/")
+                transaction.on_commit(lambda: populate_subscription_metadata.delay(sub.id, base_url))
                 messages.success(request, f"Subscribed to {feed_url}.")
             return redirect("site_admin:microsub_channel_detail", uid=channel.uid)
     else:
@@ -4208,12 +4288,28 @@ def microsub_feed_remove(request, uid, feed_id):
     if guard:
         return guard
 
+    from django.conf import settings
+    from core.models import SiteConfiguration
     from microsub.models import Channel, Subscription
+    from microsub.views import _unsubscribe_from_websub
 
     channel = get_object_or_404(Channel, uid=uid)
     sub = get_object_or_404(Subscription, pk=feed_id, channel=channel)
-    sub.delete()
-    messages.success(request, "Feed removed.")
+    if sub.managed_by:
+        provider = sub.managed_by.capitalize()
+        messages.info(request, f"This feed is managed from the {provider} integration settings.")
+        return redirect("site_admin:microsub_channel_detail", uid=channel.uid)
+    sub.is_active = False
+    sub.websub_subscribed_at = None
+    sub.websub_requested_at = None
+    sub.websub_expires_at = None
+    sub.save(update_fields=["is_active", "websub_subscribed_at", "websub_requested_at", "websub_expires_at"])
+    if sub.websub_hub:
+        base_url = getattr(settings, "MICROSUB_BASE_URL", "").rstrip("/") or request.build_absolute_uri("/").rstrip("/")
+        _unsubscribe_from_websub(sub, base_url)
+    if SiteConfiguration.get_solo().microsub_unfollow_removes_entries:
+        channel.entries.filter(subscription=sub).update(is_removed=True)
+    messages.success(request, "Feed unfollowed.")
     return redirect("site_admin:microsub_channel_detail", uid=channel.uid)
 
 
@@ -4237,13 +4333,12 @@ def microsub_channel_reorder(request):
     if guard:
         return guard
 
-    from microsub.models import Channel
+    from microsub.views import _apply_channel_order
 
     try:
         data = json.loads(request.body)
         order_list = data.get("channels", [])
-        for i, uid in enumerate(order_list):
-            Channel.objects.filter(uid=uid).update(order=i)
+        _apply_channel_order(order_list)
     except Exception as exc:
         return JsonResponse({"error": str(exc)}, status=400)
 
@@ -4257,6 +4352,8 @@ def microsub_import_opml(request):
         return guard
 
     from microsub.models import Channel, Subscription
+    from microsub.tasks import populate_subscription_metadata
+    from microsub.views import CHANNEL_GLOBAL, CHANNEL_NOTIFICATIONS
     from microsub.opml import parse_opml
     from site_admin.forms import OPMLImportForm
     from django.utils.text import slugify
@@ -4283,6 +4380,8 @@ def microsub_import_opml(request):
                 for group in parsed:
                     channel_name = group["name"]
                     base_slug = slugify(channel_name) or "channel"
+                    if base_slug in {CHANNEL_NOTIFICATIONS, CHANNEL_GLOBAL}:
+                        base_slug = f"{base_slug}-channel"
                     uid = base_slug
                     suffix = 1
                     while Channel.objects.filter(uid=uid).exists():
@@ -4316,6 +4415,8 @@ def microsub_import_opml(request):
                             sub.is_active = True
                             sub.save(update_fields=["is_active"])
                         if created:
+                            base_url = request.build_absolute_uri("/")
+                            transaction.on_commit(lambda sub_id=sub.id, root=base_url: populate_subscription_metadata.delay(sub_id, root))
                             channel_result["feeds_new"] += 1
 
                     results["channels"].append(channel_result)
@@ -4329,3 +4430,99 @@ def microsub_import_opml(request):
                 )
 
     return render(request, "site_admin/microsub/import_opml.html", {"form": form, "results": results})
+
+
+# ---------------------------------------------------------------------------
+# Mastodon
+# ---------------------------------------------------------------------------
+
+@require_http_methods(["GET", "POST"])
+def mastodon_settings(request):
+    """
+    Mastodon settings page. Shows connection status, per-kind syndication
+    defaults, and channel selectors for timeline and notifications.
+    """
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    from microsub.models import Channel
+
+    account = MastodonAccount.get_active()
+    defaults = {d.post_kind: d for d in MastodonSyndicationDefault.objects.all()}
+    channels = Channel.objects.order_by("order", "name")
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+
+        if action == "save_defaults":
+            for kind, obj in defaults.items():
+                obj.publish = request.POST.get(f"publish_{kind}") == "on"
+                obj.save(update_fields=["publish"])
+            if account:
+                tl_channel_id = request.POST.get("timeline_channel") or None
+                notif_channel_id = request.POST.get("notifications_channel") or None
+                timeline_reply_filter = request.POST.get("timeline_reply_filter") or MastodonAccount.TIMELINE_REPLIES_ALL
+                valid_reply_filters = {value for value, _label in MastodonAccount.TIMELINE_REPLY_FILTER_CHOICES}
+                if timeline_reply_filter not in valid_reply_filters:
+                    timeline_reply_filter = MastodonAccount.TIMELINE_REPLIES_ALL
+                account.timeline_channel_id = int(tl_channel_id) if tl_channel_id else None
+                account.notifications_channel_id = int(notif_channel_id) if notif_channel_id else None
+                account.timeline_reply_filter = timeline_reply_filter
+                account.save(update_fields=["timeline_channel", "notifications_channel", "timeline_reply_filter"])
+                from mastodon_integration.subscriptions import sync_managed_subscriptions
+
+                sync_managed_subscriptions(account)
+            messages.success(request, "Mastodon settings saved.")
+            return redirect("site_admin:mastodon_settings")
+
+    return render(
+        request,
+        "site_admin/mastodon/settings.html",
+        {
+            "account": account,
+            "defaults": defaults,
+            "channels": channels,
+            "post_kind_choices": Post.KIND_CHOICES,
+            "timeline_reply_filter_choices": MastodonAccount.TIMELINE_REPLY_FILTER_CHOICES,
+        },
+    )
+
+
+@require_POST
+def mastodon_disconnect(request):
+    """Revoke access token and remove the active MastodonAccount."""
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    from mastodon_integration.subscriptions import deactivate_managed_subscriptions
+
+    account = MastodonAccount.get_active()
+    if account:
+        try:
+            from mastodon_integration.client import get_client
+            client = get_client(account)
+            client.revoke_access_token()
+        except Exception:
+            pass  # Revocation is best-effort; always remove the local record
+        deactivate_managed_subscriptions()
+        account.delete()
+        messages.success(request, "Mastodon account disconnected.")
+    else:
+        messages.info(request, "No active Mastodon account to disconnect.")
+
+    return redirect("site_admin:mastodon_settings")
+
+
+@require_POST
+def mastodon_manual_sync(request):
+    """Manually trigger a timeline + notifications poll."""
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    poll_mastodon_timeline.delay()
+    poll_mastodon_notifications.delay()
+    messages.success(request, "Mastodon sync triggered.")
+    return redirect("site_admin:mastodon_settings")

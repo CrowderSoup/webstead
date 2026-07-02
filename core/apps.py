@@ -1,5 +1,4 @@
 import logging
-import threading
 
 from django.apps import AppConfig
 from django.conf import settings
@@ -18,6 +17,12 @@ def _in_management_cmd() -> bool:
     """True when invoked via manage.py (not a long-lived server process)."""
     import sys
     return bool(sys.argv) and "manage.py" in sys.argv[0]
+
+
+def _in_celery_worker() -> bool:
+    """True when running as any Celery process (worker, beat, etc.)."""
+    import sys
+    return bool(sys.argv) and sys.argv[0].endswith("celery")
 
 
 def _reset_startup_state() -> None:
@@ -69,19 +74,22 @@ class CoreConfig(AppConfig):
         reconcile_enabled = getattr(settings, "THEMES_STARTUP_RECONCILE", True)
         startup_sync_enabled = getattr(settings, "THEME_STARTUP_SYNC_ENABLED", True)
 
-        # Don't start background threads during management commands — the thread
-        # starts importing modules (boto3 via django-storages) concurrently with
-        # the main thread loading command modules, which causes import deadlocks
-        # on Python 3.14+.  Server processes (gunicorn, uvicorn) don't go through
-        # manage.py so they're safe to thread.
         if reconcile_enabled:
             post_migrate.connect(_run_startup_reconcile, dispatch_uid="core.startup_reconcile_migrate")
-            if not _in_management_cmd():
-                threading.Thread(target=_run_startup_reconcile, daemon=True, name="theme-startup-reconcile").start()
+            if not _in_management_cmd() and not _in_celery_worker():
+                try:
+                    from core.tasks import reconcile_themes
+                    reconcile_themes.apply_async(ignore_result=True)
+                except Exception as exc:
+                    logger.warning("Could not queue startup theme reconciliation: %s", exc)
         elif startup_sync_enabled:
             post_migrate.connect(_run_startup_sync, dispatch_uid="core.startup_sync_migrate")
-            if not _in_management_cmd():
-                threading.Thread(target=_run_startup_sync, daemon=True, name="theme-startup-sync").start()
+            if not _in_management_cmd() and not _in_celery_worker():
+                try:
+                    from core.tasks import sync_themes
+                    sync_themes.apply_async(ignore_result=True)
+                except Exception as exc:
+                    logger.warning("Could not queue startup theme sync: %s", exc)
         else:  # pragma: no cover - defensive
             logger.info("Theme startup sync disabled via THEME_STARTUP_SYNC_ENABLED.")
 

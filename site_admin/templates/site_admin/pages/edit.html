@@ -8,10 +8,11 @@
   <div class="flex flex-col gap-6">
     <section class="flex flex-wrap items-center justify-between gap-4">
       <div>
-        <div class="text-sm uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Pages</div>
-        <h1 class="text-2xl font-semibold">
+        <div class="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Content editor</div>
+        <h1 class="mt-2 text-2xl font-semibold">
           {% if page %}Edit page{% else %}New page{% endif %}
         </h1>
+        <p class="mt-1 text-sm text-[color:var(--admin-muted)]">Write content on the left, then configure publish details on the right.</p>
         {% if page %}
           <p class="mt-1 text-sm text-[color:var(--admin-muted)]">Slug: {{ page.slug }}</p>
         {% endif %}

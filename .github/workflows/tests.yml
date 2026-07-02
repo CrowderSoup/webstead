@@ -28,6 +28,7 @@ jobs:
           cat <<'ENV' > .env
           DEBUG=False
           SECRET_KEY=test-secret-key
+          FIELD_ENCRYPTION_KEY=d2Vic3RlYWQtdGVzdC1maWVsZC1rZXktMTIzNDU2Nzg=
           DB_ENGINE=django.db.backends.sqlite3
           AWS_ACCESS_KEY_ID=test
           AWS_SECRET_ACCESS_KEY=test

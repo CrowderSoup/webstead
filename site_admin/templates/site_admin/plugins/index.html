@@ -3,24 +3,22 @@
 {% block title %}Plugins{% endblock %}
 
 {% block content %}
-<div class="site-settings-layout grid gap-6 lg:grid-cols-[220px_1fr]">
-  {% include "site_admin/settings/_sidebar.html" %}
-  <div class="flex flex-col gap-6">
+<div class="flex flex-col gap-6">
+    {% include "site_admin/_section_subnav.html" with section="settings" %}
     <section class="flex flex-wrap items-center justify-between gap-4">
       <div>
-        <div class="text-sm uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Site settings</div>
-        <h1 class="text-2xl font-semibold">Plugins</h1>
+        <div class="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Extensions</div>
+        <h1 class="mt-2 text-2xl font-semibold">Plugins</h1>
         <p class="mt-1 text-sm text-[color:var(--admin-muted)]">Manage installed plugins. Third-party plugins require a server restart after install.</p>
       </div>
       <a
         href="{% url 'site_admin:plugin_install' %}"
-        class="rounded-full bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+        class="rounded-xl bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
       >
         Install plugin
       </a>
     </section>
 
-    {% include "site_admin/_messages.html" with wrapper_class="space-y-2" %}
 
     <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
       {% if plugins %}
@@ -43,7 +41,7 @@
             {% if entry.manage_url %}
             <a
               href="{{ entry.manage_url }}"
-              class="rounded-full border border-[color:var(--admin-border)] px-3 py-1 text-sm font-semibold transition hover:bg-[color:var(--admin-bg)]"
+              class="rounded-xl border border-[color:var(--admin-border)] px-3 py-1 text-sm font-semibold transition hover:bg-[color:var(--admin-bg)]"
             >
               Manage
             </a>
@@ -53,7 +51,7 @@
               {% csrf_token %}
               <button
                 type="submit"
-                class="rounded-full border border-[color:var(--admin-border)] px-3 py-1 text-sm font-semibold transition hover:bg-[color:var(--admin-bg)]"
+                class="rounded-xl border border-[color:var(--admin-border)] px-3 py-1 text-sm font-semibold transition hover:bg-[color:var(--admin-bg)]"
               >
                 Update
               </button>
@@ -64,7 +62,7 @@
               {% csrf_token %}
               <button
                 type="submit"
-                class="rounded-full border border-red-300 px-3 py-1 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                class="rounded-xl border border-red-300 px-3 py-1 text-sm font-semibold text-red-600 transition hover:bg-red-50"
                 onclick="return confirm('Remove plugin {{ entry.install.name }}? This cannot be undone.');"
               >
                 Remove

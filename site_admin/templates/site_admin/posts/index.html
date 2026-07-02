@@ -4,20 +4,32 @@
 
 {% block content %}
   <div class="flex flex-col gap-6">
-    <section class="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h1 class="text-2xl font-semibold">Posts</h1>
-        <p class="mt-1 text-sm text-[color:var(--admin-muted)]">Search, filter, and jump into edits fast.</p>
+    <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Content</p>
+          <h1 class="mt-2 text-2xl font-semibold">Posts</h1>
+          <p class="mt-1 text-sm text-[color:var(--admin-muted)]">Search, filter, and jump into edits fast.</p>
+        </div>
+        <a
+          href="{% url 'site_admin:post_create' %}"
+          class="rounded-xl bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+        >
+          + New post
+        </a>
       </div>
-      <a
-        href="{% url 'site_admin:post_create' %}"
-        class="rounded-full bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
-      >
-        New post
-      </a>
+      <div class="mt-4 flex flex-wrap gap-2">
+        <span class="rounded-full border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Filter by kind</span>
+        <span class="rounded-full border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Filter by status</span>
+        <span class="rounded-full border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">HTMX live updates</span>
+      </div>
     </section>
 
     <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+      <div>
+        <h2 class="text-base font-semibold">Filter Posts</h2>
+        <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Use search and filters to narrow the list.</p>
+      </div>
       <form
         id="post-filter"
         method="get"

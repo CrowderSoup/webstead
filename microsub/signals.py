@@ -15,7 +15,8 @@ def webmention_to_notifications(sender, instance, created, **kwargs):
     if not instance.is_incoming:
         return
 
-    from .models import Channel, Entry
+    from .models import Channel
+    from .views import _store_entries
 
     channel = Channel.objects.filter(uid="notifications").first()
     if not channel:
@@ -45,13 +46,10 @@ def webmention_to_notifications(sender, instance, created, **kwargs):
     uid = f"webmention:{instance.pk}"
 
     try:
-        Entry.objects.create(
-            channel=channel,
-            uid=uid,
-            data=jf2,
-            published=instance.created_at,
-            subscription=None,
-            author_url=instance.source,
+        _store_entries(
+            channel,
+            None,
+            [{**jf2, "_uid": uid}],
         )
     except Exception:
         logger.exception("Failed to create notifications entry for webmention %s", instance.pk)

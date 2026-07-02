@@ -3,13 +3,12 @@
 {% block title %}User agents{% endblock %}
 
 {% block content %}
-  <div class="analytics-layout grid gap-6 lg:grid-cols-[220px_1fr]">
-    {% include "site_admin/analytics/_sidebar.html" %}
-    <div class="flex flex-col gap-6">
+  <div class="flex flex-col gap-6">
+    {% include "site_admin/_section_subnav.html" with section="analytics" %}
       <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
         <div class="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div class="text-sm uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Analytics</div>
+            <div class="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Analytics</div>
             <h1 class="text-2xl font-semibold">User agents</h1>
             <p class="mt-1 text-sm text-[color:var(--admin-muted)]">
               Search and manage user agents from {{ start_date|date:"M j, Y" }} to {{ end_date|date:"M j, Y" }}.
@@ -17,7 +16,7 @@
           </div>
           <a
             href="{% url 'site_admin:analytics_dashboard' %}"
-            class="rounded-full border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+            class="rounded-xl border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
           >
             Back to overview
           </a>
@@ -28,7 +27,7 @@
             {% for preset in presets.values %}
               <a
                 href="{% url 'site_admin:analytics_user_agents' %}?start={{ preset.start }}&end={{ preset.end }}{% if query %}&q={{ query|urlencode }}{% endif %}"
-                class="rounded-full border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)] transition hover:bg-[color:var(--admin-bg)]"
+                class="rounded-xl border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)] transition hover:bg-[color:var(--admin-bg)]"
               >
                 {{ preset.label }}
               </a>
@@ -43,7 +42,7 @@
                 value="{{ query }}"
                 id="analytics-query"
                 placeholder="bot, curl, Mozilla"
-                class="w-52 rounded-full border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm"
+                class="w-52 rounded-xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm"
               />
             </label>
             <label for="analytics-start" class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
@@ -53,7 +52,7 @@
                 name="start"
                 value="{{ start_date|date:'Y-m-d' }}"
                 id="analytics-start"
-                class="w-40 rounded-full border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm"
+                class="w-40 rounded-xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm"
               />
             </label>
             <label for="analytics-end" class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
@@ -63,19 +62,18 @@
                 name="end"
                 value="{{ end_date|date:'Y-m-d' }}"
                 id="analytics-end"
-                class="w-40 rounded-full border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm"
+                class="w-40 rounded-xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm"
               />
             </label>
             <button
               type="submit"
-              class="rounded-full bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+              class="rounded-xl bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
             >
               Update
             </button>
           </form>
         </div>
 
-        {% include "site_admin/_messages.html" with wrapper_class="mt-6 space-y-2" %}
       </section>
 
       <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
@@ -97,7 +95,7 @@
                 <input type="hidden" name="next" value="{{ request.get_full_path }}" />
                 <button
                   type="submit"
-                  class="rounded-full border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+                  class="rounded-xl border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
                 >
                   Ignore all matches
                 </button>
@@ -152,7 +150,7 @@
                     <td class="px-4 py-3 text-[color:var(--admin-ink)]">{{ row.last_seen|date:"M j, Y" }}</td>
                     <td class="px-4 py-3">
                       {% if row.user_agent in ignored_user_agents %}
-                        <span class="rounded-full bg-[color:var(--admin-bg)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-muted)]">
+                        <span class="rounded-xl bg-[color:var(--admin-bg)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-muted)]">
                           Ignored
                         </span>
                       {% else %}
@@ -160,7 +158,7 @@
                           type="submit"
                           name="user_agents"
                           value="{{ row.user_agent }}"
-                          class="rounded-full border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+                          class="rounded-xl border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
                         >
                           Ignore
                         </button>
@@ -183,14 +181,13 @@
             </p>
             <button
               type="submit"
-              class="rounded-full border border-[color:var(--admin-border)] px-4 py-2 text-xs font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+              class="rounded-xl border border-[color:var(--admin-border)] px-4 py-2 text-xs font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
             >
               Ignore selected
             </button>
           </div>
         </form>
       </section>
-    </div>
   </div>
 {% endblock %}
 

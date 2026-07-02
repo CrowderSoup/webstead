@@ -1,10 +1,5 @@
 <form id="menu-form" method="post" class="flex flex-col gap-6" data-menu-form>
   {% csrf_token %}
-  {% if saved %}
-    <div class="rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] px-4 py-3 text-sm text-[color:var(--admin-ink)]">
-      Menu saved.
-    </div>
-  {% endif %}
   {% if form.non_field_errors %}
     <div class="rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] px-4 py-3 text-sm text-[color:var(--admin-warn)]">
       {{ form.non_field_errors }}

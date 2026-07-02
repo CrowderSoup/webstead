@@ -178,12 +178,11 @@
       return;
     }
 
-    const iconBase = "https://unpkg.com/leaflet@1.9.4/dist/images/";
-    L.Icon.Default.mergeOptions({
-      iconRetinaUrl: `${iconBase}marker-icon-2x.png`,
-      iconUrl: `${iconBase}marker-icon.png`,
-      shadowUrl: `${iconBase}marker-shadow.png`,
-    });
+    const styles = getComputedStyle(document.documentElement);
+    const accent = styles.getPropertyValue("--accent").trim() || "#d56b30";
+    const accentDeep =
+      styles.getPropertyValue("--accent-deep").trim() || accent;
+    const panel = styles.getPropertyValue("--panel").trim() || "#ffffff";
 
     document.querySelectorAll("[data-checkin-map]").forEach((el) => {
       if (el.dataset.mapReady === "true") {
@@ -202,7 +201,22 @@
           '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19,
       }).addTo(map);
-      L.marker([lat, lng]).addTo(map);
+      L.circleMarker([lat, lng], {
+        radius: 14,
+        weight: 1.5,
+        color: accentDeep,
+        opacity: 0.45,
+        fillColor: accent,
+        fillOpacity: 0.16,
+        interactive: false,
+      }).addTo(map);
+      L.circleMarker([lat, lng], {
+        radius: 7.5,
+        weight: 3,
+        color: panel,
+        fillColor: accent,
+        fillOpacity: 1,
+      }).addTo(map);
 
       el.dataset.mapReady = "true";
       window.setTimeout(() => map.invalidateSize(), 120);

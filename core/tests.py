@@ -252,7 +252,6 @@ class ThemeStartupReconcileTests(TestCase):
                 THEME_STORAGE_PREFIX="themes",
                 THEMES_STARTUP_RECONCILE=True,
             ), mock.patch("core.themes.get_theme_storage", return_value=storage), \
-                    mock.patch("core.apps.threading.Thread", _SyncThread), \
                     mock.patch("core.apps._in_management_cmd", return_value=False):
                 with self.assertLogs("core.apps", level="INFO") as logs:
                     CoreConfig("core", importlib.import_module("core")).ready()
@@ -267,7 +266,6 @@ class ThemeStartupReconcileTests(TestCase):
     def test_ready_logs_warning_when_reconcile_unavailable(self):
         with override_settings(THEMES_STARTUP_RECONCILE=True):
             with mock.patch("core.apps.reconcile_installed_themes", side_effect=Exception("boom")), \
-                    mock.patch("core.apps.threading.Thread", _SyncThread), \
                     mock.patch("core.apps._in_management_cmd", return_value=False):
                 with self.assertLogs("core.apps", level="WARNING") as logs:
                     CoreConfig("core", importlib.import_module("core")).ready()

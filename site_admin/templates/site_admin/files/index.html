@@ -4,24 +4,31 @@
 
 {% block content %}
   <div class="flex flex-col gap-6">
-    <section class="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h1 class="text-2xl font-semibold">Files</h1>
-        <p class="mt-1 text-sm text-[color:var(--admin-muted)]">Browse uploads and grab URLs quickly.</p>
+    <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Media Library</p>
+          <h1 class="mt-2 text-2xl font-semibold">Files</h1>
+          <p class="mt-1 text-sm text-[color:var(--admin-muted)]">Browse uploads, copy URLs, and manage attachment metadata.</p>
+        </div>
+        <a
+          href="{% url 'site_admin:file_create' %}"
+          class="rounded-xl bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+        >
+          + Upload file
+        </a>
       </div>
-      <a
-        href="{% url 'site_admin:file_create' %}"
-        class="rounded-full bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
-      >
-        Upload file
-      </a>
     </section>
 
     <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
       {% if page_obj.object_list %}
+        <div class="mb-4 flex items-center justify-between gap-3 text-xs">
+          <div class="font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">{{ paginator.count }} total files</div>
+          <div class="text-[color:var(--admin-muted)]">Page {{ page_obj.number }} of {{ paginator.num_pages }}</div>
+        </div>
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {% for asset in page_obj.object_list %}
-            <div class="overflow-hidden rounded-2xl border border-[color:var(--admin-border)] bg-white">
+            <div class="overflow-hidden rounded-2xl border border-[color:var(--admin-border)] bg-white shadow-sm transition hover:-translate-y-0.5">
               <a href="{{ asset.file.url }}" class="block" target="_blank" rel="noopener">
                 {% if asset.kind == "image" %}
                   <img
@@ -39,11 +46,15 @@
                 {% endif %}
               </a>
               <div class="p-4">
-                <div class="truncate text-sm font-semibold" title="{{ asset.caption|default:asset.alt_text|default:asset }}">
-                  {{ asset.caption|default:asset.alt_text|default:asset }}
+                <div class="flex items-start justify-between gap-2">
+                  <div class="truncate text-sm font-semibold" title="{{ asset.caption|default:asset.alt_text|default:asset }}">
+                    {{ asset.caption|default:asset.alt_text|default:asset }}
+                  </div>
+                  <span class="rounded-full border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+                    {{ asset.get_kind_display }}
+                  </span>
                 </div>
                 <div class="mt-1 flex items-center justify-between text-xs text-[color:var(--admin-muted)]">
-                  <span>{{ asset.get_kind_display }}</span>
                   <span>{{ asset.created_at|date:"M j, Y" }}</span>
                 </div>
                 <div class="mt-3 flex flex-wrap items-center gap-3 text-xs">

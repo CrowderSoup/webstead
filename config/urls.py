@@ -10,6 +10,7 @@ urlpatterns = [
     path('', include('micropub.urls')),
     path('', include('microsub.urls')),
     path("analytics/", include("analytics.urls")),
+    path("", include("mastodon_integration.urls")),
 ]
 
 handler500 = "core.views.server_error"

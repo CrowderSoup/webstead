@@ -3,24 +3,22 @@
 {% block title %}Widgets{% endblock %}
 
 {% block content %}
-<div class="site-settings-layout grid gap-6 lg:grid-cols-[220px_1fr]">
-  {% include "site_admin/settings/_sidebar.html" %}
-  <div class="flex flex-col gap-6">
+<div class="flex flex-col gap-6">
+    {% include "site_admin/_section_subnav.html" with section="settings" %}
     <section class="flex flex-wrap items-center justify-between gap-4">
       <div>
-        <div class="text-sm uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Site settings &rsaquo; <a href="{% url 'site_admin:plugin_list' %}" class="hover:text-[color:var(--admin-ink)]">Plugins</a> &rsaquo; Widgets</div>
+        <div class="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Site settings &rsaquo; <a href="{% url 'site_admin:plugin_list' %}" class="hover:text-[color:var(--admin-ink)]">Plugins</a> &rsaquo; Widgets</div>
         <h1 class="text-2xl font-semibold">Widgets</h1>
         <p class="mt-1 text-sm text-[color:var(--admin-muted)]">Configure widgets shown in theme areas.</p>
       </div>
       <a
         href="{% url 'site_admin:widget_add' %}"
-        class="rounded-full bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+        class="rounded-xl bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
       >
         Add widget
       </a>
     </section>
 
-    {% include "site_admin/_messages.html" with wrapper_class="space-y-2" %}
 
     {% if not areas %}
     <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
@@ -35,15 +33,17 @@
         <li class="flex flex-wrap items-center justify-between gap-4 py-4 first:pt-0 last:pb-0">
           <div>
             <p class="font-semibold">
-              {{ widget.widget_type }}
-              {% if not widget.is_active %}<span class="ml-2 rounded-full bg-[color:var(--admin-border)] px-2 py-0.5 text-xs text-[color:var(--admin-muted)]">Inactive</span>{% endif %}
+              {{ widget.display_title }}
+              {% if not widget.is_active %}<span class="ml-2 rounded-xl bg-[color:var(--admin-border)] px-2 py-0.5 text-xs text-[color:var(--admin-muted)]">Inactive</span>{% endif %}
             </p>
-            <p class="text-sm text-[color:var(--admin-muted)]">Area: {{ widget.area }} &middot; Order: {{ widget.order }}</p>
+            <p class="text-sm text-[color:var(--admin-muted)]">
+              {% if widget.configured_title %}{{ widget.widget_type_label }} &middot; {% endif %}Area: {{ widget.area }} &middot; Order: {{ widget.order }}
+            </p>
           </div>
           <div class="flex gap-2">
             <a
               href="{% url 'site_admin:widget_edit' pk=widget.pk %}"
-              class="rounded-full border border-[color:var(--admin-border)] px-3 py-1 text-sm font-semibold transition hover:bg-[color:var(--admin-bg)]"
+              class="rounded-xl border border-[color:var(--admin-border)] px-3 py-1 text-sm font-semibold transition hover:bg-[color:var(--admin-bg)]"
             >
               Edit
             </a>
@@ -51,7 +51,7 @@
               {% csrf_token %}
               <button
                 type="submit"
-                class="rounded-full border border-red-300 px-3 py-1 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                class="rounded-xl border border-red-300 px-3 py-1 text-sm font-semibold text-red-600 transition hover:bg-red-50"
                 onclick="return confirm('Delete this widget?');"
               >
                 Delete

@@ -2,7 +2,15 @@ from django.db import IntegrityError
 from django.test import TestCase
 from django.utils import timezone
 
-from microsub.models import BlockedUser, Channel, Entry, MutedUser, Subscription
+from microsub.models import (
+    BlockedUser,
+    Channel,
+    Entry,
+    EntryCategory,
+    EntrySearchToken,
+    MutedUser,
+    Subscription,
+)
 
 
 class ChannelModelTests(TestCase):
@@ -61,6 +69,10 @@ class SubscriptionModelTests(TestCase):
         sub = Subscription.objects.create(channel=self.channel, url="https://example.com/")
         self.assertTrue(sub.is_active)
 
+    def test_callback_token_is_generated_on_save(self):
+        sub = Subscription.objects.create(channel=self.channel, url="https://example.com/")
+        self.assertTrue(sub.websub_callback_token)
+
 
 class EntryModelTests(TestCase):
     def setUp(self):
@@ -110,6 +122,40 @@ class EntryModelTests(TestCase):
         entries = list(self.channel.entries.all())
         self.assertEqual(entries[0], e2)
         self.assertEqual(entries[1], e1)
+
+    def test_save_normalizes_uid_arrays_and_search_metadata(self):
+        entry = self._make_entry(
+            uid="entry-2",
+            data={
+                "type": "entry",
+                "_uid": "internal-uid",
+                "name": "Hello Search",
+                "content": {"text": "hello world"},
+                "category": "Python",
+                "like-of": "https://liked.example/post",
+                "_source": {"url": "https://feeds.example/news.xml"},
+                "author": {"type": "card", "url": "https://authors.example/alice/"},
+            },
+        )
+        entry.refresh_from_db()
+        self.assertEqual(entry.data["uid"], "internal-uid")
+        self.assertEqual(entry.data["like-of"], ["https://liked.example/post"])
+        self.assertEqual(entry.author_url, "https://authors.example/alice/")
+        self.assertEqual(entry.source_url, "https://feeds.example/news.xml")
+        self.assertTrue(entry.kind_like)
+        self.assertTrue(EntrySearchToken.objects.filter(entry=entry, token="hello").exists())
+        self.assertTrue(EntryCategory.objects.filter(entry=entry, value="python").exists())
+
+    def test_explicit_author_and_source_fields_are_preserved_when_data_is_sparse(self):
+        entry = self._make_entry(
+            uid="entry-3",
+            data={"type": "entry"},
+            author_url="https://authors.example/alice/",
+            source_url="https://feeds.example/news.xml",
+        )
+        entry.refresh_from_db()
+        self.assertEqual(entry.author_url, "https://authors.example/alice/")
+        self.assertEqual(entry.source_url, "https://feeds.example/news.xml")
 
 
 class MutedUserModelTests(TestCase):

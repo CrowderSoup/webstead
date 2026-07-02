@@ -14,11 +14,15 @@ dependencies = [
   "django-taggit>=6.1.0",
   "markdown>=3.9",
   "markdownify>=0.12.0",
+  "celery[redis]>=5.3",
+  "django-celery-beat>=2.7",
   "feedparser>=6.0.11",
   "mf2py>=2.0.1",
   "psycopg>=3.2.12",
   "psycopg2-binary>=2.9.11",
   "python-frontmatter>=1.1.0",
+  "Mastodon.py>=1.8",
+  "django-encrypted-model-fields>=0.6",
   "requests>=2.32.5",
 ]
 

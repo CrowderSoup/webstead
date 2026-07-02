@@ -102,6 +102,8 @@ urlpatterns = [
     ),
     path("settings/errors/", views.error_log_list, name="error_log_list"),
     path("settings/errors/<int:log_id>/", views.error_log_detail, name="error_log_detail"),
+    path("settings/tasks/", views.task_log_list, name="task_log_list"),
+    path("settings/tasks/<str:task_id>/", views.task_log_detail, name="task_log_detail"),
     path("settings/indieauth/", views.indieauth_settings, name="indieauth_settings"),
     path(
         "settings/indieauth/clients/new/",
@@ -201,4 +203,8 @@ urlpatterns = [
     path("microsub/channels/<slug:uid>/feeds/add/", views.microsub_feed_add, name="microsub_feed_add"),
     path("microsub/channels/<slug:uid>/feeds/<int:feed_id>/remove/", views.microsub_feed_remove, name="microsub_feed_remove"),
     path("microsub/import/", views.microsub_import_opml, name="microsub_import_opml"),
+    # Mastodon
+    path("mastodon/", views.mastodon_settings, name="mastodon_settings"),
+    path("mastodon/disconnect/", views.mastodon_disconnect, name="mastodon_disconnect"),
+    path("mastodon/sync/", views.mastodon_manual_sync, name="mastodon_manual_sync"),
 ]

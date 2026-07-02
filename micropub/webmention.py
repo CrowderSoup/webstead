@@ -1,5 +1,4 @@
 import logging
-import threading
 import re
 import socket
 import urllib.error
@@ -20,7 +19,6 @@ BRIDGY_PUBLISH_TARGETS = (
     ("bridgy_publish_bluesky", "https://brid.gy/publish/bluesky"),
     ("bridgy_publish_flickr", "https://brid.gy/publish/flickr"),
     ("bridgy_publish_github", "https://brid.gy/publish/github"),
-    ("bridgy_publish_mastodon", "https://brid.gy/publish/mastodon"),
 )
 
 
@@ -171,6 +169,14 @@ def _post_from_url(url: str) -> Optional[Post]:
         return None
 
 
+def _is_globally_blocked_target(target_url: str) -> bool:
+    from microsub.models import BlockedUser
+    from microsub.utils import url_matches_profile_prefix
+
+    blocked_urls = BlockedUser.objects.filter(channel__isnull=True).values_list("url", flat=True)
+    return any(url_matches_profile_prefix(blocked_url, target_url) for blocked_url in blocked_urls)
+
+
 def _send_webmention_request(
     source_url: str,
     target_url: str,
@@ -244,6 +250,20 @@ def send_webmention(
     mention_type: str = Webmention.MENTION,
     local_post: Optional[Post] = None,
 ) -> Webmention:
+    if _is_globally_blocked_target(target_url):
+        if not local_post:
+            local_post = _post_from_url(source_url)
+        mention_type = mention_type if mention_type in dict(Webmention.MENTION_CHOICES) else Webmention.MENTION
+        return Webmention.objects.create(
+            source=source_url,
+            target=target_url,
+            mention_type=mention_type,
+            status=Webmention.REJECTED,
+            target_post=local_post,
+            error="Target blocked by Microsub global block",
+            is_incoming=False,
+        )
+
     status, error = _send_webmention_request(source_url, target_url, mention_type)
     if status == Webmention.REJECTED and "No webmention endpoint" not in error:
         retry_status, retry_error = _send_webmention_request(
@@ -267,6 +287,12 @@ def send_webmention(
 
 
 def resend_webmention(webmention: Webmention) -> Webmention:
+    if _is_globally_blocked_target(webmention.target):
+        webmention.status = Webmention.REJECTED
+        webmention.error = "Target blocked by Microsub global block"
+        webmention.save(update_fields=["status", "error", "updated_at"])
+        return webmention
+
     status, error = _send_webmention_request(webmention.source, webmention.target, webmention.mention_type)
     if status == Webmention.REJECTED and "No webmention endpoint" not in error:
         retry_status, retry_error = _send_webmention_request(
@@ -280,9 +306,25 @@ def resend_webmention(webmention: Webmention) -> Webmention:
     return webmention
 
 
+def _resolve_mention_type(post: Post, target: str) -> str:
+    if target == post.like_of:
+        return Webmention.LIKE
+    if target == post.repost_of:
+        return Webmention.REPOST
+    if target == post.in_reply_to:
+        return Webmention.REPLY
+    if target == post.bookmark_of:
+        return Webmention.BOOKMARK
+    return Webmention.MENTION
+
+
 def send_webmentions_for_post(post: Post, source_url: str) -> None:
     source_host = urllib.parse.urlparse(source_url).netloc
-    targets = [url for url in _extract_targets(post) if urllib.parse.urlparse(url).netloc != source_host]
+    targets = [
+        url
+        for url in _extract_targets(post)
+        if urllib.parse.urlparse(url).netloc != source_host and not _is_globally_blocked_target(url)
+    ]
     existing_targets = set()
     if targets:
         existing_targets = set(
@@ -323,9 +365,7 @@ def _bridgy_publish_targets(settings_obj) -> list[str]:
 
 
 def send_bridgy_publish_webmentions(post: Post, source_url: str, settings_obj) -> None:
-    if post.kind in (Post.LIKE, Post.REPLY, Post.REPOST):
-        return
-    targets = _bridgy_publish_targets(settings_obj)
+    targets = [target for target in _bridgy_publish_targets(settings_obj) if not _is_globally_blocked_target(target)]
     if not targets:
         return
     existing_targets = set(
@@ -349,28 +389,17 @@ def queue_webmentions_for_post(
     include_bridgy: bool = False,
     settings_obj=None,
 ) -> None:
-    if settings.RUNNING_TESTS:
-        send_webmentions_for_post(post, source_url)
-        if include_bridgy:
-            send_bridgy_publish_webmentions(post, source_url, settings_obj)
-        return
+    from micropub.tasks import dispatch_webmentions
 
-    def _runner():
-        try:
-            send_webmentions_for_post(post, source_url)
-        except Exception:
-            logger.exception(
-                "Webmention dispatch failed",
-                extra={"webmention_source": source_url},
-            )
-        if include_bridgy:
-            try:
-                send_bridgy_publish_webmentions(post, source_url, settings_obj)
-            except Exception:
-                logger.exception(
-                    "Bridgy publish webmention dispatch failed",
-                    extra={"webmention_source": source_url},
-                )
+    dispatch_webmentions.delay(post.id, source_url, include_bridgy=include_bridgy)
 
-    thread = threading.Thread(target=_runner, name="webmention-dispatch", daemon=True)
-    thread.start()
+    # Dispatch Mastodon syndication unconditionally — the task itself checks
+    # _should_syndicate() and idempotency, so it is safe to call on every save.
+    try:
+        from mastodon_integration.tasks import publish_post_to_mastodon
+        publish_post_to_mastodon.delay(post.id)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            "queue_webmentions_for_post: failed to dispatch publish_post_to_mastodon"
+        )

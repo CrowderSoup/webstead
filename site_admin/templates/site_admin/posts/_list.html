@@ -1,4 +1,10 @@
 {% if page_obj.object_list %}
+  <div class="mb-3 flex items-center justify-between gap-3 text-xs">
+    <div class="font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+      {{ paginator.count }} total posts
+    </div>
+    <div class="text-[color:var(--admin-muted)]">Showing page {{ page_obj.number }}</div>
+  </div>
   <div class="hidden md:block">
     <div class="overflow-hidden rounded-2xl border border-[color:var(--admin-border)]">
       <table class="w-full text-left text-sm">
@@ -13,7 +19,7 @@
         </thead>
         <tbody>
           {% for post in page_obj.object_list %}
-            <tr class="border-t border-[color:var(--admin-border)]">
+            <tr class="border-t border-[color:var(--admin-border)] hover:bg-[color:var(--admin-bg)]/40">
               <td class="px-4 py-3 font-semibold">{{ post.title }}</td>
               <td class="px-4 py-3 text-[color:var(--admin-muted)]">{{ post.get_kind_display }}</td>
               <td class="px-4 py-3">

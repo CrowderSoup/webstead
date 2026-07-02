@@ -3,9 +3,8 @@
 {% block title %}Add feed – {{ channel.name }}{% endblock %}
 
 {% block content %}
-  <div class="site-settings-layout grid gap-6 lg:grid-cols-[220px_1fr]">
-    {% include "site_admin/settings/_sidebar.html" %}
-    <div class="flex flex-col gap-6">
+  <div class="flex flex-col gap-6">
+    {% include "site_admin/_section_subnav.html" with section="settings" %}
       <section class="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div class="text-sm uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">{{ channel.name }}</div>
@@ -22,7 +21,6 @@
         </a>
       </section>
 
-      {% include "site_admin/_messages.html" with wrapper_class="space-y-2" %}
 
       <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
         <form method="post" class="flex flex-col gap-4 max-w-md">
@@ -50,6 +48,5 @@
           </div>
         </form>
       </section>
-    </div>
   </div>
 {% endblock %}

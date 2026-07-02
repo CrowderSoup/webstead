@@ -1,0 +1,50 @@
+{% with current=request.resolver_match.url_name|default:'' %}
+  <aside class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-4 shadow-sm">
+    <div class="space-y-1">
+      <div class="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">
+        Quick Create
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <a
+          href="{% url 'site_admin:post_create' %}"
+          class="rounded-xl bg-[color:var(--admin-accent)] px-3 py-2 text-center text-xs font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+        >
+          New Post
+        </a>
+        <a
+          href="{% url 'site_admin:page_create' %}"
+          class="rounded-xl border border-[color:var(--admin-border)] px-3 py-2 text-center text-xs font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+        >
+          New Page
+        </a>
+      </div>
+    </div>
+
+    <nav class="mt-5 space-y-4" aria-label="Site admin navigation">
+      <div class="space-y-1">
+        <div class="px-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Main</div>
+        <a href="{% url 'site_admin:dashboard' %}" class="site-admin-side-link {% nav_active 'dashboard' %}">Dashboard</a>
+        <a href="{% url 'site_admin:post_list' %}" class="site-admin-side-link {% nav_active 'posts' %}">Posts</a>
+        <a href="{% url 'site_admin:page_list' %}" class="site-admin-side-link {% nav_active 'pages' %}">Pages</a>
+        <a href="{% url 'site_admin:file_list' %}" class="site-admin-side-link {% nav_active 'files' %}">Files</a>
+      </div>
+
+      <div class="space-y-1">
+        <div class="px-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Engagement</div>
+        <a href="{% url 'site_admin:interactions' %}" class="site-admin-side-link {% nav_active 'interactions' %}">
+          Interactions
+          {% if interactions_pending_count %}
+            <span class="site-admin-side-badge">{{ interactions_pending_count }}</span>
+          {% endif %}
+        </a>
+      </div>
+
+      <div class="space-y-1">
+        <div class="px-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Operations</div>
+        <a href="{% url 'site_admin:analytics_dashboard' %}" class="site-admin-side-link {% nav_active 'analytics' %}">Analytics</a>
+        <a href="{% url 'site_admin:site_settings' %}" class="site-admin-side-link {% nav_active 'settings' %}">Site Settings</a>
+        <a href="{% url 'site_admin:profile_edit' %}" class="site-admin-side-link {% nav_active 'profile' %}">Profile</a>
+      </div>
+    </nav>
+  </aside>
+{% endwith %}

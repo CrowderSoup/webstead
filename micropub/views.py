@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import mimetypes
@@ -10,6 +11,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 from urllib.request import Request, urlopen
 from uuid import uuid4
+
+from django.core.cache import cache
 from django.http import (
     HttpResponse,
     HttpResponseBadRequest,
@@ -34,7 +37,7 @@ from core.models import Page, SiteConfiguration, RequestErrorLog
 from core.request_logs import extract_response_error, log_request_error
 from files.models import Attachment, File
 from .models import Webmention
-from .webmention import BRIDGY_PUBLISH_TARGETS, queue_webmentions_for_post, verify_webmention_source
+from .webmention import BRIDGY_PUBLISH_TARGETS, queue_webmentions_for_post
 
 DEFAULT_TOKEN_ENDPOINT = "https://tokens.indieauth.com/token"
 logger = logging.getLogger(__name__)
@@ -702,22 +705,18 @@ def _attach_uploaded_photos(request, post):
 
 
 def _attach_remote_photos(data, post):
+    from micropub.tasks import download_post_photo
     for photo_item in data.get("photo", []):
         if isinstance(photo_item, str) and photo_item and not photo_item.startswith("<UploadedFile"):
             if photo_item.startswith("!["):
                 post.content += f"\n{photo_item}\n"
                 continue
-            if _download_and_attach_photo(post, photo_item):
-                continue
-            post.content += f"\n![Photo]({photo_item})\n"
+            transaction.on_commit(lambda u=photo_item: download_post_photo.delay(post.pk, u))
         elif isinstance(photo_item, dict):
             url = photo_item.get("url")
             alt_text = photo_item.get("alt") or ""
             if isinstance(url, str) and url:
-                if _download_and_attach_photo(post, url, alt_text=alt_text):
-                    continue
-                alt_fragment = alt_text if alt_text else "Photo"
-                post.content += f"\n![{alt_fragment}]({url})\n"
+                transaction.on_commit(lambda u=url, a=alt_text: download_post_photo.delay(post.pk, u, a))
     if data.get("photo"):
         post.save()
 
@@ -861,6 +860,14 @@ def _authorized(request):
             request.micropub_auth_error = "introspect_inactive"
         return authorized, scopes
 
+    cache_key = "token_introspect:" + hashlib.sha256(token.encode()).hexdigest()
+    cached = cache.get(cache_key)
+    if cached is not None:
+        authorized, scopes = cached
+        if not authorized:
+            request.micropub_auth_error = "introspect_inactive"
+        return authorized, scopes
+
     introspect_url = request.build_absolute_uri(reverse("indieauth-introspect"))
     body = urlencode({"token": token}).encode("utf-8")
     verification_request = Request(
@@ -899,6 +906,7 @@ def _authorized(request):
             active = _first_value({"active": active}, "active")
         if active is False or (isinstance(active, str) and active.lower() == "false"):
             request.micropub_auth_error = "introspect_inactive"
+            cache.set(cache_key, (False, []), timeout=30)
             return False, []
 
         error = token_data.get("error")
@@ -906,10 +914,12 @@ def _authorized(request):
             error = _first_value({"error": error}, "error")
         if error:
             request.micropub_auth_error = f"introspect_error:{error}"
+            cache.set(cache_key, (False, []), timeout=30)
             return False, []
 
         scopes = _parse_scope(token_data.get("scope", []))
 
+    cache.set(cache_key, (True, scopes), timeout=300)
     return True, scopes
 
 
@@ -1142,39 +1152,22 @@ class WebmentionView(View):
 
         mention_type = mention_type if mention_type in dict(Webmention.MENTION_CHOICES) else Webmention.MENTION
 
-        verified, verify_error, fetch_failed = verify_webmention_source(source, target)
-        if not verified:
-            if fetch_failed:
-                status = Webmention.PENDING
-                response_status = 202
-            else:
-                status = Webmention.REJECTED
-                response_status = 400
-            logger.info(
-                "Webmention verification failed",
-                extra={
-                    "webmention_source": source,
-                    "webmention_target": target,
-                    "webmention_error": verify_error,
-                },
-            )
-        else:
-            status = Webmention.ACCEPTED if _is_trusted_domain(source) else Webmention.PENDING
-            response_status = 202
-
         defaults = {
             "mention_type": mention_type,
-            "status": status,
+            "status": Webmention.PENDING,
             "target_post": target_post,
-            "error": verify_error or "",
+            "error": "",
             "is_incoming": True,
         }
         try:
-            Webmention.objects.update_or_create(source=source, target=target, defaults=defaults)
+            obj, _ = Webmention.objects.update_or_create(source=source, target=target, defaults=defaults)
         except IntegrityError:
             Webmention.objects.filter(source=source, target=target).update(**defaults)
+            obj = Webmention.objects.get(source=source, target=target)
 
-        return HttpResponse(status=response_status)
+        from micropub.tasks import verify_and_update_webmention
+        transaction.on_commit(lambda: verify_and_update_webmention.delay(obj.id))
+        return HttpResponse(status=202)
 
 
 class WebmentionSubmitView(View):
@@ -1228,35 +1221,20 @@ class WebmentionSubmitView(View):
             )
             return redirect(next_url)
 
-        verified, verify_error, fetch_failed = verify_webmention_source(source, target)
-        if not verified:
-            if fetch_failed:
-                status = Webmention.PENDING
-            else:
-                status = Webmention.REJECTED
-            logger.info(
-                "Webmention verification failed",
-                extra={
-                    "webmention_source": source,
-                    "webmention_target": target,
-                    "webmention_error": verify_error,
-                    "indieauth_me": indieauth_me,
-                },
-            )
-        else:
-            status = Webmention.ACCEPTED if _is_trusted_domain(source) else Webmention.PENDING
-
         mention_type = mention_type if mention_type in dict(Webmention.MENTION_CHOICES) else Webmention.MENTION
         defaults = {
             "mention_type": mention_type,
-            "status": status,
+            "status": Webmention.PENDING,
             "target_post": target_post,
-            "error": verify_error or "",
+            "error": "",
             "is_incoming": True,
         }
         try:
-            Webmention.objects.update_or_create(source=source, target=target, defaults=defaults)
+            obj, _ = Webmention.objects.update_or_create(source=source, target=target, defaults=defaults)
         except IntegrityError:
             Webmention.objects.filter(source=source, target=target).update(**defaults)
+            obj = Webmention.objects.get(source=source, target=target)
 
+        from micropub.tasks import verify_and_update_webmention
+        transaction.on_commit(lambda: verify_and_update_webmention.delay(obj.id))
         return redirect(next_url)

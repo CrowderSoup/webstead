@@ -2,7 +2,7 @@
 from django.test import TestCase
 from django.utils import timezone
 
-from microsub.models import Channel, Entry, Subscription
+from microsub.models import BlockedUser, Channel, Entry, Subscription
 from microsub.views import _channel_json, _entry_json, _require_scope, _store_entries
 
 
@@ -83,9 +83,24 @@ class EntryJsonTests(TestCase):
         )
         result = _entry_json(entry)
         self.assertIn("_source", result)
+        self.assertEqual(result["_source"]["_id"], str(self.sub.pk))
         self.assertEqual(result["_source"]["url"], "https://example.com/feed")
         self.assertEqual(result["_source"]["name"], "Example")
         self.assertEqual(result["_source"]["photo"], "https://example.com/photo.jpg")
+
+    def test_managed_subscription_source_includes_provider_metadata(self):
+        self.sub.managed_by = "mastodon"
+        self.sub.managed_key = "timeline"
+        self.sub.save(update_fields=["managed_by", "managed_key"])
+        entry = Entry.objects.create(
+            channel=self.channel, uid="e1", data={}, published=timezone.now(), subscription=self.sub
+        )
+
+        result = _entry_json(entry)
+
+        self.assertTrue(result["_source"]["_is_managed"])
+        self.assertEqual(result["_source"]["_provider"], "mastodon")
+        self.assertEqual(result["_source"]["_managed_key"], "timeline")
 
     def test_does_not_mutate_original_data(self):
         original_data = {"type": "entry", "name": "Hello"}
@@ -168,3 +183,18 @@ class StoreEntriesTests(TestCase):
         ]
         count = _store_entries(self.channel, self.sub, entries)
         self.assertEqual(count, 3)
+
+    def test_skips_future_entries_from_blocked_author(self):
+        BlockedUser.objects.create(channel=self.channel, url="https://blocked.example/")
+        count = _store_entries(
+            self.channel,
+            self.sub,
+            [
+                {
+                    "_uid": "blocked-entry",
+                    "author": {"type": "card", "url": "https://blocked.example/"},
+                }
+            ],
+        )
+        self.assertEqual(count, 0)
+        self.assertFalse(Entry.objects.filter(uid="blocked-entry").exists())

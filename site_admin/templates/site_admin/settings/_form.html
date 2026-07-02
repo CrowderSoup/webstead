@@ -1,10 +1,5 @@
 <form method="post" class="flex flex-col gap-6">
   {% csrf_token %}
-  {% if saved %}
-    <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-      Settings saved.
-    </div>
-  {% endif %}
   {% if form.non_field_errors %}
     <div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
       {{ form.non_field_errors }}
@@ -31,6 +26,19 @@
         </label>
         {{ form.tagline }}
         {{ form.tagline.errors }}
+      </div>
+      <div>
+        <label
+          for="{{ form.site_url.id_for_label }}"
+          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+        >
+          Canonical site URL
+        </label>
+        {{ form.site_url }}
+        {% if form.site_url.help_text %}
+          <p class="mt-1 text-xs text-[color:var(--admin-muted)]">{{ form.site_url.help_text }}</p>
+        {% endif %}
+        {{ form.site_url.errors }}
       </div>
       <div>
         <label
@@ -131,6 +139,19 @@
         </label>
         {{ form.developer_tools_enabled.errors }}
       </div>
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+          Microsub
+        </p>
+        <label for="{{ form.microsub_unfollow_removes_entries.id_for_label }}" class="mt-2 flex items-center gap-2 text-sm">
+          {{ form.microsub_unfollow_removes_entries }}
+          <span>Remove previously fetched entries when a feed is unfollowed</span>
+        </label>
+        {% if form.microsub_unfollow_removes_entries.help_text %}
+          <p class="mt-1 text-xs text-[color:var(--admin-muted)]">{{ form.microsub_unfollow_removes_entries.help_text }}</p>
+        {% endif %}
+        {{ form.microsub_unfollow_removes_entries.errors }}
+      </div>
     </div>
     <div class="space-y-5">
       <div>
@@ -166,11 +187,6 @@
             <span>GitHub</span>
           </label>
           {{ form.bridgy_publish_github.errors }}
-          <label for="{{ form.bridgy_publish_mastodon.id_for_label }}" class="flex items-center gap-2">
-            {{ form.bridgy_publish_mastodon }}
-            <span>Mastodon</span>
-          </label>
-          {{ form.bridgy_publish_mastodon.errors }}
         </div>
       </div>
     </div>
@@ -178,7 +194,7 @@
   <div class="flex flex-wrap items-center gap-3">
     <button
       type="submit"
-      class="rounded-full bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+      class="rounded-xl bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
     >
       Save settings
     </button>

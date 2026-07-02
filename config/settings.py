@@ -19,6 +19,13 @@ environ.Env.read_env(BASE_DIR / ".env")
 
 DEBUG = env.bool("DEBUG", default=False)
 SECRET_KEY = env("SECRET_KEY")
+FIELD_ENCRYPTION_KEY = env("FIELD_ENCRYPTION_KEY", default="")
+if not FIELD_ENCRYPTION_KEY:
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured(
+        "FIELD_ENCRYPTION_KEY must be set to a non-empty Fernet key. "
+        "Generate one with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+    )
 
 # Themes
 THEMES_ROOT = env("THEMES_ROOT", default=str(BASE_DIR / "themes"))
@@ -54,6 +61,7 @@ if not DEBUG:
     CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
 
 WEBMENTION_TRUSTED_DOMAINS = env.list("WEBMENTION_TRUSTED_DOMAINS", default=[])
+MICROSUB_BASE_URL = env("MICROSUB_BASE_URL", default="")
 
 # Comments + spam protection
 AKISMET_API_KEY = env("AKISMET_API_KEY", default="")
@@ -78,6 +86,7 @@ INSTALLED_APPS = [
     "site_admin.apps.SiteAdminConfig",
     "widgets.apps.WidgetsConfig",
     "microsub.apps.MicrosubConfig",
+    "mastodon_integration.apps.MastodonIntegrationConfig",
 
     # Third-party plugins from config/installed_plugins.py
     *INSTALLED_PLUGIN_APPS,
@@ -92,6 +101,8 @@ INSTALLED_APPS = [
     # Third party apps
     "solo",
     "storages",
+    "django_celery_beat",
+    "encrypted_model_fields",
 ]
 
 if DEBUG:
@@ -110,6 +121,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "site_admin.middleware.SiteAdminHtmxMessagesMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -129,13 +141,27 @@ TEMPLATES = [
         "DIRS": [],
         "APP_DIRS": False,
         "OPTIONS": {
-            "loaders": [
-                "core.template_loaders.ThemeTemplateLoader",
-                "django.template.loaders.filesystem.Loader",
-                "django.template.loaders.app_directories.Loader",
-            ],
+            "loaders": (
+                [
+                    "core.template_loaders.ThemeTemplateLoader",
+                    "django.template.loaders.filesystem.Loader",
+                    "django.template.loaders.app_directories.Loader",
+                ]
+                if DEBUG or RUNNING_TESTS
+                else [
+                    (
+                        "django.template.loaders.cached.Loader",
+                        [
+                            "core.template_loaders.ThemeTemplateLoader",
+                            "django.template.loaders.filesystem.Loader",
+                            "django.template.loaders.app_directories.Loader",
+                        ],
+                    )
+                ]
+            ),
             "builtins": [
                 "core.templatetags.theme",
+                "site_admin.templatetags.site_admin_tags",
             ],
             "context_processors": [
                 "django.template.context_processors.request",
@@ -209,6 +235,66 @@ LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
+
+# ---------------------------------------------------------------------------
+# Cache
+# ---------------------------------------------------------------------------
+
+if RUNNING_TESTS:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": env("CACHE_URL", default="redis://localhost:6379/1"),
+            "OPTIONS": {
+                "socket_connect_timeout": 5,
+                "socket_timeout": 5,
+            },
+        }
+    }
+
+# ---------------------------------------------------------------------------
+# Celery
+# ---------------------------------------------------------------------------
+
+CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default="redis://localhost:6379/2")
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_DEFAULT_QUEUE = env("CELERY_TASK_DEFAULT_QUEUE", default="webstead")
+CELERY_WORKER_POOL = env("CELERY_WORKER_POOL", default="prefork")
+CELERY_WORKER_CONCURRENCY = env.int("CELERY_WORKER_CONCURRENCY", default=None)
+CELERY_TASK_IGNORE_RESULT = True
+
+if RUNNING_TESTS:
+    # These use the CELERY_ namespace prefix, which config/celery.py strips and
+    # lowercases via app.config_from_object(namespace="CELERY"), mapping them to
+    # the Celery 5 lowercase keys task_always_eager / task_eager_propagates.
+    # If that namespace argument is ever removed, rename to the lowercase forms.
+    CELERY_TASK_ALWAYS_EAGER = True
+    CELERY_TASK_EAGER_PROPAGATES = True
+
+CELERY_BEAT_SCHEDULE = {
+    "poll-microsub-feeds": {
+        "task": "microsub.tasks.poll_microsub_feeds",
+        "schedule": 900,  # every 15 min (matches REFETCH_INTERVAL_SECONDS)
+    },
+    "poll-mastodon-timeline": {
+        "task": "mastodon_integration.tasks.poll_mastodon_timeline",
+        "schedule": 900,  # every 15 min
+    },
+    "poll-mastodon-notifications": {
+        "task": "mastodon_integration.tasks.poll_mastodon_notifications",
+        "schedule": 900,  # every 15 min
+    },
+}
 
 # ---------------------------------------------------------------------------
 # Storage and files

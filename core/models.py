@@ -207,6 +207,12 @@ class PluginInstall(models.Model):
 class SiteConfiguration(SingletonModel):
     title = models.CharField(max_length=255, default="", blank=True)
     tagline = models.CharField(max_length=1024, default="", blank=True)
+    site_url = models.URLField(
+        max_length=2000,
+        default="",
+        blank=True,
+        help_text="Canonical base URL used when background jobs need to build absolute links.",
+    )
     home_page = models.ForeignKey(
         "Page",
         null=True,
@@ -238,7 +244,6 @@ class SiteConfiguration(SingletonModel):
     bridgy_publish_bluesky = models.BooleanField("Bridgy Publish: Bluesky", default=True)
     bridgy_publish_flickr = models.BooleanField("Bridgy Publish: Flickr", default=True)
     bridgy_publish_github = models.BooleanField("Bridgy Publish: GitHub", default=True)
-    bridgy_publish_mastodon = models.BooleanField("Bridgy Publish: Mastodon", default=True)
     comments_enabled = models.BooleanField("Comments enabled", default=False)
     developer_tools_enabled = models.BooleanField("Developer tools enabled", default=False)
     default_feed_kinds = models.CharField(
@@ -246,6 +251,11 @@ class SiteConfiguration(SingletonModel):
         default="",
         blank=True,
         help_text="Comma-separated list of post kinds shown by default when no filter is applied. Leave blank for the default (article, note, photo, activity, event, checkin). Valid values: article, note, photo, activity, like, repost, reply, event, rsvp, checkin, bookmark.",
+    )
+    microsub_unfollow_removes_entries = models.BooleanField(
+        "Microsub unfollow removes history",
+        default=False,
+        help_text="If enabled, unfollowing a feed removes its previously fetched entries from the channel instead of leaving them visible.",
     )
 
     def __str__(self):

@@ -323,6 +323,7 @@
 
     const iconBase = "https://unpkg.com/leaflet@1.9.4/dist/images/";
     L.Icon.Default.mergeOptions({
+      imagePath: "",
       iconRetinaUrl: `${iconBase}marker-icon-2x.png`,
       iconUrl: `${iconBase}marker-icon.png`,
       shadowUrl: `${iconBase}marker-shadow.png`,

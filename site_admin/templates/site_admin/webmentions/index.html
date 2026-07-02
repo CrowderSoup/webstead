@@ -4,6 +4,7 @@
 
 {% block content %}
   <div class="flex flex-col gap-6">
+    {% include "site_admin/_section_subnav.html" with section="interactions" %}
     <section class="flex flex-wrap items-start justify-between gap-4">
       <div>
         <h1 class="text-2xl font-semibold">Webmentions</h1>
@@ -11,12 +12,12 @@
           Review incoming mentions and manage outgoing notifications.
         </p>
         <p class="mt-2 text-xs text-[color:var(--admin-muted)]">
-          Incoming endpoint: <span class="rounded-full bg-[color:var(--admin-bg)] px-2 py-1 font-mono">{{ endpoint_url }}</span>
+          Incoming endpoint: <span class="rounded-xl bg-[color:var(--admin-bg)] px-2 py-1 font-mono">{{ endpoint_url }}</span>
         </p>
       </div>
       <a
         href="{% url 'site_admin:webmention_create' %}"
-        class="rounded-full bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+        class="rounded-xl bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
       >
         New webmention
       </a>
@@ -26,13 +27,13 @@
       <div class="flex flex-wrap gap-2">
         <a
           href="{% url 'site_admin:webmention_list' %}?direction=incoming"
-          class="rounded-full border px-4 py-2 text-sm font-semibold transition {% if direction == 'incoming' %}border-[color:var(--admin-accent)] bg-[color:var(--admin-bg)] text-[color:var(--admin-accent)]{% else %}border-[color:var(--admin-border)] text-[color:var(--admin-ink)] hover:bg-[color:var(--admin-bg)]{% endif %}"
+          class="rounded-xl border px-4 py-2 text-sm font-semibold transition {% if direction == 'incoming' %}border-[color:var(--admin-accent)] bg-[color:var(--admin-bg)] text-[color:var(--admin-accent)]{% else %}border-[color:var(--admin-border)] text-[color:var(--admin-ink)] hover:bg-[color:var(--admin-bg)]{% endif %}"
         >
           Incoming
         </a>
         <a
           href="{% url 'site_admin:webmention_list' %}?direction=outgoing"
-          class="rounded-full border px-4 py-2 text-sm font-semibold transition {% if direction == 'outgoing' %}border-[color:var(--admin-accent)] bg-[color:var(--admin-bg)] text-[color:var(--admin-accent)]{% else %}border-[color:var(--admin-border)] text-[color:var(--admin-ink)] hover:bg-[color:var(--admin-bg)]{% endif %}"
+          class="rounded-xl border px-4 py-2 text-sm font-semibold transition {% if direction == 'outgoing' %}border-[color:var(--admin-accent)] bg-[color:var(--admin-bg)] text-[color:var(--admin-accent)]{% else %}border-[color:var(--admin-border)] text-[color:var(--admin-ink)] hover:bg-[color:var(--admin-bg)]{% endif %}"
         >
           Outgoing
         </a>
@@ -79,7 +80,7 @@
         </div>
         <button
           type="submit"
-          class="rounded-full border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+          class="rounded-xl border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
         >
           Filter
         </button>

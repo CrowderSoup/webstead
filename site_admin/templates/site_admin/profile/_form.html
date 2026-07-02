@@ -4,13 +4,9 @@
   class="flex flex-col gap-6"
   data-profile-photo-upload-url="{{ photo_upload_url }}"
   data-profile-photo-delete-url="{{ photo_delete_url }}"
+  data-hcard-form
 >
   {% csrf_token %}
-  {% if saved %}
-    <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-      Profile saved.
-    </div>
-  {% endif %}
   {% if form.non_field_errors %}
     <div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
       {{ form.non_field_errors }}
@@ -422,7 +418,7 @@
 
 <script>
 (function () {
-  const form = document.querySelector("form");
+  const form = document.querySelector("form[data-hcard-form]");
   if (!form || form.dataset.hcardInit === "1") return;
   form.dataset.hcardInit = "1";
 
@@ -486,10 +482,11 @@
     const totalForms = form.querySelector(`#id_${prefix}-TOTAL_FORMS`);
     if (!totalForms) return;
     const index = parseInt(totalForms.value, 10);
-    const fragment = template.content.cloneNode(true);
-    const html = fragment.firstElementChild.innerHTML.replace(/__prefix__/g, index);
-    fragment.firstElementChild.innerHTML = html;
-    container.appendChild(fragment);
+    const tmp = document.createElement("div");
+    tmp.innerHTML = template.innerHTML.replace(/__prefix__/g, index);
+    const newItem = tmp.firstElementChild;
+    if (!newItem) return;
+    container.appendChild(newItem);
     totalForms.value = index + 1;
     updateEmptyState(container, prefix === "urls" ? urlEmptyState : emailEmptyState, itemSelector);
   }

@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Bitter:wght@600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
@@ -19,6 +19,10 @@
           extend: {
             fontFamily: {
               sans: ["Space Grotesk", "ui-sans-serif", "system-ui"],
+              display: ["Bitter", "ui-serif", "Georgia"],
+            },
+            boxShadow: {
+              panel: "0 18px 40px rgba(14, 20, 26, 0.06)",
             },
           },
         },
@@ -36,39 +40,39 @@
     </script>
     <style>
       :root {
-        --admin-bg: #f6f2ec;
-        --admin-surface: #ffffff;
-        --admin-ink: #1b1b1b;
-        --admin-muted: #6b6a69;
-        --admin-accent: #0f766e;
-        --admin-accent-strong: #0a5b55;
-        --admin-border: #e5dfd6;
-        --admin-warn: #b45309;
-        --site-admin-bar-bg: var(--admin-bg);
+        --admin-bg: #ece6d8;
+        --admin-surface: #fffdf8;
+        --admin-ink: #1b2c1f;
+        --admin-muted: #47564a;
+        --admin-accent: #2e5f43;
+        --admin-accent-strong: #234d35;
+        --admin-border: #c5b89d;
+        --admin-warn: #9f5f24;
+        --site-admin-bar-bg: var(--admin-surface);
         --site-admin-bar-hamburger-bg: var(--admin-surface);
       }
 
       .admin-theme-dark {
         color-scheme: dark;
-        --admin-bg: #0f1214;
-        --admin-surface: #171b20;
-        --admin-ink: #f5f2ec;
-        --admin-muted: #9aa1a8;
-        --admin-accent: #2dd4bf;
-        --admin-accent-strong: #14b8a6;
-        --admin-border: #2a3138;
-        --admin-warn: #fbbf24;
-        --site-admin-bar-bg: var(--admin-bg);
+        --admin-bg: #121711;
+        --admin-surface: #1a2219;
+        --admin-ink: #f4f0e3;
+        --admin-muted: #c2cbbe;
+        --admin-accent: #71a57f;
+        --admin-accent-strong: #5f946d;
+        --admin-border: #324034;
+        --admin-warn: #dba053;
+        --site-admin-bar-bg: var(--admin-surface);
         --site-admin-bar-hamburger-bg: var(--admin-surface);
       }
 
       .admin-theme-dark .site-admin-bar {
-        --admin-muted: #9aa1a8;
-        --admin-accent: #2dd4bf;
-        --admin-accent-strong: #14b8a6;
-        --admin-warn: #fbbf24;
-        --admin-ink: #f5f2ec;
-        --admin-surface: #171b20;
+        --admin-muted: #c2cbbe;
+        --admin-accent: #71a57f;
+        --admin-accent-strong: #5f946d;
+        --admin-warn: #dba053;
+        --admin-ink: #f4f0e3;
+        --admin-surface: #1a2219;
       }
 
       .admin-theme-dark .bg-white {
@@ -92,6 +96,11 @@
         background-color: var(--admin-surface);
         color: var(--admin-ink);
         border-color: var(--admin-border);
+      }
+
+      .admin-theme-dark .CodeMirror-cursor,
+      .admin-theme-dark .CodeMirror div.CodeMirror-secondarycursor {
+        border-left-color: #ffffff !important;
       }
 
       .admin-theme-dark .EasyMDEContainer .editor-toolbar {
@@ -126,6 +135,63 @@
         border-radius: 1rem 1rem 0 0;
       }
 
+      .site-admin-shell {
+        background-image:
+          radial-gradient(circle at 12% -15%, rgba(188, 134, 49, 0.24), transparent 36%),
+          radial-gradient(circle at 92% 2%, rgba(46, 95, 67, 0.2), transparent 34%),
+          repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0 2px, transparent 2px 9px);
+      }
+
+      h1,
+      h2,
+      h3 {
+        font-family: "Bitter", ui-serif, Georgia, serif;
+        letter-spacing: -0.01em;
+        color: var(--admin-ink);
+      }
+
+      .site-admin-side-link {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        border-radius: 0.8rem;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--admin-ink);
+        border: 1px solid transparent;
+        text-decoration: none;
+        transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+      }
+
+      .site-admin-side-link:hover {
+        background: color-mix(in srgb, var(--admin-accent) 12%, var(--admin-surface));
+        border-color: color-mix(in srgb, var(--admin-accent) 28%, var(--admin-border));
+      }
+
+      .site-admin-side-link--active {
+        background: var(--admin-accent);
+        border-color: var(--admin-accent-strong);
+        color: #fff;
+        font-weight: 600;
+      }
+
+      .site-admin-side-badge {
+        margin-left: auto;
+        border-radius: 999px;
+        padding: 0.1rem 0.45rem;
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        color: #fff;
+        background: #7a4b1f;
+      }
+
+      :focus-visible {
+        outline: 2px solid var(--admin-accent);
+        outline-offset: 2px;
+      }
+
       .errorlist {
         margin-top: 0.35rem;
         color: #b91c1c;
@@ -137,14 +203,44 @@
       .errorlist li {
         margin: 0;
       }
+
+      #site-admin-toast-stack {
+        pointer-events: none;
+      }
+
+      .site-admin-toast {
+        pointer-events: auto;
+      }
     </style>
     {% block head %}{% endblock %}
   </head>
-  <body class="min-h-screen bg-[color:var(--admin-bg)] text-[color:var(--admin-ink)]">
+  <body class="site-admin-shell min-h-screen bg-[color:var(--admin-bg)] text-[color:var(--admin-ink)]">
     {% include "site_admin/_admin_bar.html" %}
-    <main class="mx-auto px-4 py-8">
-      {% block content %}{% endblock %}
-    </main>
+    <div class="mx-auto w-full max-w-[1500px] px-4 pb-10 pt-6 lg:px-6">
+      <div class="grid gap-6 lg:grid-cols-[270px_minmax(0,1fr)]">
+        <div class="hidden lg:block lg:sticky lg:top-24 lg:self-start">
+          {% include "site_admin/_sidebar.html" %}
+        </div>
+        <main class="min-w-0">
+          {% block content %}{% endblock %}
+        </main>
+      </div>
+    </div>
+    <div
+      id="site-admin-toast-region"
+      class="pointer-events-none fixed inset-x-0 top-4 z-[90] flex justify-center px-4 sm:justify-end sm:px-6"
+      aria-live="polite"
+      aria-atomic="false"
+    >
+      <div id="site-admin-toast-stack" class="flex w-full max-w-sm flex-col gap-2"></div>
+    </div>
+    <script id="site-admin-messages-data" type="application/json">
+      [
+        {% for message in messages %}
+          {"level":"{{ message.level_tag|default:'info'|escapejs }}","text":"{{ message|escapejs }}"}{% if not forloop.last %},{% endif %}
+        {% endfor %}
+      ]
+    </script>
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
     <script src="{% static 'js/admin_slugify.js' %}"></script>
     <script>
@@ -221,6 +317,101 @@
         });
 
         applyTheme(getStoredTheme());
+      })();
+    </script>
+    <script>
+      (function () {
+        const stack = document.getElementById("site-admin-toast-stack");
+        const bootstrapData = document.getElementById("site-admin-messages-data");
+        if (!stack) {
+          return;
+        }
+
+        function normalizeMessages(payload) {
+          if (Array.isArray(payload)) {
+            return payload;
+          }
+          if (payload && Array.isArray(payload.value)) {
+            return payload.value;
+          }
+          if (payload && Array.isArray(payload.messages)) {
+            return payload.messages;
+          }
+          return [];
+        }
+
+        function toastClasses(level) {
+          if (level === "success") {
+            return "border-emerald-200 bg-emerald-50 text-emerald-700";
+          }
+          if (level === "warning") {
+            return "border-amber-200 bg-amber-50 text-amber-700";
+          }
+          if (level === "error") {
+            return "border-rose-200 bg-rose-50 text-rose-700";
+          }
+          return "border-blue-200 bg-blue-50 text-blue-700";
+        }
+
+        function pushToast(entry) {
+          const level = (entry && entry.level) || "info";
+          const text = (entry && entry.text) || "";
+          if (!text) {
+            return;
+          }
+
+          const toast = document.createElement("section");
+          toast.className =
+            "site-admin-toast rounded-2xl border px-4 py-3 text-sm shadow-sm transition-opacity duration-200 " +
+            toastClasses(level);
+          toast.setAttribute("role", "status");
+
+          const row = document.createElement("div");
+          row.className = "flex items-start gap-3";
+
+          const content = document.createElement("p");
+          content.className = "grow";
+          content.textContent = text;
+
+          const close = document.createElement("button");
+          close.type = "button";
+          close.className = "text-xs font-semibold opacity-70 transition hover:opacity-100";
+          close.setAttribute("aria-label", "Dismiss message");
+          close.textContent = "Dismiss";
+          close.addEventListener("click", function () {
+            toast.remove();
+          });
+
+          row.appendChild(content);
+          row.appendChild(close);
+          toast.appendChild(row);
+          stack.appendChild(toast);
+
+          window.setTimeout(function () {
+            toast.style.opacity = "0";
+            window.setTimeout(function () {
+              toast.remove();
+            }, 200);
+          }, 5000);
+        }
+
+        function pushMessages(payload) {
+          normalizeMessages(payload).forEach(pushToast);
+        }
+
+        window.siteAdminToasts = {
+          push: pushMessages,
+        };
+
+        document.body.addEventListener("site_admin:messages", function (event) {
+          pushMessages(event.detail);
+        });
+
+        try {
+          pushMessages(JSON.parse(bootstrapData.textContent || "[]"));
+        } catch (error) {
+          console.warn("Unable to parse site-admin message payload", error);
+        }
       })();
     </script>
     <script>

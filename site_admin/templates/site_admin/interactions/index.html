@@ -4,12 +4,24 @@
 
 {% block content %}
   <div class="flex flex-col gap-6">
-    <section class="flex flex-wrap items-start justify-between gap-4">
+    {% include "site_admin/_section_subnav.html" with section="interactions" %}
+    <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
       <div>
-        <h1 class="text-2xl font-semibold">Interactions</h1>
+        <p class="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Engagement Inbox</p>
+        <h1 class="mt-2 text-2xl font-semibold">Interactions</h1>
         <p class="mt-1 text-sm text-[color:var(--admin-muted)]">
-          Incoming comments and webmentions that need your review.
+          Review and moderate incoming comments and webmentions in one place.
         </p>
+      </div>
+      <div class="mt-4 grid gap-3 sm:grid-cols-2">
+        <div class="rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] p-4">
+          <div class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Pending comments</div>
+          <div class="mt-2 text-3xl font-semibold">{{ pending_comment_count }}</div>
+        </div>
+        <div class="rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] p-4">
+          <div class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Pending webmentions</div>
+          <div class="mt-2 text-3xl font-semibold">{{ pending_webmention_count }}</div>
+        </div>
       </div>
     </section>
 
@@ -36,7 +48,7 @@
           >
             <div class="flex flex-wrap items-center justify-between gap-2">
               <div class="text-sm font-semibold">{{ comment.author_name }}</div>
-              <span class="rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+              <span class="rounded-xl bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
                 {{ comment.get_status_display }}
               </span>
             </div>
@@ -76,7 +88,7 @@
           >
             <div class="flex flex-wrap items-center justify-between gap-2">
               <div class="text-sm font-semibold">{{ mention.get_mention_type_display }}</div>
-              <span class="rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+              <span class="rounded-xl bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
                 Pending
               </span>
             </div>

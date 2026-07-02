@@ -52,6 +52,14 @@ class Post(models.Model):
     repost_of = models.URLField(blank=True)
     in_reply_to = models.URLField(blank=True)
     bookmark_of = models.URLField(blank=True)
+    mastodon_syndicate = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Override Mastodon syndication for this post. "
+            "Null = use the per-kind default from MastodonSyndicationDefault."
+        ),
+    )
 
     def __str__(self):
         return self.title

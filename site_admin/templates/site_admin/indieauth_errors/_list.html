@@ -16,7 +16,7 @@
           {% for log in page_obj.object_list %}
             <tr class="border-t border-[color:var(--admin-border)]">
               <td class="px-4 py-3">
-                <span class="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
+                <span class="rounded-xl bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
                   {{ log.status_code }}
                 </span>
               </td>
@@ -52,7 +52,7 @@
       <div class="rounded-2xl border border-[color:var(--admin-border)] p-4">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <div class="text-base font-semibold">{{ log.method }} {{ log.path }}</div>
-          <span class="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
+          <span class="rounded-xl bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
             {{ log.status_code }}
           </span>
         </div>
@@ -80,7 +80,7 @@
       {% if page_obj.has_previous %}
         <a
           href="?page={{ page_obj.previous_page_number }}{% if base_query %}&{{ base_query }}{% endif %}"
-          class="rounded-full border border-[color:var(--admin-border)] px-3 py-1.5 font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+          class="rounded-xl border border-[color:var(--admin-border)] px-3 py-1.5 font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
           hx-get="?page={{ page_obj.previous_page_number }}{% if base_query %}&{{ base_query }}{% endif %}"
           hx-target="#indieauth-error-list"
           hx-push-url="true"
@@ -91,7 +91,7 @@
       {% if page_obj.has_next %}
         <a
           href="?page={{ page_obj.next_page_number }}{% if base_query %}&{{ base_query }}{% endif %}"
-          class="rounded-full border border-[color:var(--admin-border)] px-3 py-1.5 font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+          class="rounded-xl border border-[color:var(--admin-border)] px-3 py-1.5 font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
           hx-get="?page={{ page_obj.next_page_number }}{% if base_query %}&{{ base_query }}{% endif %}"
           hx-target="#indieauth-error-list"
           hx-push-url="true"

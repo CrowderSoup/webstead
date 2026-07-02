@@ -41,28 +41,31 @@
         </div>
       </div>
 
-      <div>
-        <label
-          for="{{ form.title.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
-        >
-          Title
-        </label>
-        {{ form.title }}
-        {{ form.title.errors }}
-      </div>
-      <div>
-        <label
-          for="{{ form.content.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
-        >
-          Content
-        </label>
-        {{ form.content }}
-        <p class="mt-1 text-xs text-[color:var(--admin-muted)]" id="content-helper">
-          Write the caption, note, or long-form text here.
-        </p>
-        {{ form.content.errors }}
+      <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-5 shadow-sm">
+        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Basics</div>
+        <div class="mt-4">
+          <label
+            for="{{ form.title.id_for_label }}"
+            class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+          >
+            Title
+          </label>
+          {{ form.title }}
+          {{ form.title.errors }}
+        </div>
+        <div class="mt-4">
+          <label
+            for="{{ form.content.id_for_label }}"
+            class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+          >
+            Content
+          </label>
+          {{ form.content }}
+          <p class="mt-1 text-xs text-[color:var(--admin-muted)]" id="content-helper">
+            Write the caption, note, or long-form text here.
+          </p>
+          {{ form.content.errors }}
+        </div>
       </div>
 
       <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-5 shadow-sm" data-kind-section="activity">
@@ -286,7 +289,8 @@
         <div id="photo-metadata-fields"></div>
       </div>
 
-      <div>
+      <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-5 shadow-sm">
+        <div class="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Organization</div>
         <div class="flex items-center justify-between gap-2">
           <label
             for="{{ form.tags_text.id_for_label }}"
@@ -317,89 +321,115 @@
       </div>
     </div>
     <div class="space-y-5">
-      <div data-kind-section="like">
-        <label
-          for="{{ form.like_of.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
-        >
-          Like URL
-        </label>
-        {{ form.like_of }}
-        <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Required for like posts.</p>
-        {{ form.like_of.errors }}
+      <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-5 shadow-sm">
+        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Publishing</div>
+        <div class="mt-4">
+          <label
+            for="{{ form.published_on.id_for_label }}"
+            class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+          >
+            Publish time
+          </label>
+          {{ form.published_on }}
+          {{ form.published_on.errors }}
+        </div>
+        <div class="mt-4 flex items-center gap-2">
+          <label class="flex items-center gap-2 text-sm font-semibold text-[color:var(--admin-muted)]">
+            {{ form.save_as_draft }}
+            <span>Save as draft</span>
+          </label>
+        </div>
+        {% if mastodon_connected %}
+        <div class="mt-4">
+          <label
+            for="{{ form.mastodon_syndicate.id_for_label }}"
+            class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+          >
+            Mastodon
+          </label>
+          {{ form.mastodon_syndicate }}
+          {{ form.mastodon_syndicate.errors }}
+        </div>
+        {% endif %}
       </div>
-      <div data-kind-section="repost">
-        <label
-          for="{{ form.repost_of.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
-        >
-          Repost URL
-        </label>
-        {{ form.repost_of }}
-        <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Required for reposts.</p>
-        {{ form.repost_of.errors }}
+
+      <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-5 shadow-sm">
+        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Post targets</div>
+        <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Only required for interaction-style posts.</p>
+        <div class="mt-4 space-y-4">
+          <div data-kind-section="like">
+            <label
+              for="{{ form.like_of.id_for_label }}"
+              class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+            >
+              Like URL
+            </label>
+            {{ form.like_of }}
+            <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Required for like posts.</p>
+            {{ form.like_of.errors }}
+          </div>
+          <div data-kind-section="repost">
+            <label
+              for="{{ form.repost_of.id_for_label }}"
+              class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+            >
+              Repost URL
+            </label>
+            {{ form.repost_of }}
+            <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Required for reposts.</p>
+            {{ form.repost_of.errors }}
+          </div>
+          <div data-kind-section="reply rsvp">
+            <label
+              for="{{ form.in_reply_to.id_for_label }}"
+              class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+            >
+              Target URL
+            </label>
+            {{ form.in_reply_to }}
+            <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Required for replies and RSVPs.</p>
+            {{ form.in_reply_to.errors }}
+          </div>
+          <div data-kind-section="bookmark">
+            <label
+              for="{{ form.bookmark_of.id_for_label }}"
+              class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+            >
+              Bookmark URL
+            </label>
+            {{ form.bookmark_of }}
+            <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Required for bookmarks.</p>
+            {{ form.bookmark_of.errors }}
+          </div>
+        </div>
       </div>
-      <div data-kind-section="reply rsvp">
-        <label
-          for="{{ form.in_reply_to.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
-        >
-          Target URL
-        </label>
-        {{ form.in_reply_to }}
-        <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Required for replies and RSVPs.</p>
-        {{ form.in_reply_to.errors }}
-      </div>
-      <div data-kind-section="bookmark">
-        <label
-          for="{{ form.bookmark_of.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
-        >
-          Bookmark URL
-        </label>
-        {{ form.bookmark_of }}
-        <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Required for bookmarks.</p>
-        {{ form.bookmark_of.errors }}
-      </div>
-      <div>
-        <label
-          for="{{ form.published_on.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
-        >
-          Publish time
-        </label>
-        {{ form.published_on }}
-        {{ form.published_on.errors }}
-      </div>
-      <div class="flex items-center gap-2">
-        <label class="flex items-center gap-2 text-sm font-semibold text-[color:var(--admin-muted)]">
-          {{ form.save_as_draft }}
-          <span>Save as draft</span>
-        </label>
-      </div>
-      <div class="flex items-center gap-2">
-        <label class="flex items-center gap-2 text-sm font-semibold text-[color:var(--admin-warn)]">
-          {{ form.deleted }}
-          <span>Mark as deleted</span>
-        </label>
-      </div>
-      <div>
-        <label
-          for="{{ form.slug.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
-        >
-          Slug
-        </label>
-        {{ form.slug }}
-        <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Leave blank to auto-generate.</p>
-        {{ form.slug.errors }}
+
+      <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-5 shadow-sm">
+        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Advanced</div>
+        <div class="mt-4">
+          <label
+            for="{{ form.slug.id_for_label }}"
+            class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+          >
+            Slug
+          </label>
+          {{ form.slug }}
+          <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Leave blank to auto-generate.</p>
+          {{ form.slug.errors }}
+        </div>
+        <div class="mt-4 flex items-center gap-2">
+          <label class="flex items-center gap-2 text-sm font-semibold text-[color:var(--admin-warn)]">
+            {{ form.deleted }}
+            <span>Mark as deleted</span>
+          </label>
+        </div>
       </div>
     </div>
   </div>
-  <div class="flex flex-wrap items-center gap-3">
+  <div class="sticky bottom-4 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] px-4 py-3 shadow-sm">
     <button
       type="submit"
-      class="rounded-full bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+      class="rounded-xl bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
     >
       Save post
     </button>

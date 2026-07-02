@@ -3,24 +3,22 @@
 {% block title %}Install Plugin{% endblock %}
 
 {% block content %}
-<div class="site-settings-layout grid gap-6 lg:grid-cols-[220px_1fr]">
-  {% include "site_admin/settings/_sidebar.html" %}
-  <div class="flex flex-col gap-6">
+<div class="flex flex-col gap-6">
+    {% include "site_admin/_section_subnav.html" with section="settings" %}
     <section class="flex flex-wrap items-center justify-between gap-4">
       <div>
-        <div class="text-sm uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Site settings &rsaquo; Plugins</div>
+        <div class="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Site settings &rsaquo; Plugins</div>
         <h1 class="text-2xl font-semibold">Install Plugin</h1>
         <p class="mt-1 text-sm text-[color:var(--admin-muted)]">Install a plugin from a public git repository.</p>
       </div>
       <a
         href="{% url 'site_admin:plugin_list' %}"
-        class="rounded-full border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+        class="rounded-xl border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
       >
         Back to plugins
       </a>
     </section>
 
-    {% include "site_admin/_messages.html" with wrapper_class="space-y-2" %}
 
     <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
       <form method="post" class="space-y-4">
@@ -49,7 +47,7 @@
         <div class="pt-2">
           <button
             type="submit"
-            class="rounded-full bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+            class="rounded-xl bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
           >
             Install
           </button>

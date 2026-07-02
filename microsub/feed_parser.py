@@ -1,8 +1,12 @@
 import logging
+import re
+from html import escape
 from html.parser import HTMLParser
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
+
+from .utils import normalize_entry_data, normalize_url
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +30,69 @@ def _strip_html(html_str: str) -> str:
         return " ".join("".join(s._parts).split())
     except Exception:
         return html_str
+
+
+def _normalize_text(text: str) -> str:
+    return text.replace("\r\n", "\n").replace("\r", "\n").strip()
+
+
+def _looks_like_html(value: str) -> bool:
+    return bool(re.search(r"<[A-Za-z!/][^>]*>", value))
+
+
+def _plain_text_to_html(text: str) -> str:
+    text = _normalize_text(text)
+    if not text:
+        return ""
+    paragraphs = []
+    for block in text.split("\n\n"):
+        block = block.strip()
+        if not block:
+            continue
+        paragraphs.append(f"<p>{escape(block).replace(chr(10), '<br>')}</p>")
+    if paragraphs:
+        return "".join(paragraphs)
+    return f"<p>{escape(text).replace(chr(10), '<br>')}</p>"
+
+
+def _feedparser_content_to_jf2(value: str, content_type: str | None = None) -> dict | None:
+    """Convert feedparser content/summary fields into a JF2 content block."""
+    if not value:
+        return None
+
+    normalized = _normalize_text(value)
+    if not normalized:
+        return None
+
+    content_type = (content_type or "").lower()
+    if "html" in content_type or "xhtml" in content_type:
+        is_html = _looks_like_html(value)
+    elif "text" in content_type or "plain" in content_type:
+        is_html = False
+    else:
+        is_html = _looks_like_html(value)
+
+    if is_html:
+        return {"html": value, "text": _strip_html(value)}
+    text_value = _strip_html(normalized) if _looks_like_html(value) else normalized
+    return {"html": _plain_text_to_html(normalized), "text": text_value}
+
+
+def _feedparser_media_urls(values, *, allowed_types: tuple[str, ...] | None = None) -> list[str]:
+    urls: list[str] = []
+    seen: set[str] = set()
+    for item in values or []:
+        if not isinstance(item, dict):
+            continue
+        media_url = item.get("url")
+        if not media_url or media_url in seen:
+            continue
+        media_type = str(item.get("type", "")).lower()
+        if allowed_types and not any(media_type.startswith(prefix) for prefix in allowed_types):
+            continue
+        seen.add(media_url)
+        urls.append(media_url)
+    return urls
 
 
 class _HubLinkParser(HTMLParser):
@@ -244,15 +311,20 @@ def _hentry_to_jf2(item: dict, base_url: str) -> dict:
 
 def _apply_feed_author_fallback(entries: list[dict], feed_meta: dict) -> None:
     """Assign feed-level author to entries that lack an author URL."""
-    if not (feed_meta.get("url") or feed_meta.get("name")):
+    if isinstance(feed_meta.get("author"), dict) and feed_meta["author"].get("url"):
+        feed_author = feed_meta["author"]
+    else:
+        if not (feed_meta.get("url") or feed_meta.get("name")):
+            return
+        feed_author: dict = {"type": "card"}
+        if feed_meta.get("name"):
+            feed_author["name"] = feed_meta["name"]
+        if feed_meta.get("url"):
+            feed_author["url"] = feed_meta["url"]
+        if feed_meta.get("photo"):
+            feed_author["photo"] = feed_meta["photo"]
+    if not feed_author:
         return
-    feed_author: dict = {"type": "card"}
-    if feed_meta.get("name"):
-        feed_author["name"] = feed_meta["name"]
-    if feed_meta.get("url"):
-        feed_author["url"] = feed_meta["url"]
-    if feed_meta.get("photo"):
-        feed_author["photo"] = feed_meta["photo"]
     for e in entries:
         if not e.get("author") or not e["author"].get("url"):
             e["author"] = feed_author
@@ -268,7 +340,7 @@ def _parse_hfeed(html: str, base_url: str) -> tuple[list[dict], dict]:
 
     parsed = mf2py.parse(doc=html, url=base_url)
     items = parsed.get("items", [])
-    feed_meta: dict = {"name": "", "photo": "", "url": ""}
+    feed_meta: dict = {"name": "", "photo": "", "url": normalize_url(base_url) or "", "description": "", "author": None}
 
     def _apply_hcard_meta(search_items: list) -> None:
         """Populate feed_meta from an h-card if name/photo/url not yet found."""
@@ -287,6 +359,10 @@ def _parse_hfeed(html: str, base_url: str) -> tuple[list[dict], dict]:
                     card_url = i.get("properties", {}).get("url", [])
                     if card_url and isinstance(card_url[0], str):
                         feed_meta["url"] = urljoin(base_url, card_url[0])
+                if not feed_meta["author"]:
+                    card = _mf2_embedded_to_jf2(i, base_url)
+                    if card:
+                        feed_meta["author"] = card
                 break
 
     def _apply_title_fallback() -> None:
@@ -309,6 +385,25 @@ def _parse_hfeed(html: str, base_url: str) -> tuple[list[dict], dict]:
             if photo_vals:
                 p = photo_vals[0]
                 feed_meta["photo"] = (p.get("value") or p) if isinstance(p, dict) else p
+            url_vals = props.get("url", [])
+            if url_vals and isinstance(url_vals[0], str):
+                feed_meta["url"] = urljoin(base_url, url_vals[0])
+            summary_vals = props.get("summary", [])
+            if summary_vals and isinstance(summary_vals[0], str):
+                feed_meta["description"] = summary_vals[0]
+            if not feed_meta["description"]:
+                content_vals = props.get("content", [])
+                if content_vals:
+                    first_content = content_vals[0]
+                    if isinstance(first_content, dict):
+                        feed_meta["description"] = first_content.get("value", "") or _strip_html(first_content.get("html", ""))
+                    elif isinstance(first_content, str):
+                        feed_meta["description"] = first_content
+            author_vals = props.get("author", [])
+            if author_vals and not feed_meta["author"]:
+                author = _author_from_mf2(author_vals[0], base_url)
+                if author:
+                    feed_meta["author"] = author
             children = item.get("children", [])
             entries = [
                 _hentry_to_jf2(child, base_url)
@@ -342,18 +437,40 @@ def _parse_rss_atom(content: bytes, url: str) -> tuple[list[dict], dict]:
         return [], {}
 
     feed = feedparser.parse(content)
-    feed_meta: dict = {"name": "", "photo": ""}
+    feed_meta: dict = {"name": "", "photo": "", "url": normalize_url(url) or "", "description": "", "author": None}
 
     # Feed-level metadata
     feed_info = getattr(feed, "feed", None)
     if feed_info:
         title = getattr(feed_info, "title", "") or ""
         feed_meta["name"] = title
+        feed_meta["url"] = (
+            getattr(feed_info, "link", None)
+            or getattr(feed_info, "href", None)
+            or ""
+        )
+        feed_meta["description"] = (
+            getattr(feed_info, "subtitle", None)
+            or getattr(feed_info, "description", None)
+            or ""
+        )
         image = getattr(feed_info, "image", None)
         if image and getattr(image, "href", None):
             feed_meta["photo"] = image.href
         elif getattr(feed_info, "icon", None):
             feed_meta["photo"] = feed_info.icon
+        feed_author = getattr(feed_info, "author_detail", None) or getattr(feed_info, "author", None)
+        if feed_author:
+            if isinstance(feed_author, str):
+                feed_meta["author"] = {"type": "card", "name": feed_author}
+            else:
+                card: dict = {"type": "card"}
+                if getattr(feed_author, "name", None):
+                    card["name"] = feed_author.name
+                if getattr(feed_author, "href", None):
+                    card["url"] = feed_author.href
+                if card:
+                    feed_meta["author"] = card
 
     entries = []
     for e in feed.entries:
@@ -370,13 +487,46 @@ def _parse_rss_atom(content: bytes, url: str) -> tuple[list[dict], dict]:
         # content
         content_list = getattr(e, "content", None)
         summary = getattr(e, "summary", None)
+        summary_detail = getattr(e, "summary_detail", None)
+        summary_block = _feedparser_content_to_jf2(
+            summary,
+            summary_detail.get("type") if hasattr(summary_detail, "get") else getattr(summary_detail, "type", None),
+        )
+        if summary_block:
+            entry["summary"] = summary_block["text"]
         if content_list:
             c = content_list[0]
-            html_val = c.get("value", "")
-            text_val = _strip_html(html_val)
-            entry["content"] = {"html": html_val, "text": text_val}
-        elif summary:
-            entry["content"] = {"text": _strip_html(summary), "html": summary}
+            content_block = _feedparser_content_to_jf2(c.get("value", ""), c.get("type"))
+            if content_block:
+                entry["content"] = content_block
+        elif summary_block:
+            entry["content"] = summary_block
+
+        photos = _feedparser_media_urls(getattr(e, "media_thumbnail", None))
+        photos.extend(
+            media_url
+            for media_url in _feedparser_media_urls(
+                getattr(e, "media_content", None),
+                allowed_types=("image/",),
+            )
+            if media_url not in photos
+        )
+        if photos:
+            entry["photo"] = photos
+
+        videos = _feedparser_media_urls(
+            getattr(e, "media_content", None),
+            allowed_types=("video/",),
+        )
+        if videos:
+            entry["video"] = videos
+
+        audio = _feedparser_media_urls(
+            getattr(e, "media_content", None),
+            allowed_types=("audio/",),
+        )
+        if audio:
+            entry["audio"] = audio
         # published / updated — use the parsed time.struct_time to produce a
         # stable ISO 8601 string regardless of what format the feed used.
         pub_parsed = getattr(e, "published_parsed", None) or getattr(e, "updated_parsed", None)
@@ -387,6 +537,14 @@ def _parse_rss_atom(content: bytes, url: str) -> tuple[list[dict], dict]:
             pub = getattr(e, "published", None) or getattr(e, "updated", None)
             if pub:
                 entry["published"] = pub
+        updated_parsed = getattr(e, "updated_parsed", None)
+        if updated_parsed:
+            from datetime import datetime, timezone as _tz
+            entry["updated"] = datetime(*updated_parsed[:6], tzinfo=_tz.utc).isoformat()
+        else:
+            updated = getattr(e, "updated", None)
+            if updated:
+                entry["updated"] = updated
         # author
         author = getattr(e, "author_detail", None) or getattr(e, "author", None)
         if author:
@@ -414,9 +572,26 @@ def _parse_rss_atom(content: bytes, url: str) -> tuple[list[dict], dict]:
 
 def _parse_json_feed(data: dict, base_url: str) -> tuple[list[dict], dict]:
     """Return (entries, feed_meta) from a JSON Feed dict."""
-    feed_meta: dict = {"name": "", "photo": ""}
+    feed_meta: dict = {
+        "name": "",
+        "photo": "",
+        "url": normalize_url(data.get("home_page_url", "") or data.get("feed_url", "") or base_url) or "",
+        "description": data.get("description", "") or "",
+        "author": None,
+    }
     feed_meta["name"] = data.get("title", "") or ""
     feed_meta["photo"] = data.get("icon", "") or data.get("favicon", "") or ""
+    feed_author = data.get("author") or (data.get("authors") or [None])[0]
+    if isinstance(feed_author, dict):
+        card: dict = {"type": "card"}
+        if feed_author.get("name"):
+            card["name"] = feed_author["name"]
+        if feed_author.get("url"):
+            card["url"] = feed_author["url"]
+        if feed_author.get("avatar"):
+            card["photo"] = feed_author["avatar"]
+        if len(card) > 1:
+            feed_meta["author"] = card
 
     items = data.get("items", [])
     entries = []
@@ -458,6 +633,17 @@ def _parse_json_feed(data: dict, base_url: str) -> tuple[list[dict], dict]:
     return entries, feed_meta
 
 
+def _normalize_entries(entries: list[dict]) -> list[dict]:
+    normalized_entries: list[dict] = []
+    for entry in entries:
+        uid = entry.get("_uid") or entry.get("uid") or entry.get("url")
+        if not uid:
+            continue
+        payload, _ = normalize_entry_data(entry, uid=str(uid))
+        normalized_entries.append(payload)
+    return normalized_entries
+
+
 def fetch_and_parse_feed(url: str) -> tuple[list[dict], str | None, dict]:
     """Fetch a URL and return (jf2_entries, websub_hub_url, feed_meta).
 
@@ -473,7 +659,7 @@ def fetch_and_parse_feed(url: str) -> tuple[list[dict], str | None, dict]:
         raise RuntimeError(f"Failed to fetch {url}: {exc}") from exc
 
     hub_url = discover_websub_hub(url, link_header)
-    feed_meta: dict = {"name": "", "photo": ""}
+    feed_meta: dict = {"name": "", "photo": "", "url": normalize_url(url) or "", "description": "", "author": None}
 
     # Detect format
     if "json" in content_type:
@@ -495,4 +681,4 @@ def fetch_and_parse_feed(url: str) -> tuple[list[dict], str | None, dict]:
         # Try RSS/Atom (XML)
         entries, feed_meta = _parse_rss_atom(raw, url)
 
-    return entries, hub_url, feed_meta
+    return _normalize_entries(entries), hub_url, feed_meta

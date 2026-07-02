@@ -74,10 +74,11 @@
   <div class="flex flex-col gap-6">
     <section class="flex flex-wrap items-center justify-between gap-4">
       <div>
-        <div class="text-sm uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Posts</div>
-        <h1 class="text-2xl font-semibold">
+        <div class="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Content editor</div>
+        <h1 class="mt-2 text-2xl font-semibold">
           {% if post %}Edit post{% else %}New post{% endif %}
         </h1>
+        <p class="mt-1 text-sm text-[color:var(--admin-muted)]">Use the left side for writing and media. Use the right side for publishing and advanced controls.</p>
         {% if post %}
           <p class="mt-1 text-sm text-[color:var(--admin-muted)]">Slug: {{ post.slug }}</p>
         {% endif %}

@@ -86,19 +86,19 @@ class WebmentionToNotificationsTests(TestCase):
     def test_like_sets_like_of(self):
         wm = _make_webmention(mention_type="like")
         entry = Entry.objects.get(channel=self.notifications)
-        self.assertEqual(entry.data.get("like-of"), wm.target)
+        self.assertEqual(entry.data.get("like-of"), [wm.target])
         self.assertNotIn("in-reply-to", entry.data)
         self.assertNotIn("repost-of", entry.data)
 
     def test_reply_sets_in_reply_to(self):
         wm = _make_webmention(mention_type="reply")
         entry = Entry.objects.get(channel=self.notifications)
-        self.assertEqual(entry.data.get("in-reply-to"), wm.target)
+        self.assertEqual(entry.data.get("in-reply-to"), [wm.target])
 
     def test_repost_sets_repost_of(self):
         wm = _make_webmention(mention_type="repost")
         entry = Entry.objects.get(channel=self.notifications)
-        self.assertEqual(entry.data.get("repost-of"), wm.target)
+        self.assertEqual(entry.data.get("repost-of"), [wm.target])
 
     def test_plain_mention_has_no_interaction_keys(self):
         _make_webmention(mention_type="mention")

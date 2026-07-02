@@ -58,8 +58,11 @@ class GetChannelsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertIn("channels", data)
-        # Seed migration creates 'notifications'; our two plus that = 3
-        self.assertEqual(len(data["channels"]), 3)
+        uids = [channel["uid"] for channel in data["channels"]]
+        self.assertEqual(uids[0], "notifications")
+        self.assertIn("home", uids)
+        self.assertIn("news", uids)
+        self.assertIn("tech", uids)
 
     @authorized
     def test_empty_channel_list_contains_seed_channel(self, _auth):
@@ -125,6 +128,24 @@ class GetFollowTests(TestCase):
         self.assertIn("url", item)
         self.assertIn("name", item)
         self.assertIn("photo", item)
+
+    @authorized
+    def test_managed_items_include_provider_metadata(self, _auth):
+        Subscription.objects.create(
+            channel=self.channel,
+            url="https://a.example.com/feed",
+            name="Mastodon home timeline",
+            managed_by="mastodon",
+            managed_key="timeline",
+        )
+        response = self.client.get(
+            MICROSUB_URL, {"action": "follow", "channel": "news"}, HTTP_AUTHORIZATION="Bearer token"
+        )
+
+        item = response.json()["items"][0]
+        self.assertTrue(item["_is_managed"])
+        self.assertEqual(item["_provider"], "mastodon")
+        self.assertEqual(item["_managed_key"], "timeline")
 
     @authorized
     def test_empty_channel_returns_empty_items(self, _auth):
@@ -428,9 +449,9 @@ class GetSearchTests(TestCase):
         self.assertEqual(response.json(), {"results": []})
 
     @authorized
-    @patch("urllib.request.urlopen")
-    def test_non_http_query_prepends_https(self, mock_urlopen, _auth):
-        from io import BytesIO
+    @patch("microsub.views.fetch_and_parse_feed", return_value=([], None, {}))
+    @patch("microsub.views.urlopen")
+    def test_non_http_query_prepends_https(self, mock_urlopen, _mock_fetch, _auth):
         from unittest.mock import MagicMock
 
         mock_resp = MagicMock()
@@ -448,8 +469,9 @@ class GetSearchTests(TestCase):
         self.assertTrue(req_obj.full_url.startswith("https://"))
 
     @authorized
-    @patch("urllib.request.urlopen")
-    def test_network_error_returns_empty_results(self, mock_urlopen, _auth):
+    @patch("microsub.views.fetch_and_parse_feed", return_value=([], None, {"name": "Feed"}))
+    @patch("microsub.views.urlopen")
+    def test_network_error_returns_empty_results(self, mock_urlopen, _mock_fetch, _auth):
         from urllib.error import URLError
         mock_urlopen.side_effect = URLError("connection refused")
         response = self.client.get(
@@ -461,8 +483,9 @@ class GetSearchTests(TestCase):
         self.assertEqual(response.json(), {"results": []})
 
     @authorized
-    @patch("urllib.request.urlopen")
-    def test_non_html_response_returns_url_as_feed(self, mock_urlopen, _auth):
+    @patch("microsub.views.fetch_and_parse_feed", return_value=([], None, {"name": "Feed"}))
+    @patch("microsub.views.urlopen")
+    def test_non_html_response_returns_url_as_feed(self, mock_urlopen, _mock_fetch, _auth):
         from unittest.mock import MagicMock
 
         mock_resp = MagicMock()
@@ -482,8 +505,9 @@ class GetSearchTests(TestCase):
         self.assertEqual(results[0]["url"], "https://example.com/feed")
 
     @authorized
-    @patch("urllib.request.urlopen")
-    def test_html_response_discovers_alternate_feeds(self, mock_urlopen, _auth):
+    @patch("microsub.views.fetch_and_parse_feed")
+    @patch("microsub.views.urlopen")
+    def test_html_response_discovers_alternate_feeds(self, mock_urlopen, mock_fetch, _auth):
         from unittest.mock import MagicMock
 
         html = b'<html><head><link rel="alternate" type="application/rss+xml" href="/feed.rss" title="RSS Feed"></head></html>'
@@ -493,6 +517,10 @@ class GetSearchTests(TestCase):
         mock_resp.headers.get.side_effect = lambda k, d="": "text/html; charset=utf-8" if k == "Content-Type" else d
         mock_resp.read.return_value = html
         mock_urlopen.return_value = mock_resp
+        mock_fetch.side_effect = [
+            ([], None, {}),
+            ([], None, {"name": "RSS Feed"}),
+        ]
 
         response = self.client.get(
             MICROSUB_URL,
@@ -502,6 +530,7 @@ class GetSearchTests(TestCase):
         results = response.json()["results"]
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["type"], "feed")
+        self.assertEqual(results[0]["url"], "https://example.com/feed.rss")
 
 
 class GetPreviewTests(TestCase):
@@ -543,6 +572,54 @@ class GetPreviewTests(TestCase):
         )
         self.assertEqual(response.status_code, 502)
         self.assertEqual(response.json()["error"], "fetch_error")
+
+
+class GetTimelineDefaultChannelTests(TestCase):
+    def setUp(self):
+        self.home = Channel.objects.get(uid="home")
+        self.entry = Entry.objects.create(
+            channel=self.home,
+            uid="home-entry",
+            data={"type": "entry"},
+            published=timezone.now(),
+        )
+
+    @authorized
+    def test_missing_channel_defaults_to_home(self, _auth):
+        response = self.client.get(
+            MICROSUB_URL,
+            {"action": "timeline"},
+            HTTP_AUTHORIZATION="Bearer token",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item["uid"] for item in response.json()["items"]], ["home-entry"])
+
+
+class GetMuteBlockGlobalTests(TestCase):
+    def setUp(self):
+        self.channel = Channel.objects.create(uid="news", name="News")
+
+    @authorized
+    def test_get_mute_accepts_channel_global(self, _auth):
+        MutedUser.objects.create(channel=None, url="https://muted.example/")
+        response = self.client.get(
+            MICROSUB_URL,
+            {"action": "mute", "channel": "global"},
+            HTTP_AUTHORIZATION="Bearer token",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["items"], [{"type": "card", "url": "https://muted.example/"}])
+
+    @authorized
+    def test_get_block_accepts_channel_global(self, _auth):
+        BlockedUser.objects.create(channel=None, url="https://blocked.example/")
+        response = self.client.get(
+            MICROSUB_URL,
+            {"action": "block", "channel": "global"},
+            HTTP_AUTHORIZATION="Bearer token",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["items"], [{"type": "card", "url": "https://blocked.example/"}])
 
 
 class DiscoveryTests(TestCase):

@@ -1,5 +1,7 @@
 import logging
 from functools import lru_cache
+from html.parser import HTMLParser
+from urllib.parse import urlparse
 
 import mf2py
 import requests
@@ -14,6 +16,47 @@ USER_AGENT = "Webstead/1.0 (+https://webstead.dev/)"
 DEFAULT_AVATAR_URL = static("img/default-avatar.svg")
 INTERACTION_SUMMARY_LENGTH = 240
 REQUEST_TIMEOUT = (3, 8)
+
+
+class _HeadMetadataParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self._in_title = False
+        self._title_parts = []
+        self.meta = {}
+
+    @property
+    def title(self):
+        return " ".join(self._title_parts).strip()
+
+    def handle_starttag(self, tag, attrs):
+        attrs_dict = {
+            key.lower(): value
+            for key, value in attrs
+            if key and value is not None
+        }
+        if tag == "title":
+            self._in_title = True
+            return
+        if tag != "meta":
+            return
+
+        content = (attrs_dict.get("content") or "").strip()
+        if not content:
+            return
+
+        for key in ("property", "name", "itemprop"):
+            meta_name = (attrs_dict.get(key) or "").strip().lower()
+            if meta_name and meta_name not in self.meta:
+                self.meta[meta_name] = content
+
+    def handle_endtag(self, tag):
+        if tag == "title":
+            self._in_title = False
+
+    def handle_data(self, data):
+        if self._in_title and data.strip():
+            self._title_parts.append(data.strip())
 
 
 def _first_text(value, default=""):
@@ -126,6 +169,68 @@ def _normalized_title(name_value, summary_for_compare):
     return name_text
 
 
+def _site_root_url(value):
+    parsed = urlparse(value)
+    if not parsed.scheme or not parsed.netloc:
+        return ""
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _host_label(value):
+    parsed = urlparse(value)
+    host = parsed.netloc.strip().lower()
+    if host.startswith("www."):
+        host = host[4:]
+    return host
+
+
+def _fallback_target_from_metadata(html, base_url):
+    parser = _HeadMetadataParser()
+    parser.feed(html)
+
+    title = _strip_text(
+        parser.meta.get("og:title")
+        or parser.meta.get("twitter:title")
+        or parser.title
+    )
+    description = _strip_text(
+        parser.meta.get("og:description")
+        or parser.meta.get("twitter:description")
+        or parser.meta.get("description")
+    )
+    original_url = (
+        parser.meta.get("og:url")
+        or parser.meta.get("twitter:url")
+        or base_url
+    ).strip()
+
+    if not title and not description:
+        return None
+
+    summary_excerpt, summary_truncated = _summary_excerpt(description)
+    payload = {
+        "original_url": original_url,
+        "summary_excerpt": summary_excerpt,
+        "summary_truncated": summary_truncated,
+        "summary_text": description,
+        "summary_html": None,
+        "title": title or None,
+    }
+
+    author_name = _strip_text(
+        parser.meta.get("og:site_name")
+        or parser.meta.get("application-name")
+        or _host_label(original_url or base_url)
+    )
+    author_url = _site_root_url(original_url or base_url)
+    if author_name:
+        payload["author_name"] = author_name
+    if author_url:
+        payload["author_url"] = author_url
+
+    return payload
+
+
 def normalize_interaction_properties(properties, target_url=""):
     if not isinstance(properties, dict):
         return None
@@ -164,7 +269,7 @@ def parse_target_from_html(html, base_url):
     items = parsed.get("items") if isinstance(parsed, dict) else []
     entry = _find_entry(items)
     if not entry:
-        return None
+        return _fallback_target_from_metadata(html, base_url)
     properties = entry.get("properties") or {}
     return normalize_interaction_properties(properties, target_url=base_url)
 

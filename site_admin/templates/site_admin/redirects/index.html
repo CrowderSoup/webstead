@@ -3,9 +3,8 @@
 {% block title %}Redirects{% endblock %}
 
 {% block content %}
-  <div class="analytics-layout grid gap-6 lg:grid-cols-[220px_1fr]">
-    {% include "site_admin/analytics/_sidebar.html" %}
-    <div class="flex flex-col gap-6">
+  <div class="flex flex-col gap-6">
+    {% include "site_admin/_section_subnav.html" with section="analytics" %}
       <section class="flex flex-wrap items-center justify-between gap-4">
         <div>
           <div class="text-sm uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Analytics</div>
@@ -70,6 +69,5 @@
           {% endfor %}
         </div>
       </section>
-    </div>
   </div>
 {% endblock %}

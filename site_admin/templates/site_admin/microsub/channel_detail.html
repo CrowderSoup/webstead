@@ -3,9 +3,8 @@
 {% block title %}{{ channel.name }} – Microsub{% endblock %}
 
 {% block content %}
-  <div class="site-settings-layout grid gap-6 lg:grid-cols-[220px_1fr]">
-    {% include "site_admin/settings/_sidebar.html" %}
-    <div class="flex flex-col gap-6">
+  <div class="flex flex-col gap-6">
+    {% include "site_admin/_section_subnav.html" with section="settings" %}
       <section class="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div class="text-sm uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Microsub</div>
@@ -55,7 +54,6 @@
         </div>
       </section>
 
-      {% include "site_admin/_messages.html" with wrapper_class="space-y-2" %}
 
       <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
         <h2 class="text-lg font-semibold">Subscriptions</h2>
@@ -77,7 +75,9 @@
                     <tr class="border-t border-[color:var(--admin-border)]">
                       <td class="px-4 py-3">
                         <div class="font-semibold">{{ sub.name|default:sub.url|truncatechars:60 }}</div>
-                        {% if sub.name %}
+                        {% if sub.managed_by == "mastodon" %}
+                          <div class="mt-0.5 text-xs text-[color:var(--admin-muted)]">Managed by Mastodon integration</div>
+                        {% elif sub.name %}
                           <div class="mt-0.5 text-xs text-[color:var(--admin-muted)] truncate">{{ sub.url }}</div>
                         {% endif %}
                         {% if sub.websub_hub %}
@@ -95,16 +95,22 @@
                         {% endif %}
                       </td>
                       <td class="px-4 py-3 text-right">
-                        <form method="post" action="{% url 'site_admin:microsub_feed_remove' uid=channel.uid feed_id=sub.pk %}" class="inline">
-                          {% csrf_token %}
-                          <button
-                            type="submit"
-                            class="text-sm font-semibold text-rose-600"
-                            onclick="return confirm('Remove this feed subscription and its entries?');"
-                          >
-                            Remove
-                          </button>
-                        </form>
+                        {% if sub.managed_by == "mastodon" %}
+                          <a href="{% url 'site_admin:mastodon_settings' %}" class="text-sm font-semibold text-[color:var(--admin-accent)]">
+                            Manage
+                          </a>
+                        {% else %}
+                          <form method="post" action="{% url 'site_admin:microsub_feed_remove' uid=channel.uid feed_id=sub.pk %}" class="inline">
+                            {% csrf_token %}
+                            <button
+                              type="submit"
+                              class="text-sm font-semibold text-rose-600"
+                              onclick="return confirm('Remove this feed subscription and its entries?');"
+                            >
+                              Remove
+                            </button>
+                          </form>
+                        {% endif %}
                       </td>
                     </tr>
                   {% endfor %}
@@ -117,7 +123,9 @@
             {% for sub in subscriptions %}
               <div class="rounded-2xl border border-[color:var(--admin-border)] p-4">
                 <div class="text-base font-semibold">{{ sub.name|default:sub.url|truncatechars:60 }}</div>
-                {% if sub.name %}
+                {% if sub.managed_by == "mastodon" %}
+                  <div class="mt-0.5 text-xs text-[color:var(--admin-muted)]">Managed by Mastodon integration</div>
+                {% elif sub.name %}
                   <div class="mt-0.5 text-xs text-[color:var(--admin-muted)] truncate">{{ sub.url }}</div>
                 {% endif %}
                 <div class="mt-1 text-sm text-[color:var(--admin-muted)]">
@@ -127,16 +135,22 @@
                   <div class="mt-1 text-xs text-rose-600">{{ sub.fetch_error|truncatechars:80 }}</div>
                 {% endif %}
                 <div class="mt-3">
-                  <form method="post" action="{% url 'site_admin:microsub_feed_remove' uid=channel.uid feed_id=sub.pk %}" class="inline">
-                    {% csrf_token %}
-                    <button
-                      type="submit"
-                      class="text-sm font-semibold text-rose-600"
-                      onclick="return confirm('Remove this feed?');"
-                    >
-                      Remove
-                    </button>
-                  </form>
+                  {% if sub.managed_by == "mastodon" %}
+                    <a href="{% url 'site_admin:mastodon_settings' %}" class="text-sm font-semibold text-[color:var(--admin-accent)]">
+                      Manage
+                    </a>
+                  {% else %}
+                    <form method="post" action="{% url 'site_admin:microsub_feed_remove' uid=channel.uid feed_id=sub.pk %}" class="inline">
+                      {% csrf_token %}
+                      <button
+                        type="submit"
+                        class="text-sm font-semibold text-rose-600"
+                        onclick="return confirm('Remove this feed?');"
+                      >
+                        Remove
+                      </button>
+                    </form>
+                  {% endif %}
                 </div>
               </div>
             {% endfor %}
@@ -148,6 +162,5 @@
           </div>
         {% endif %}
       </section>
-    </div>
   </div>
 {% endblock %}

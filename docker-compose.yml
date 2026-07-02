@@ -6,6 +6,44 @@ version: "3.9"
 #--------------------------------------------------------------------
 
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: blog-redis-dev
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  celery-worker:
+    build: .
+    # Run migrate first so the worker never starts before the schema is ready.
+    command: sh -c "uv run manage.py migrate --noinput && uv run celery -A config worker -l INFO"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+
+  celery-beat:
+    build: .
+    # Run migrate first; django_celery_beat stores its schedule in the DB so
+    # the schema must exist before beat tries to read/write periodic tasks.
+    command: sh -c "uv run manage.py migrate --noinput && uv run celery -A config beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+
   postgres:
     image: postgres:16-alpine
     container_name: blog-postgres
@@ -23,27 +61,28 @@ services:
       timeout: 3s
       retries: 20
 
-  # minio:
-  #   image: quay.io/minio/minio:latest
-  #   container_name: blog-minio
-  #   command: server /data --console-address ":9001"
-  #   environment:
-  #     MINIO_ROOT_USER: minio
-  #     MINIO_ROOT_PASSWORD: minio12345
-  #   ports:
-  #     - "9000:9000" # S3 API
-  #     - "9001:9001" # Web console
-  #   volumes:
-  #     - minio_data:/data
-  #   healthcheck:
-  #     test:
-  #       [
-  #         "CMD-SHELL",
-  #         "wget -qO- http://localhost:9000/minio/health/ready || exit 1",
-  #       ]
-  #     interval: 5s
-  #     timeout: 3s
-  #     retries: 20
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: blog-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio12345
+      MINIO_API_CORS_ALLOW_ORIGIN: "http://localhost:8000,http://127.0.0.1:8000"
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # Web console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://localhost:9000/minio/health/ready || exit 1",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
 volumes:
   db_data:
