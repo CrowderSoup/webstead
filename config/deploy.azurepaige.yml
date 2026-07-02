@@ -1,0 +1,92 @@
+# Kamal 2 deploy config for azurepaige-art (azurepaige.art), deployed from the
+# webstead repo's `main` branch. Second Kamal destination in this repo -
+# deploy with `kamal deploy -d azurepaige`. See config/deploy.yml for the
+# crowdersoup-blog destination (dev branch).
+#
+# Redis/Valkey is shared across all crowder-cloud services on this droplet, via the
+# vtodo-redis accessory (owned by the vtodo repo). DB indices in use:
+#   0: vtodo (cache + celery broker)
+#   1: PADD (cache)
+#   2: blog celery broker      5: azurepaige celery broker
+#   3: blog cache              6: azurepaige cache
+#   4: blog celery result backend   7: azurepaige celery result backend
+
+service: azurepaige
+image: crowdersoup/webstead
+
+# Startup (db wait, migrate, storage bootstrap, theme reconcile, collectstatic) takes
+# ~15s before gunicorn binds, so give the health check more room than the 30s default.
+deploy_timeout: 90
+
+servers:
+  web:
+    hosts:
+      - 64.23.247.60
+    proxy:
+      ssl: true
+      host: azurepaige.art
+      app_port: 8000
+      healthcheck:
+        path: /healthz
+        interval: 2
+  celery-worker:
+    hosts:
+      - 64.23.247.60
+    cmd: "uv run celery -A config worker -l INFO --concurrency 2"
+    env:
+      clear:
+        COLLECTSTATIC: "false"
+        STORAGE_BOOTSTRAP: "false"
+        THEME_RECONCILE: "false"
+  celery-beat:
+    hosts:
+      - 64.23.247.60
+    cmd: "uv run celery -A config beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler"
+    env:
+      clear:
+        COLLECTSTATIC: "false"
+        STORAGE_BOOTSTRAP: "false"
+        THEME_RECONCILE: "false"
+
+registry:
+  server: ghcr.io
+  username: crowdersoup
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+builder:
+  arch: amd64
+
+ssh:
+  user: deploy
+  keys:
+    - ~/.ssh/crowder-cloud
+
+env:
+  clear:
+    DEBUG: "False"
+    ALLOWED_HOSTS: azurepaige.art,www.azurepaige.art,localhost,127.0.0.1,*
+    CSRF_TRUSTED_ORIGINS: https://azurepaige.art,https://www.azurepaige.art
+    DB_NAME: azurepaige-art
+    DB_USER: doadmin
+    DB_HOST: crowder-cloud-do-user-4979145-0.g.db.ondigitalocean.com
+    DB_PORT: "25060"
+    AWS_ACCESS_KEY_ID: DO801LCF6YU9ZGX9FK6Q
+    AWS_STORAGE_BUCKET_NAME: azurepaige-art
+    AWS_S3_ENDPOINT_URL: https://sfo3.digitaloceanspaces.com
+    AWS_S3_REGION_NAME: sfo3
+    AWS_S3_CUSTOM_DOMAIN: azurepaige-art.sfo3.cdn.digitaloceanspaces.com
+    THEME_STORAGE_PREFIX: themes/
+    TURNSTILE_SITE_KEY: 0x4AAAAAACNSDZ_RlYavK12F
+    MICROSUB_BASE_URL: https://azurepaige.art
+    CELERY_TASK_DEFAULT_QUEUE: azurepaige
+  secret:
+    - SECRET_KEY
+    - DB_PASS
+    - AWS_SECRET_ACCESS_KEY
+    - FIELD_ENCRYPTION_KEY
+    - AKISMET_API_KEY
+    - TURNSTILE_SECRET_KEY
+    - CACHE_URL          # redis://vtodo-redis:6379/6
+    - CELERY_BROKER_URL  # redis://vtodo-redis:6379/5
+    - CELERY_RESULT_BACKEND  # redis://vtodo-redis:6379/7
