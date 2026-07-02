@@ -67,3 +67,6 @@ uploads/
 
 # Celery beat scheduler state files
 celerybeat-schedule*
+
+# Kamal
+.kamal/secrets

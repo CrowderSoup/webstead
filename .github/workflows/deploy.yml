@@ -1,0 +1,55 @@
+name: Deploy
+
+on:
+  push:
+    branches: [dev]  # crowdersoup-blog currently tracks dev; switch to main after the dev->main merge
+
+env:
+  SSH_PRIVATE_KEY: ${{ secrets.CROWDER_CLOUD_SSH_KEY }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+
+      - run: gem install kamal -v '~> 2'
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/crowder-cloud
+          chmod 600 ~/.ssh/crowder-cloud
+
+      - name: Write kamal secrets
+        run: |
+          cat > .kamal/secrets <<'EOF'
+          KAMAL_REGISTRY_PASSWORD=$KAMAL_REGISTRY_PASSWORD
+          SECRET_KEY=$SECRET_KEY
+          DB_PASS=$DB_PASS
+          AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+          FIELD_ENCRYPTION_KEY=$FIELD_ENCRYPTION_KEY
+          AKISMET_API_KEY=$AKISMET_API_KEY
+          TURNSTILE_SECRET_KEY=$TURNSTILE_SECRET_KEY
+          CACHE_URL=$CACHE_URL
+          CELERY_BROKER_URL=$CELERY_BROKER_URL
+          CELERY_RESULT_BACKEND=$CELERY_RESULT_BACKEND
+          EOF
+
+      - name: Deploy
+        run: kamal deploy
+        env:
+          KAMAL_REGISTRY_PASSWORD: ${{ secrets.KAMAL_REGISTRY_PASSWORD }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          DB_PASS: ${{ secrets.DB_PASS }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          FIELD_ENCRYPTION_KEY: ${{ secrets.FIELD_ENCRYPTION_KEY }}
+          AKISMET_API_KEY: ${{ secrets.AKISMET_API_KEY }}
+          TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
+          CACHE_URL: ${{ secrets.CACHE_URL }}
+          CELERY_BROKER_URL: ${{ secrets.CELERY_BROKER_URL }}
+          CELERY_RESULT_BACKEND: ${{ secrets.CELERY_RESULT_BACKEND }}

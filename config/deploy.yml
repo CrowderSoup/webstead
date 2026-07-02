@@ -1,0 +1,85 @@
+# Kamal 2 deploy config for crowdersoup-blog (crowdersoup.com), deployed from the
+# webstead repo's `dev` branch.
+#
+# Redis/Valkey is shared across all crowder-cloud services on this droplet, via the
+# vtodo-redis accessory (owned by the vtodo repo). DB indices in use:
+#   0: vtodo (cache + celery broker)
+#   1: PADD (cache)
+#   2: blog celery broker
+#   3: blog cache
+#   4: blog celery result backend
+
+service: blog
+image: crowdersoup/webstead
+
+servers:
+  web:
+    hosts:
+      - 64.23.247.60
+    proxy:
+      ssl: true
+      host: crowdersoup.com
+      app_port: 8000
+      healthcheck:
+        path: /healthz
+  celery-worker:
+    hosts:
+      - 64.23.247.60
+    cmd: "uv run celery -A config worker -l INFO --concurrency 2"
+    env:
+      clear:
+        COLLECTSTATIC: "false"
+        STORAGE_BOOTSTRAP: "false"
+        THEME_RECONCILE: "false"
+  celery-beat:
+    hosts:
+      - 64.23.247.60
+    cmd: "uv run celery -A config beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler"
+    env:
+      clear:
+        COLLECTSTATIC: "false"
+        STORAGE_BOOTSTRAP: "false"
+        THEME_RECONCILE: "false"
+
+registry:
+  server: ghcr.io
+  username: crowdersoup
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+builder:
+  arch: amd64
+
+ssh:
+  user: deploy
+  keys:
+    - ~/.ssh/crowder-cloud
+
+env:
+  clear:
+    DEBUG: "False"
+    ALLOWED_HOSTS: crowdersoup.com,www.crowdersoup.com,localhost,127.0.0.1,*
+    CSRF_TRUSTED_ORIGINS: https://crowdersoup.com,https://www.crowdersoup.com
+    DB_NAME: blog
+    DB_USER: doadmin
+    DB_HOST: crowder-cloud-do-user-4979145-0.g.db.ondigitalocean.com
+    DB_PORT: "25060"
+    AWS_ACCESS_KEY_ID: DO801WGZZVCC4KXWACUK
+    AWS_STORAGE_BUCKET_NAME: crowdersoup-blog
+    AWS_S3_ENDPOINT_URL: https://sfo3.digitaloceanspaces.com
+    AWS_S3_REGION_NAME: sfo3
+    AWS_S3_CUSTOM_DOMAIN: crowdersoup-blog.sfo3.cdn.digitaloceanspaces.com
+    THEME_STORAGE_PREFIX: themes/
+    TURNSTILE_SITE_KEY: 0x4AAAAAACNSDZ_RlYavK12F
+    MICROSUB_BASE_URL: https://crowdersoup.com
+    CELERY_TASK_DEFAULT_QUEUE: crowdersoup
+  secret:
+    - SECRET_KEY
+    - DB_PASS
+    - AWS_SECRET_ACCESS_KEY
+    - FIELD_ENCRYPTION_KEY
+    - AKISMET_API_KEY
+    - TURNSTILE_SECRET_KEY
+    - CACHE_URL          # redis://vtodo-redis:6379/3
+    - CELERY_BROKER_URL  # redis://vtodo-redis:6379/2
+    - CELERY_RESULT_BACKEND  # redis://vtodo-redis:6379/4
