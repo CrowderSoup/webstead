@@ -12,6 +12,10 @@
 service: blog
 image: crowdersoup/webstead
 
+# Startup (db wait, migrate, storage bootstrap, theme reconcile, collectstatic) takes
+# ~15s before gunicorn binds, so give the health check more room than the 30s default.
+deploy_timeout: 90
+
 servers:
   web:
     hosts:
@@ -22,6 +26,7 @@ servers:
       app_port: 8000
       healthcheck:
         path: /healthz
+        interval: 2
   celery-worker:
     hosts:
       - 64.23.247.60
