@@ -1,0 +1,55 @@
+name: Deploy azurepaige-art
+
+on:
+  push:
+    branches: [main]
+
+env:
+  SSH_PRIVATE_KEY: ${{ secrets.CROWDER_CLOUD_SSH_KEY }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+
+      - run: gem install kamal -v '~> 2'
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/crowder-cloud
+          chmod 600 ~/.ssh/crowder-cloud
+
+      - name: Write kamal secrets
+        run: |
+          cat > .kamal/secrets.azurepaige <<'EOF'
+          KAMAL_REGISTRY_PASSWORD=$KAMAL_REGISTRY_PASSWORD
+          SECRET_KEY=$AZUREPAIGE_SECRET_KEY
+          DB_PASS=$DB_PASS
+          AWS_SECRET_ACCESS_KEY=$AZUREPAIGE_AWS_SECRET_ACCESS_KEY
+          FIELD_ENCRYPTION_KEY=$AZUREPAIGE_FIELD_ENCRYPTION_KEY
+          AKISMET_API_KEY=$AKISMET_API_KEY
+          TURNSTILE_SECRET_KEY=$TURNSTILE_SECRET_KEY
+          CACHE_URL=$AZUREPAIGE_CACHE_URL
+          CELERY_BROKER_URL=$AZUREPAIGE_CELERY_BROKER_URL
+          CELERY_RESULT_BACKEND=$AZUREPAIGE_CELERY_RESULT_BACKEND
+          EOF
+
+      - name: Deploy
+        run: kamal deploy -d azurepaige
+        env:
+          KAMAL_REGISTRY_PASSWORD: ${{ secrets.KAMAL_REGISTRY_PASSWORD }}
+          AZUREPAIGE_SECRET_KEY: ${{ secrets.AZUREPAIGE_SECRET_KEY }}
+          DB_PASS: ${{ secrets.DB_PASS }}
+          AZUREPAIGE_AWS_SECRET_ACCESS_KEY: ${{ secrets.AZUREPAIGE_AWS_SECRET_ACCESS_KEY }}
+          AZUREPAIGE_FIELD_ENCRYPTION_KEY: ${{ secrets.AZUREPAIGE_FIELD_ENCRYPTION_KEY }}
+          AKISMET_API_KEY: ${{ secrets.AKISMET_API_KEY }}
+          TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
+          AZUREPAIGE_CACHE_URL: ${{ secrets.AZUREPAIGE_CACHE_URL }}
+          AZUREPAIGE_CELERY_BROKER_URL: ${{ secrets.AZUREPAIGE_CELERY_BROKER_URL }}
+          AZUREPAIGE_CELERY_RESULT_BACKEND: ${{ secrets.AZUREPAIGE_CELERY_RESULT_BACKEND }}
