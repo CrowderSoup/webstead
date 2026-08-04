@@ -244,24 +244,11 @@
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
     <script src="{% static 'js/admin_slugify.js' %}"></script>
     <script>
-      function getCookie(name) {
-        if (!document.cookie) {
-          return null;
-        }
-        const csrfCookie = document.cookie
-          .split(";")
-          .map((cookie) => cookie.trim())
-          .find((cookie) => cookie.startsWith(name + "="));
-        if (!csrfCookie) {
-          return null;
-        }
-        return decodeURIComponent(csrfCookie.split("=")[1]);
-      }
+      const CSRF_TOKEN = "{{ csrf_token }}";
 
       document.body.addEventListener("htmx:configRequest", (event) => {
-        const token = getCookie("csrftoken");
-        if (token) {
-          event.detail.headers["X-CSRFToken"] = token;
+        if (CSRF_TOKEN) {
+          event.detail.headers["X-CSRFToken"] = CSRF_TOKEN;
         }
       });
 

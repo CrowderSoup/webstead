@@ -156,8 +156,8 @@
   const removedExisting = new Set();
 
   function getCsrfToken() {
-    const match = document.cookie.match(/csrftoken=([^;]+)/);
-    return match ? match[1] : "";
+    const input = document.querySelector("#page-form input[name='csrfmiddlewaretoken']");
+    return input ? input.value : "";
   }
 
   try {

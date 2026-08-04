@@ -211,8 +211,8 @@
         suggestBtn.disabled = true;
         suggestBtn.textContent = "Suggesting\u2026";
         try {
-          const csrfMatch = document.cookie.match(/csrftoken=([^;]+)/);
-          const csrfToken = csrfMatch ? csrfMatch[1] : "";
+          const csrfInput = parentForm.querySelector("input[name='csrfmiddlewaretoken']");
+          const csrfToken = csrfInput ? csrfInput.value : "";
           const resp = await fetch(suggestContentUrl, {
             method: "POST",
             headers: {
