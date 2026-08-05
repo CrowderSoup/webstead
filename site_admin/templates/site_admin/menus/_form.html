@@ -1,14 +1,14 @@
 <form id="menu-form" method="post" class="flex flex-col gap-6" data-menu-form>
   {% csrf_token %}
   {% if form.non_field_errors %}
-    <div class="rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] px-4 py-3 text-sm text-[color:var(--admin-warn)]">
+    <div class="rounded-2xl border border-(--admin-border) bg-(--admin-bg) px-4 py-3 text-sm text-(--admin-warn)">
       {{ form.non_field_errors }}
     </div>
   {% endif %}
   <div>
     <label
       for="{{ form.title.id_for_label }}"
-      class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+      class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
     >
       Menu name
     </label>
@@ -19,11 +19,11 @@
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div>
       <div class="text-sm font-semibold">Menu items</div>
-      <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Add links and adjust ordering. Lower numbers appear first.</p>
+      <p class="mt-1 text-xs text-(--admin-muted)">Add links and adjust ordering. Lower numbers appear first.</p>
     </div>
     <button
       type="button"
-      class="rounded-full border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+      class="rounded-full border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
       data-add-menu-item
     >
       Add item
@@ -32,20 +32,20 @@
 
   {{ formset.management_form }}
   {% if formset.non_form_errors %}
-    <div class="rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] px-4 py-3 text-sm text-[color:var(--admin-warn)]">
+    <div class="rounded-2xl border border-(--admin-border) bg-(--admin-bg) px-4 py-3 text-sm text-(--admin-warn)">
       {{ formset.non_form_errors }}
     </div>
   {% endif %}
 
   <div class="grid gap-4" data-menu-items>
     {% for item_form in formset %}
-      <div class="rounded-2xl border border-[color:var(--admin-border)] bg-white p-4" data-menu-item>
+      <div class="rounded-2xl border border-(--admin-border) bg-white p-4" data-menu-item>
         {{ item_form.id }}
         <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_140px]">
           <div>
             <label
               for="{{ item_form.text.id_for_label }}"
-              class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+              class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
             >
               Label
             </label>
@@ -55,7 +55,7 @@
           <div>
             <label
               for="{{ item_form.url.id_for_label }}"
-              class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+              class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
             >
               URL
             </label>
@@ -65,7 +65,7 @@
           <div>
             <label
               for="{{ item_form.weight.id_for_label }}"
-              class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+              class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
             >
               Order
             </label>
@@ -76,7 +76,7 @@
         <div class="mt-3 flex items-center justify-between gap-2">
           <button
             type="button"
-            class="inline-flex items-center gap-2 rounded-full border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-warn)] transition hover:bg-[color:var(--admin-bg)]"
+            class="inline-flex items-center gap-2 rounded-full border border-(--admin-border) px-3 py-1 text-xs font-semibold text-(--admin-warn) transition hover:bg-(--admin-bg)"
             {% if item_form.instance.pk %}
               hx-post="{% url 'site_admin:menu_item_delete' item_id=item_form.instance.pk %}"
               hx-target="closest [data-menu-item]"
@@ -92,38 +92,38 @@
               <path d="M6 6l1 14h10l1-14"></path>
             </svg>
             <span class="menu-item__label">Remove item</span>
-            <span class="menu-item__deleting hidden text-[color:var(--admin-muted)]">Deleting...</span>
+            <span class="menu-item__deleting hidden text-(--admin-muted)">Deleting...</span>
           </button>
         </div>
       </div>
     {% endfor %}
   </div>
 
-  <div class="rounded-2xl border border-dashed border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] px-4 py-5 text-center text-sm text-[color:var(--admin-muted)]{% if formset.total_form_count %} hidden{% endif %}" data-menu-empty>
+  <div class="rounded-2xl border border-dashed border-(--admin-border) bg-(--admin-bg) px-4 py-5 text-center text-sm text-(--admin-muted){% if formset.total_form_count %} hidden{% endif %}" data-menu-empty>
     No items yet. Add your first link.
   </div>
 
   <div class="flex flex-wrap items-center gap-3">
     <button
       type="submit"
-      class="rounded-full bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+      class="rounded-full bg-(--admin-accent) px-5 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)"
     >
       Save menu
     </button>
     {% if menu %}
-      <span class="text-xs text-[color:var(--admin-muted)]">{{ formset.total_form_count }} item{{ formset.total_form_count|pluralize }}</span>
+      <span class="text-xs text-(--admin-muted)">{{ formset.total_form_count }} item{{ formset.total_form_count|pluralize }}</span>
     {% endif %}
   </div>
 </form>
 
 <template id="menu-item-template">
-  <div class="rounded-2xl border border-[color:var(--admin-border)] bg-white p-4" data-menu-item>
+  <div class="rounded-2xl border border-(--admin-border) bg-white p-4" data-menu-item>
     {{ formset.empty_form.id }}
     <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_140px]">
       <div>
         <label
           for="{{ formset.empty_form.text.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
         >
           Label
         </label>
@@ -132,7 +132,7 @@
       <div>
         <label
           for="{{ formset.empty_form.url.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
         >
           URL
         </label>
@@ -141,7 +141,7 @@
       <div>
         <label
           for="{{ formset.empty_form.weight.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
         >
           Order
         </label>
@@ -151,7 +151,7 @@
     <div class="mt-3 flex items-center gap-2">
       <button
         type="button"
-        class="inline-flex items-center gap-2 rounded-full border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-warn)] transition hover:bg-[color:var(--admin-bg)]"
+        class="inline-flex items-center gap-2 rounded-full border border-(--admin-border) px-3 py-1 text-xs font-semibold text-(--admin-warn) transition hover:bg-(--admin-bg)"
         data-remove-menu-item
       >
         <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">

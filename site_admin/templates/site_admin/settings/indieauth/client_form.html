@@ -7,12 +7,12 @@
     {% include "site_admin/_section_subnav.html" with section="settings" %}
       <section class="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div class="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Site settings</div>
+          <div class="text-xs font-semibold uppercase tracking-[0.24em] text-(--admin-muted)">Site settings</div>
           <h1 class="text-2xl font-semibold">{% if is_edit %}Edit{% else %}Register{% endif %} IndieAuth client</h1>
           {% if is_edit %}
-            <p class="mt-1 text-sm text-[color:var(--admin-muted)]">{{ client.name|default:client.client_id }}</p>
+            <p class="mt-1 text-sm text-(--admin-muted)">{{ client.name|default:client.client_id }}</p>
           {% else %}
-            <p class="mt-1 text-sm text-[color:var(--admin-muted)]">
+            <p class="mt-1 text-sm text-(--admin-muted)">
               Manually register a client that can't be auto-discovered.
             </p>
           {% endif %}
@@ -21,14 +21,14 @@
           {% if is_edit %}
             <a
               href="{% url 'site_admin:indieauth_client_detail' client_pk=client.pk %}"
-              class="rounded-xl border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+              class="rounded-xl border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
             >
               Cancel
             </a>
           {% else %}
             <a
               href="{% url 'site_admin:indieauth_settings' %}"
-              class="rounded-xl border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+              class="rounded-xl border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
             >
               Cancel
             </a>
@@ -37,14 +37,14 @@
       </section>
 
 
-      <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+      <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
         <form method="post" class="flex flex-col gap-5">
           {% csrf_token %}
 
           <div>
             <label
               for="{{ form.client_id.id_for_label }}"
-              class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+              class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
             >
               Client ID
             </label>
@@ -57,7 +57,7 @@
           <div>
             <label
               for="{{ form.name.id_for_label }}"
-              class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+              class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
             >
               Name
             </label>
@@ -70,7 +70,7 @@
           <div>
             <label
               for="{{ form.logo_url.id_for_label }}"
-              class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+              class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
             >
               Logo URL
             </label>
@@ -83,13 +83,13 @@
           <div>
             <label
               for="{{ form.redirect_uris_text.id_for_label }}"
-              class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+              class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
             >
               Redirect URIs
             </label>
             {{ form.redirect_uris_text }}
             {% if form.redirect_uris_text.help_text %}
-              <p class="mt-1 text-xs text-[color:var(--admin-muted)]">{{ form.redirect_uris_text.help_text }}</p>
+              <p class="mt-1 text-xs text-(--admin-muted)">{{ form.redirect_uris_text.help_text }}</p>
             {% endif %}
             {% if form.redirect_uris_text.errors %}
               <p class="mt-1 text-sm text-rose-600">{{ form.redirect_uris_text.errors.0 }}</p>
@@ -99,7 +99,7 @@
           <div class="flex items-center gap-3">
             <button
               type="submit"
-              class="rounded-xl bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+              class="rounded-xl bg-(--admin-accent) px-5 py-2 text-sm font-semibold text-white shadow-xs transition hover:opacity-90"
             >
               {% if is_edit %}Save changes{% else %}Register client{% endif %}
             </button>

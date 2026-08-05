@@ -74,26 +74,26 @@
   <div class="flex flex-col gap-6">
     <section class="flex flex-wrap items-center justify-between gap-4">
       <div>
-        <div class="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Content editor</div>
+        <div class="text-xs font-semibold uppercase tracking-[0.24em] text-(--admin-muted)">Content editor</div>
         <h1 class="mt-2 text-2xl font-semibold">
           {% if post %}Edit post{% else %}New post{% endif %}
         </h1>
-        <p class="mt-1 text-sm text-[color:var(--admin-muted)]">Use the left side for writing and media. Use the right side for publishing and advanced controls.</p>
+        <p class="mt-1 text-sm text-(--admin-muted)">Use the left side for writing and media. Use the right side for publishing and advanced controls.</p>
         {% if post %}
-          <p class="mt-1 text-sm text-[color:var(--admin-muted)]">Slug: {{ post.slug }}</p>
+          <p class="mt-1 text-sm text-(--admin-muted)">Slug: {{ post.slug }}</p>
         {% endif %}
       </div>
       <div class="flex flex-wrap items-center gap-3">
         <a
           href="{% url 'site_admin:post_list' %}"
-          class="rounded-full border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+          class="rounded-full border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
         >
           Back to posts
         </a>
         {% if post %}
           <a
             href="{{ post.get_absolute_url }}"
-            class="rounded-full bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+            class="rounded-full bg-(--admin-accent) px-4 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)"
           >
             View post
           </a>
@@ -110,7 +110,7 @@
       </div>
     </section>
 
-    <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+    <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
       {% include "site_admin/posts/_form.html" %}
     </section>
   </div>

@@ -8,20 +8,20 @@
   <div class="flex flex-col gap-6">
     <section class="flex flex-wrap items-center justify-between gap-4">
       <div>
-        <div class="text-sm uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Account</div>
+        <div class="text-sm uppercase tracking-[0.2em] text-(--admin-muted)">Account</div>
         <h1 class="text-2xl font-semibold">Profile</h1>
       </div>
       <div class="flex flex-wrap items-center gap-3">
         <a
           href="{% url 'site_admin:dashboard' %}"
-          class="rounded-full border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+          class="rounded-full border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
         >
           Back to dashboard
         </a>
       </div>
     </section>
 
-    <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+    <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
       {% include "site_admin/profile/_form.html" %}
     </section>
   </div>

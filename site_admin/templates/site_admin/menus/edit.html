@@ -7,26 +7,26 @@
     {% include "site_admin/_section_subnav.html" with section="settings" %}
       <section class="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <div class="text-sm uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Site settings</div>
+          <div class="text-sm uppercase tracking-[0.2em] text-(--admin-muted)">Site settings</div>
           <h1 class="text-2xl font-semibold">{% if menu %}Edit menu{% else %}New menu{% endif %}</h1>
         </div>
         <div class="flex flex-wrap items-center gap-3">
           <a
             href="{% url 'site_admin:menu_list' %}"
-            class="rounded-full border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+            class="rounded-full border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
           >
             Back to menus
           </a>
           <a
             href="{% url 'site_admin:site_settings' %}"
-            class="rounded-full border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+            class="rounded-full border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
           >
             Back to general
           </a>
         </div>
       </section>
 
-      <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+      <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
         {% include "site_admin/menus/_form.html" %}
       </section>
   </div>

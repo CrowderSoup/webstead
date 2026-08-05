@@ -10,7 +10,7 @@
       <div>
         <label
           for="{{ form.title.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
         >
           Site title
         </label>
@@ -20,7 +20,7 @@
       <div>
         <label
           for="{{ form.tagline.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
         >
           Tagline
         </label>
@@ -30,46 +30,46 @@
       <div>
         <label
           for="{{ form.site_url.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
         >
           Canonical site URL
         </label>
         {{ form.site_url }}
         {% if form.site_url.help_text %}
-          <p class="mt-1 text-xs text-[color:var(--admin-muted)]">{{ form.site_url.help_text }}</p>
+          <p class="mt-1 text-xs text-(--admin-muted)">{{ form.site_url.help_text }}</p>
         {% endif %}
         {{ form.site_url.errors }}
       </div>
       <div>
         <label
           for="{{ form.home_page.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
         >
           Homepage content
         </label>
         {{ form.home_page }}
         {% if form.home_page.help_text %}
-          <p class="mt-1 text-xs text-[color:var(--admin-muted)]">{{ form.home_page.help_text }}</p>
+          <p class="mt-1 text-xs text-(--admin-muted)">{{ form.home_page.help_text }}</p>
         {% endif %}
         {{ form.home_page.errors }}
       </div>
       <div>
         <label
           for="{{ form.favicon.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
         >
           Favicon
         </label>
         {{ form.favicon }}
         {% if form.favicon.help_text %}
-          <p class="mt-1 text-xs text-[color:var(--admin-muted)]">{{ form.favicon.help_text }}</p>
+          <p class="mt-1 text-xs text-(--admin-muted)">{{ form.favicon.help_text }}</p>
         {% endif %}
         {{ form.favicon.errors }}
       </div>
       <div>
         <label
           for="{{ form.site_author.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
         >
           Default author
         </label>
@@ -79,7 +79,7 @@
       <div>
         <label
           for="{{ form.active_theme.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
         >
           Active theme
         </label>
@@ -89,7 +89,7 @@
       <div>
         <label
           for="{{ form.main_menu.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
         >
           Main menu
         </label>
@@ -99,7 +99,7 @@
       <div>
         <label
           for="{{ form.footer_menu.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
         >
           Footer menu
         </label>
@@ -109,18 +109,18 @@
       <div>
         <label
           for="{{ form.default_feed_kinds.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
         >
           Default feed kinds
         </label>
         {{ form.default_feed_kinds }}
         {% if form.default_feed_kinds.help_text %}
-          <p class="mt-1 text-xs text-[color:var(--admin-muted)]">{{ form.default_feed_kinds.help_text }}</p>
+          <p class="mt-1 text-xs text-(--admin-muted)">{{ form.default_feed_kinds.help_text }}</p>
         {% endif %}
         {{ form.default_feed_kinds.errors }}
       </div>
       <div>
-        <p class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+        <p class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">
           Comments
         </p>
         <label for="{{ form.comments_enabled.id_for_label }}" class="mt-2 flex items-center gap-2 text-sm">
@@ -130,7 +130,7 @@
         {{ form.comments_enabled.errors }}
       </div>
       <div>
-        <p class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+        <p class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">
           Developer tools
         </p>
         <label for="{{ form.developer_tools_enabled.id_for_label }}" class="mt-2 flex items-center gap-2 text-sm">
@@ -140,7 +140,7 @@
         {{ form.developer_tools_enabled.errors }}
       </div>
       <div>
-        <p class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+        <p class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">
           Microsub
         </p>
         <label for="{{ form.microsub_unfollow_removes_entries.id_for_label }}" class="mt-2 flex items-center gap-2 text-sm">
@@ -148,7 +148,7 @@
           <span>Remove previously fetched entries when a feed is unfollowed</span>
         </label>
         {% if form.microsub_unfollow_removes_entries.help_text %}
-          <p class="mt-1 text-xs text-[color:var(--admin-muted)]">{{ form.microsub_unfollow_removes_entries.help_text }}</p>
+          <p class="mt-1 text-xs text-(--admin-muted)">{{ form.microsub_unfollow_removes_entries.help_text }}</p>
         {% endif %}
         {{ form.microsub_unfollow_removes_entries.errors }}
       </div>
@@ -157,7 +157,7 @@
       <div>
         <label
           for="{{ form.robots_txt.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
         >
           Robots.txt
         </label>
@@ -165,13 +165,13 @@
         {{ form.robots_txt.errors }}
       </div>
       <div>
-        <p class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+        <p class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">
           Bridgy Publish links
         </p>
-        <p class="mt-1 text-xs text-[color:var(--admin-muted)]">
+        <p class="mt-1 text-xs text-(--admin-muted)">
           Toggle each hidden link used for Bridgy Publish webmentions.
         </p>
-        <div class="mt-3 space-y-2 text-sm text-[color:var(--admin-ink)]">
+        <div class="mt-3 space-y-2 text-sm text-(--admin-ink)">
           <label for="{{ form.bridgy_publish_bluesky.id_for_label }}" class="flex items-center gap-2">
             {{ form.bridgy_publish_bluesky }}
             <span>Bluesky</span>
@@ -194,7 +194,7 @@
   <div class="flex flex-wrap items-center gap-3">
     <button
       type="submit"
-      class="rounded-xl bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+      class="rounded-xl bg-(--admin-accent) px-5 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)"
     >
       Save settings
     </button>

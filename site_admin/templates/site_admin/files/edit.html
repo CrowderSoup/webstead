@@ -6,14 +6,14 @@
   <div class="flex flex-col gap-6">
     <section class="flex flex-wrap items-center justify-between gap-4">
       <div>
-        <div class="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Media Library</div>
+        <div class="text-xs font-semibold uppercase tracking-[0.24em] text-(--admin-muted)">Media Library</div>
         <h1 class="mt-2 text-2xl font-semibold">Edit file</h1>
-        <p class="mt-1 text-sm text-[color:var(--admin-muted)]">{{ asset }}</p>
+        <p class="mt-1 text-sm text-(--admin-muted)">{{ asset }}</p>
       </div>
       <div class="flex flex-wrap items-center gap-3">
         <a
           href="{% url 'site_admin:file_list' %}"
-          class="rounded-full border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+          class="rounded-full border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
         >
           Back to files
         </a>
@@ -25,7 +25,7 @@
         </a>
         <a
           href="{{ asset.file.url }}"
-          class="rounded-full bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+          class="rounded-full bg-(--admin-accent) px-4 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)"
           target="_blank"
           rel="noopener"
         >
@@ -34,7 +34,7 @@
       </div>
     </section>
 
-    <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+    <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
       {% if form.non_field_errors %}
         <div class="mb-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {{ form.non_field_errors }}
@@ -43,12 +43,12 @@
       <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         <form method="post" enctype="multipart/form-data" class="space-y-5">
           {% csrf_token %}
-          <div class="rounded-2xl border border-[color:var(--admin-border)] bg-white p-5">
-            <div class="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Basics</div>
+          <div class="rounded-2xl border border-(--admin-border) bg-white p-5">
+            <div class="text-xs font-semibold uppercase tracking-[0.2em] text-(--admin-muted)">Basics</div>
             <div class="mt-4">
               <label
                 for="{{ form.kind.id_for_label }}"
-                class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+                class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
               >
                 Kind
               </label>
@@ -58,7 +58,7 @@
             <div class="mt-4">
               <label
                 for="{{ form.file.id_for_label }}"
-                class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+                class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
               >
                 File
               </label>
@@ -66,12 +66,12 @@
               {{ form.file.errors }}
             </div>
           </div>
-          <div class="rounded-2xl border border-[color:var(--admin-border)] bg-white p-5">
-            <div class="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Metadata</div>
+          <div class="rounded-2xl border border-(--admin-border) bg-white p-5">
+            <div class="text-xs font-semibold uppercase tracking-[0.2em] text-(--admin-muted)">Metadata</div>
             <div class="mt-4">
               <label
                 for="{{ form.alt_text.id_for_label }}"
-                class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+                class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
               >
                 Alt text
               </label>
@@ -81,7 +81,7 @@
             <div class="mt-4">
               <label
                 for="{{ form.caption.id_for_label }}"
-                class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+                class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
               >
                 Caption
               </label>
@@ -91,7 +91,7 @@
             <div class="mt-4">
               <label
                 for="{{ form.owner.id_for_label }}"
-                class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+                class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
               >
                 Owner
               </label>
@@ -99,28 +99,28 @@
               {{ form.owner.errors }}
             </div>
           </div>
-          <div class="sticky bottom-4 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] px-4 py-3 shadow-sm">
+          <div class="sticky bottom-4 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-(--admin-border) bg-(--admin-surface) px-4 py-3 shadow-xs">
             <button
               type="submit"
-              class="rounded-xl bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+              class="rounded-xl bg-(--admin-accent) px-5 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)"
             >
               Save file
             </button>
           </div>
         </form>
         <div class="space-y-4">
-          <div class="overflow-hidden rounded-2xl border border-[color:var(--admin-border)] bg-white">
+          <div class="overflow-hidden rounded-2xl border border-(--admin-border) bg-white">
             {% if asset.kind == "image" %}
               <img src="{{ asset.file.url }}" alt="{{ asset.alt_text|default:asset }}" class="h-56 w-full object-cover" />
             {% else %}
-              <div class="flex h-56 items-center justify-center bg-[color:var(--admin-bg)]">
-                <span class="rounded-full border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+              <div class="flex h-56 items-center justify-center bg-(--admin-bg)">
+                <span class="rounded-full border border-(--admin-border) px-3 py-1 text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">
                   {{ asset.get_kind_display }}
                 </span>
               </div>
             {% endif %}
           </div>
-          <div class="rounded-2xl border border-[color:var(--admin-border)] bg-white p-4 text-xs text-[color:var(--admin-muted)]">
+          <div class="rounded-2xl border border-(--admin-border) bg-white p-4 text-xs text-(--admin-muted)">
             <div>Uploaded {{ asset.created_at|date:"M j, Y" }}</div>
           </div>
         </div>

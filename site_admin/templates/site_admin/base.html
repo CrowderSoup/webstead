@@ -12,22 +12,7 @@
       href="https://fonts.googleapis.com/css2?family=Bitter:wght@600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ["Space Grotesk", "ui-sans-serif", "system-ui"],
-              display: ["Bitter", "ui-serif", "Georgia"],
-            },
-            boxShadow: {
-              panel: "0 18px 40px rgba(14, 20, 26, 0.06)",
-            },
-          },
-        },
-      };
-    </script>
+    <link rel="stylesheet" href="{% static 'site_admin/css/admin.css' %}" />
     <script>
       (function () {
         const storageKey = "admin-theme";
@@ -214,7 +199,7 @@
     </style>
     {% block head %}{% endblock %}
   </head>
-  <body class="site-admin-shell min-h-screen bg-[color:var(--admin-bg)] text-[color:var(--admin-ink)]">
+  <body class="site-admin-shell min-h-screen bg-(--admin-bg) text-(--admin-ink)">
     {% include "site_admin/_admin_bar.html" %}
     <div class="mx-auto w-full max-w-[1500px] px-4 pb-10 pt-6 lg:px-6">
       <div class="grid gap-6 lg:grid-cols-[270px_minmax(0,1fr)]">
@@ -228,7 +213,7 @@
     </div>
     <div
       id="site-admin-toast-region"
-      class="pointer-events-none fixed inset-x-0 top-4 z-[90] flex justify-center px-4 sm:justify-end sm:px-6"
+      class="pointer-events-none fixed inset-x-0 top-4 z-90 flex justify-center px-4 sm:justify-end sm:px-6"
       aria-live="polite"
       aria-atomic="false"
     >
@@ -241,7 +226,11 @@
         {% endfor %}
       ]
     </script>
-    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script
+      src="https://unpkg.com/htmx.org@2.0.10/dist/htmx.min.js"
+      integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V"
+      crossorigin="anonymous"
+    ></script>
     <script src="{% static 'js/admin_slugify.js' %}"></script>
     <script>
       const CSRF_TOKEN = "{{ csrf_token }}";
@@ -349,7 +338,7 @@
 
           const toast = document.createElement("section");
           toast.className =
-            "site-admin-toast rounded-2xl border px-4 py-3 text-sm shadow-sm transition-opacity duration-200 " +
+            "site-admin-toast rounded-2xl border px-4 py-3 text-sm shadow-xs transition-opacity duration-200 " +
             toastClasses(level);
           toast.setAttribute("role", "status");
 

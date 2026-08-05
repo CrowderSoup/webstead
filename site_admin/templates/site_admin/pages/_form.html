@@ -12,12 +12,12 @@
   {% include "site_admin/pages/_form_messages.html" %}
   <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
     <div class="space-y-6">
-      <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-5 shadow-sm">
-        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Basics</div>
+      <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs">
+        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-(--admin-muted)">Basics</div>
         <div class="mt-4">
           <label
             for="{{ form.title.id_for_label }}"
-            class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+            class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
           >
             Title
           </label>
@@ -27,43 +27,43 @@
         <div class="mt-4">
           <label
             for="{{ form.content.id_for_label }}"
-            class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+            class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
           >
             Content
           </label>
           {{ form.content }}
-          <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Write the page body in Markdown.</p>
+          <p class="mt-1 text-xs text-(--admin-muted)">Write the page body in Markdown.</p>
           {{ form.content.errors }}
         </div>
       </div>
 
-      <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-5 shadow-sm">
+      <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <label
               for="page-photo-uploader"
-              class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+              class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
             >
               Photos
             </label>
-            <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Upload images to attach to this page.</p>
+            <p class="mt-1 text-xs text-(--admin-muted)">Upload images to attach to this page.</p>
           </div>
           <button
             type="button"
-            class="rounded-full border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+            class="rounded-full border border-(--admin-border) px-3 py-1 text-xs font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
             data-photo-trigger
           >
             Upload photos
           </button>
         </div>
         <div
-          class="mt-4 flex min-h-[140px] flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] px-4 py-6 text-center text-sm text-[color:var(--admin-muted)] transition"
+          class="mt-4 flex min-h-[140px] flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-(--admin-border) bg-(--admin-bg) px-4 py-6 text-center text-sm text-(--admin-muted) transition"
           data-photo-dropzone
           role="button"
           tabindex="0"
           aria-label="Upload photos"
         >
-          <span class="text-sm font-semibold text-[color:var(--admin-ink)]">Drop images here</span>
+          <span class="text-sm font-semibold text-(--admin-ink)">Drop images here</span>
           <span class="text-xs">or click to browse</span>
         </div>
         <label for="page-photo-uploader" class="sr-only">Upload photos</label>
@@ -76,19 +76,19 @@
           class="sr-only"
         >
         <div id="page-photo-grid" class="mt-4 grid gap-4 sm:grid-cols-2"></div>
-        <div id="page-photo-empty" class="mt-3 text-xs text-[color:var(--admin-muted)]">
+        <div id="page-photo-empty" class="mt-3 text-xs text-(--admin-muted)">
           No photos yet.
         </div>
         <div id="page-photo-metadata-fields"></div>
       </div>
     </div>
     <div class="space-y-5">
-      <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-5 shadow-sm">
-        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Publishing</div>
+      <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs">
+        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-(--admin-muted)">Publishing</div>
         <div class="mt-4">
           <label
             for="{{ form.published_on.id_for_label }}"
-            class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+            class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
           >
             Publish time
           </label>
@@ -96,39 +96,39 @@
           {{ form.published_on.errors }}
         </div>
       </div>
-      <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-5 shadow-sm">
-        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Advanced</div>
+      <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs">
+        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-(--admin-muted)">Advanced</div>
         <div class="mt-4">
           <label
             for="{{ form.slug.id_for_label }}"
-            class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+            class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
           >
             Slug
           </label>
           {{ form.slug }}
-          <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Leave blank to auto-generate.</p>
+          <p class="mt-1 text-xs text-(--admin-muted)">Leave blank to auto-generate.</p>
           {{ form.slug.errors }}
         </div>
         <div class="mt-4">
-          <label class="flex items-center gap-2 text-sm font-semibold text-[color:var(--admin-ink)]">
+          <label class="flex items-center gap-2 text-sm font-semibold text-(--admin-ink)">
             {{ form.is_gallery }}
             <span>Photo gallery page</span>
           </label>
-          <p class="mt-1 text-xs text-[color:var(--admin-muted)]">When enabled, uploaded images display as a photo slider on the public page.</p>
+          <p class="mt-1 text-xs text-(--admin-muted)">When enabled, uploaded images display as a photo slider on the public page.</p>
           {{ form.is_gallery.errors }}
         </div>
       </div>
     </div>
   </div>
-  <div class="sticky bottom-4 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] px-4 py-3 shadow-sm">
+  <div class="sticky bottom-4 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-(--admin-border) bg-(--admin-surface) px-4 py-3 shadow-xs">
     <button
       type="submit"
-      class="rounded-xl bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+      class="rounded-xl bg-(--admin-accent) px-5 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)"
     >
       Save page
     </button>
     {% if page %}
-      <span class="text-xs text-[color:var(--admin-muted)]">
+      <span class="text-xs text-(--admin-muted)">
         Published {{ page.published_on|date:"M j, Y" }}
       </span>
     {% endif %}
@@ -192,12 +192,12 @@
   function buildCard(item, idx) {
     const card = document.createElement("div");
     card.className =
-      "flex flex-col gap-3 rounded-2xl border border-[color:var(--admin-border)] bg-white p-3 shadow-sm";
+      "flex flex-col gap-3 rounded-2xl border border-(--admin-border) bg-white p-3 shadow-xs";
 
     const img = document.createElement("img");
     img.src = item.url;
     img.alt = "Selected image preview";
-    img.className = "h-40 w-full rounded-xl object-cover bg-[color:var(--admin-bg)]";
+    img.className = "h-40 w-full rounded-xl object-cover bg-(--admin-bg)";
 
     const meta = document.createElement("div");
     meta.className = "flex flex-col gap-2";
@@ -208,7 +208,7 @@
     altInput.setAttribute("aria-label", "Alt text");
     altInput.value = item.alt || "";
     altInput.className =
-      "w-full rounded-xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-xs focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]";
+      "w-full rounded-xl border border-(--admin-border) bg-white px-3 py-2 text-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)";
     altInput.addEventListener("input", (event) => {
       item.alt = event.target.value;
     });
@@ -218,7 +218,7 @@
     captionInput.setAttribute("aria-label", "Caption");
     captionInput.value = item.caption || "";
     captionInput.className =
-      "w-full rounded-xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-xs focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]";
+      "w-full rounded-xl border border-(--admin-border) bg-white px-3 py-2 text-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)";
     captionInput.rows = 2;
     captionInput.addEventListener("input", (event) => {
       item.caption = event.target.value;
@@ -235,7 +235,7 @@
     up.textContent = "Move up";
     up.disabled = idx === 0;
     up.className =
-      "rounded-full border border-[color:var(--admin-border)] px-3 py-1 font-semibold text-[color:var(--admin-ink)] disabled:cursor-not-allowed disabled:opacity-60";
+      "rounded-full border border-(--admin-border) px-3 py-1 font-semibold text-(--admin-ink) disabled:cursor-not-allowed disabled:opacity-60";
     up.addEventListener("click", () => moveCard(idx, -1));
 
     const down = document.createElement("button");
@@ -243,14 +243,14 @@
     down.textContent = "Move down";
     down.disabled = idx === photoData.length - 1;
     down.className =
-      "rounded-full border border-[color:var(--admin-border)] px-3 py-1 font-semibold text-[color:var(--admin-ink)] disabled:cursor-not-allowed disabled:opacity-60";
+      "rounded-full border border-(--admin-border) px-3 py-1 font-semibold text-(--admin-ink) disabled:cursor-not-allowed disabled:opacity-60";
     down.addEventListener("click", () => moveCard(idx, 1));
 
     const copy = document.createElement("button");
     copy.type = "button";
     copy.textContent = "Copy URL";
     copy.className =
-      "rounded-full border border-[color:var(--admin-border)] px-3 py-1 font-semibold text-[color:var(--admin-ink)]";
+      "rounded-full border border-(--admin-border) px-3 py-1 font-semibold text-(--admin-ink)";
     copy.addEventListener("click", () => copyUrlToClipboard(item.url));
 
     const remove = document.createElement("button");
@@ -384,16 +384,16 @@
 
     dropzone.addEventListener("dragover", (event) => {
       event.preventDefault();
-      dropzone.classList.add("border-[color:var(--admin-accent)]");
+      dropzone.classList.add("border-(--admin-accent)");
     });
 
     dropzone.addEventListener("dragleave", () => {
-      dropzone.classList.remove("border-[color:var(--admin-accent)]");
+      dropzone.classList.remove("border-(--admin-accent)");
     });
 
     dropzone.addEventListener("drop", (event) => {
       event.preventDefault();
-      dropzone.classList.remove("border-[color:var(--admin-accent)]");
+      dropzone.classList.remove("border-(--admin-accent)");
       const files = Array.from(event.dataTransfer.files || []).filter((file) =>
         file.type.startsWith("image/")
       );

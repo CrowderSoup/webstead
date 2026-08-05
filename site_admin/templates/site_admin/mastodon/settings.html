@@ -9,14 +9,14 @@
 
   <section class="flex flex-wrap items-center justify-between gap-4">
     <div>
-      <div class="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Settings</div>
+      <div class="text-xs font-semibold uppercase tracking-[0.24em] text-(--admin-muted)">Settings</div>
       <h1 class="mt-2 text-2xl font-semibold">Mastodon</h1>
-      <p class="mt-1 text-sm text-[color:var(--admin-muted)]">Connect your Mastodon account for publishing and feed ingestion.</p>
+      <p class="mt-1 text-sm text-(--admin-muted)">Connect your Mastodon account for publishing and feed ingestion.</p>
     </div>
   </section>
 
   {# ── Connection ──────────────────────────────────────────────────────── #}
-  <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+  <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
     <h2 class="text-base font-semibold">Connection</h2>
 
     {% if account %}
@@ -26,8 +26,8 @@
         {% endif %}
         <div>
           <div class="font-semibold">{{ account.display_name|default:account.username }}</div>
-          <div class="text-sm text-[color:var(--admin-muted)]">@{{ account.username }}</div>
-          <div class="text-xs text-[color:var(--admin-muted)] mt-0.5">{{ account.app.instance_url }} · max {{ account.max_toot_chars }} chars</div>
+          <div class="text-sm text-(--admin-muted)">@{{ account.username }}</div>
+          <div class="text-xs text-(--admin-muted) mt-0.5">{{ account.app.instance_url }} · max {{ account.max_toot_chars }} chars</div>
         </div>
       </div>
       <form method="post" action="{% url 'site_admin:mastodon_disconnect' %}" class="mt-4">
@@ -38,28 +38,28 @@
           Disconnect
         </button>
         <button form="sync-form" type="submit"
-          class="ml-3 rounded-xl border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]">
+          class="ml-3 rounded-xl border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)">
           Sync now
         </button>
       </form>
       <form id="sync-form" method="post" action="{% url 'site_admin:mastodon_manual_sync' %}">{% csrf_token %}</form>
     {% else %}
-      <p class="mt-3 text-sm text-[color:var(--admin-muted)]">No Mastodon account connected.</p>
+      <p class="mt-3 text-sm text-(--admin-muted)">No Mastodon account connected.</p>
       <form method="post" action="{% url 'mastodon_oauth_start' %}" class="mt-4 flex flex-wrap items-end gap-3">
         {% csrf_token %}
         <div>
-          <label for="instance_url" class="block text-xs font-semibold text-[color:var(--admin-muted)]">Instance URL</label>
+          <label for="instance_url" class="block text-xs font-semibold text-(--admin-muted)">Instance URL</label>
           <input
             type="url"
             id="instance_url"
             name="instance_url"
             placeholder="https://mastodon.social"
             required
-            class="mt-1 rounded-xl border border-[color:var(--admin-border)] px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-[color:var(--admin-accent)]"
+            class="mt-1 rounded-xl border border-(--admin-border) px-3 py-2 text-sm w-64 focus:outline-hidden focus:ring-2 focus:ring-(--admin-accent)"
           >
         </div>
         <button type="submit"
-          class="rounded-xl bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]">
+          class="rounded-xl bg-(--admin-accent) px-4 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)">
           Connect Mastodon
         </button>
       </form>
@@ -73,12 +73,12 @@
     <input type="hidden" name="action" value="save_defaults">
 
     {# Per-kind defaults #}
-    <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+    <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
       <h2 class="text-base font-semibold">Syndication defaults</h2>
-      <p class="mt-1 text-sm text-[color:var(--admin-muted)]">
+      <p class="mt-1 text-sm text-(--admin-muted)">
         Which post kinds are published to Mastodon by default? Individual posts can override this.
       </p>
-      <div class="mt-4 divide-y divide-[color:var(--admin-border)]">
+      <div class="mt-4 divide-y divide-(--admin-border)">
         {% for kind_value, kind_label in post_kind_choices %}
           {% with default=defaults|get_item:kind_value %}
           <div class="flex items-center justify-between py-3">
@@ -88,7 +88,7 @@
               id="publish_{{ kind_value }}"
               name="publish_{{ kind_value }}"
               {% if default and default.publish %}checked{% endif %}
-              class="h-4 w-4 rounded border-[color:var(--admin-border)] text-[color:var(--admin-accent)]"
+              class="h-4 w-4 rounded border-(--admin-border) text-(--admin-accent)"
             >
           </div>
           {% endwith %}
@@ -101,7 +101,7 @@
               id="publish_{{ kind_value }}"
               name="publish_{{ kind_value }}"
               {% if default.publish %}checked{% endif %}
-              class="h-4 w-4 rounded border-[color:var(--admin-border)] text-[color:var(--admin-accent)]"
+              class="h-4 w-4 rounded border-(--admin-border) text-(--admin-accent)"
             >
           </div>
           {% endfor %}
@@ -110,18 +110,18 @@
     </section>
 
     {# Channel selectors #}
-    <section class="mt-6 rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+    <section class="mt-6 rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
       <h2 class="text-base font-semibold">Microsub channels</h2>
-      <p class="mt-1 text-sm text-[color:var(--admin-muted)]">
+      <p class="mt-1 text-sm text-(--admin-muted)">
         Choose which Microsub channels receive Mastodon content. Leave blank to disable.
       </p>
       <div class="mt-4 grid gap-5 sm:grid-cols-2">
         <div>
-          <label for="timeline_channel" class="block text-xs font-semibold text-[color:var(--admin-muted)]">Home timeline</label>
+          <label for="timeline_channel" class="block text-xs font-semibold text-(--admin-muted)">Home timeline</label>
           <select
             id="timeline_channel"
             name="timeline_channel"
-            class="mt-1 w-full rounded-xl border border-[color:var(--admin-border)] px-3 py-2 text-sm"
+            class="mt-1 w-full rounded-xl border border-(--admin-border) px-3 py-2 text-sm"
           >
             <option value="">— Don't ingest timeline —</option>
             {% for channel in channels %}
@@ -132,11 +132,11 @@
           </select>
         </div>
         <div>
-          <label for="notifications_channel" class="block text-xs font-semibold text-[color:var(--admin-muted)]">Notifications</label>
+          <label for="notifications_channel" class="block text-xs font-semibold text-(--admin-muted)">Notifications</label>
           <select
             id="notifications_channel"
             name="notifications_channel"
-            class="mt-1 w-full rounded-xl border border-[color:var(--admin-border)] px-3 py-2 text-sm"
+            class="mt-1 w-full rounded-xl border border-(--admin-border) px-3 py-2 text-sm"
           >
             <option value="">— Don't ingest notifications —</option>
             {% for channel in channels %}
@@ -148,11 +148,11 @@
         </div>
       </div>
       <div class="mt-5 max-w-md">
-        <label for="timeline_reply_filter" class="block text-xs font-semibold text-[color:var(--admin-muted)]">Timeline replies</label>
+        <label for="timeline_reply_filter" class="block text-xs font-semibold text-(--admin-muted)">Timeline replies</label>
         <select
           id="timeline_reply_filter"
           name="timeline_reply_filter"
-          class="mt-1 w-full rounded-xl border border-[color:var(--admin-border)] px-3 py-2 text-sm"
+          class="mt-1 w-full rounded-xl border border-(--admin-border) px-3 py-2 text-sm"
         >
           {% for value, label in timeline_reply_filter_choices %}
             <option value="{{ value }}" {% if account.timeline_reply_filter == value %}selected{% endif %}>
@@ -160,7 +160,7 @@
             </option>
           {% endfor %}
         </select>
-        <p class="mt-2 text-xs text-[color:var(--admin-muted)]">
+        <p class="mt-2 text-xs text-(--admin-muted)">
           Control whether Mastodon replies are ingested into the Microsub home timeline.
         </p>
       </div>
@@ -168,7 +168,7 @@
 
     <div class="mt-4 flex justify-end">
       <button type="submit"
-        class="rounded-xl bg-[color:var(--admin-accent)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]">
+        class="rounded-xl bg-(--admin-accent) px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)">
         Save settings
       </button>
     </div>

@@ -7,22 +7,22 @@
     {% include "site_admin/_section_subnav.html" with section="settings" %}
       <section class="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div class="text-sm uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Site settings</div>
+          <div class="text-sm uppercase tracking-[0.2em] text-(--admin-muted)">Site settings</div>
           <h1 class="text-2xl font-semibold">Microsub</h1>
-          <p class="mt-1 text-sm text-[color:var(--admin-muted)]">
+          <p class="mt-1 text-sm text-(--admin-muted)">
             Manage your feed reader channels and subscriptions.
           </p>
         </div>
         <div class="flex flex-wrap items-center gap-3">
           <a
             href="{% url 'site_admin:microsub_import_opml' %}"
-            class="rounded-full border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+            class="rounded-full border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
           >
             Import OPML
           </a>
           <a
             href="{% url 'site_admin:microsub_channel_create' %}"
-            class="rounded-full bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+            class="rounded-full bg-(--admin-accent) px-4 py-2 text-sm font-semibold text-white shadow-xs transition hover:opacity-90"
           >
             New channel
           </a>
@@ -30,14 +30,14 @@
       </section>
 
 
-      <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+      <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
         <h2 class="text-lg font-semibold">Channels</h2>
 
         {% if channels %}
           <div class="mt-4 hidden md:block">
-            <div class="overflow-hidden rounded-2xl border border-[color:var(--admin-border)]">
+            <div class="overflow-hidden rounded-2xl border border-(--admin-border)">
               <table class="w-full table-fixed text-left text-sm">
-                <thead class="bg-[color:var(--admin-bg)] text-xs uppercase tracking-widest text-[color:var(--admin-muted)]">
+                <thead class="bg-(--admin-bg) text-xs uppercase tracking-widest text-(--admin-muted)">
                   <tr>
                     <th class="px-4 py-3">Name</th>
                     <th class="px-4 py-3 w-24">Feeds</th>
@@ -48,26 +48,26 @@
                 </thead>
                 <tbody>
                   {% for channel in channels %}
-                    <tr class="border-t border-[color:var(--admin-border)]">
+                    <tr class="border-t border-(--admin-border)">
                       <td class="px-4 py-3 font-semibold">
                         {{ channel.name }}
                         {% if channel.uid == "notifications" %}
-                          <span class="ml-2 rounded-full bg-[color:var(--admin-bg)] px-2 py-0.5 text-xs text-[color:var(--admin-muted)]">built-in</span>
+                          <span class="ml-2 rounded-full bg-(--admin-bg) px-2 py-0.5 text-xs text-(--admin-muted)">built-in</span>
                         {% endif %}
                       </td>
-                      <td class="px-4 py-3 text-[color:var(--admin-muted)]">{{ channel.feed_count }}</td>
-                      <td class="px-4 py-3 text-[color:var(--admin-muted)]">{{ channel.entry_count }}</td>
+                      <td class="px-4 py-3 text-(--admin-muted)">{{ channel.feed_count }}</td>
+                      <td class="px-4 py-3 text-(--admin-muted)">{{ channel.entry_count }}</td>
                       <td class="px-4 py-3">
                         {% if channel.unread_count %}
-                          <span class="font-semibold text-[color:var(--admin-accent)]">{{ channel.unread_count }}</span>
+                          <span class="font-semibold text-(--admin-accent)">{{ channel.unread_count }}</span>
                         {% else %}
-                          <span class="text-[color:var(--admin-muted)]">0</span>
+                          <span class="text-(--admin-muted)">0</span>
                         {% endif %}
                       </td>
                       <td class="px-4 py-3 text-right">
                         <a
                           href="{% url 'site_admin:microsub_channel_detail' uid=channel.uid %}"
-                          class="text-sm font-semibold text-[color:var(--admin-accent)]"
+                          class="text-sm font-semibold text-(--admin-accent)"
                         >
                           View
                         </a>
@@ -81,25 +81,25 @@
 
           <div class="mt-4 flex flex-col gap-3 md:hidden">
             {% for channel in channels %}
-              <div class="rounded-2xl border border-[color:var(--admin-border)] p-4">
+              <div class="rounded-2xl border border-(--admin-border) p-4">
                 <div class="flex items-center justify-between">
                   <div class="text-base font-semibold">
                     {{ channel.name }}
                     {% if channel.uid == "notifications" %}
-                      <span class="ml-1 text-xs text-[color:var(--admin-muted)]">(built-in)</span>
+                      <span class="ml-1 text-xs text-(--admin-muted)">(built-in)</span>
                     {% endif %}
                   </div>
                   {% if channel.unread_count %}
-                    <span class="text-sm font-semibold text-[color:var(--admin-accent)]">{{ channel.unread_count }} unread</span>
+                    <span class="text-sm font-semibold text-(--admin-accent)">{{ channel.unread_count }} unread</span>
                   {% endif %}
                 </div>
-                <div class="mt-1 text-sm text-[color:var(--admin-muted)]">
+                <div class="mt-1 text-sm text-(--admin-muted)">
                   {{ channel.feed_count }} feed{{ channel.feed_count|pluralize }} &middot; {{ channel.entry_count }} entries
                 </div>
                 <div class="mt-3">
                   <a
                     href="{% url 'site_admin:microsub_channel_detail' uid=channel.uid %}"
-                    class="text-sm font-semibold text-[color:var(--admin-accent)]"
+                    class="text-sm font-semibold text-(--admin-accent)"
                   >
                     View
                   </a>
@@ -108,8 +108,8 @@
             {% endfor %}
           </div>
         {% else %}
-          <div class="mt-4 rounded-2xl border border-dashed border-[color:var(--admin-border)] p-6 text-sm text-[color:var(--admin-muted)]">
-            No channels yet. <a href="{% url 'site_admin:microsub_channel_create' %}" class="font-semibold text-[color:var(--admin-accent)]">Create one</a> to get started.
+          <div class="mt-4 rounded-2xl border border-dashed border-(--admin-border) p-6 text-sm text-(--admin-muted)">
+            No channels yet. <a href="{% url 'site_admin:microsub_channel_create' %}" class="font-semibold text-(--admin-accent)">Create one</a> to get started.
           </div>
         {% endif %}
       </section>

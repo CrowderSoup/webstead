@@ -14,10 +14,10 @@
   {% include "site_admin/posts/_form_messages.html" %}
   <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
     <div class="space-y-6">
-      <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-5 shadow-sm">
+      <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs">
         <label
           for="{{ form.kind.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--admin-muted)]"
+          class="text-xs font-semibold uppercase tracking-[0.2em] text-(--admin-muted)"
         >
           Post type
         </label>
@@ -25,7 +25,7 @@
           {% for kind, label in form.fields.kind.choices %}
             <button
               type="button"
-              class="kind-pill flex items-center justify-center rounded-full border border-[color:var(--admin-border)] px-3 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:border-[color:var(--admin-accent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--admin-accent)]"
+              class="kind-pill flex items-center justify-center rounded-full border border-(--admin-border) px-3 py-2 text-sm font-semibold text-(--admin-ink) transition hover:border-(--admin-accent) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-(--admin-accent)"
               data-kind-value="{{ kind }}"
               aria-pressed="false"
             >
@@ -33,7 +33,7 @@
             </button>
           {% endfor %}
         </div>
-        <p id="kind-hint" class="mt-3 text-xs text-[color:var(--admin-muted)]">
+        <p id="kind-hint" class="mt-3 text-xs text-(--admin-muted)">
           Choose the right flavor for this post.
         </p>
         <div class="sr-only">
@@ -41,12 +41,12 @@
         </div>
       </div>
 
-      <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-5 shadow-sm">
-        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Basics</div>
+      <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs">
+        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-(--admin-muted)">Basics</div>
         <div class="mt-4">
           <label
             for="{{ form.title.id_for_label }}"
-            class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+            class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
           >
             Title
           </label>
@@ -56,24 +56,24 @@
         <div class="mt-4">
           <label
             for="{{ form.content.id_for_label }}"
-            class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+            class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
           >
             Content
           </label>
           {{ form.content }}
-          <p class="mt-1 text-xs text-[color:var(--admin-muted)]" id="content-helper">
+          <p class="mt-1 text-xs text-(--admin-muted)" id="content-helper">
             Write the caption, note, or long-form text here.
           </p>
           {{ form.content.errors }}
         </div>
       </div>
 
-      <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-5 shadow-sm" data-kind-section="activity">
+      <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs" data-kind-section="activity">
         <div class="flex flex-wrap items-start justify-between gap-4">
           <div>
             <label
               for="{{ form.activity_type.id_for_label }}"
-              class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+              class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
             >
               Activity type
             </label>
@@ -85,17 +85,17 @@
               <option value="Walk"></option>
               <option value="Trail run"></option>
             </datalist>
-            <p class="mt-1 text-xs text-[color:var(--admin-muted)]">{{ form.activity_type.help_text }}</p>
+            <p class="mt-1 text-xs text-(--admin-muted)">{{ form.activity_type.help_text }}</p>
             {{ form.activity_type.errors }}
           </div>
-          <div class="text-xs text-[color:var(--admin-muted)]">
+          <div class="text-xs text-(--admin-muted)">
             Activity posts show a map + photos.
           </div>
         </div>
         <div class="mt-4">
           <label
             for="gpx-file"
-            class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+            class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
           >
             GPX track
           </label>
@@ -104,17 +104,17 @@
             id="gpx-file"
             name="gpx_file"
             accept=".gpx,application/gpx+xml"
-            class="mt-2 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]"
+            class="mt-2 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)"
           >
-          <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Upload a .gpx file so the map can render the route.</p>
-          <div class="mt-3 rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] px-4 py-3 text-xs text-[color:var(--admin-muted)]">
+          <p class="mt-1 text-xs text-(--admin-muted)">Upload a .gpx file so the map can render the route.</p>
+          <div class="mt-3 rounded-2xl border border-(--admin-border) bg-(--admin-bg) px-4 py-3 text-xs text-(--admin-muted)">
             <div class="flex flex-wrap items-center gap-3">
-              <label class="flex items-center gap-2 text-[color:var(--admin-ink)]">
+              <label class="flex items-center gap-2 text-(--admin-ink)">
                 <input
                   type="checkbox"
                   name="gpx_trim"
                   value="1"
-                  class="h-4 w-4 rounded border-[color:var(--admin-border)] text-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]"
+                  class="h-4 w-4 rounded border-(--admin-border) text-(--admin-accent) focus:ring-(--admin-accent)"
                   {% if gpx_trim_enabled %}checked{% endif %}
                 >
                 <span>Trim start/end</span>
@@ -126,18 +126,18 @@
                   min="0"
                   step="10"
                   value="{{ gpx_trim_distance }}"
-                  class="w-24 rounded-full border border-[color:var(--admin-border)] bg-white px-2 py-1 text-xs text-[color:var(--admin-ink)]"
+                  class="w-24 rounded-full border border-(--admin-border) bg-white px-2 py-1 text-xs text-(--admin-ink)"
                 >
                 <span>meters</span>
               </div>
             </div>
-            <div class="mt-2 flex flex-wrap items-center gap-4 text-[color:var(--admin-ink)]">
+            <div class="mt-2 flex flex-wrap items-center gap-4 text-(--admin-ink)">
               <label class="flex items-center gap-2">
                 <input
                   type="checkbox"
                   name="gpx_blur"
                   value="1"
-                  class="h-4 w-4 rounded border-[color:var(--admin-border)] text-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]"
+                  class="h-4 w-4 rounded border-(--admin-border) text-(--admin-accent) focus:ring-(--admin-accent)"
                   {% if gpx_blur_enabled %}checked{% endif %}
                 >
                 <span>Blur coordinates (5-20 m)</span>
@@ -147,7 +147,7 @@
                   type="checkbox"
                   name="gpx_remove_timestamps"
                   value="1"
-                  class="h-4 w-4 rounded border-[color:var(--admin-border)] text-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]"
+                  class="h-4 w-4 rounded border-(--admin-border) text-(--admin-accent) focus:ring-(--admin-accent)"
                   {% if gpx_remove_timestamps %}checked{% endif %}
                 >
                 <span>Remove timestamps</span>
@@ -157,11 +157,11 @@
           </div>
           {% if activity_gpx %}
             <div class="mt-3 flex flex-wrap items-center gap-3 text-xs">
-              <a href="{{ activity_gpx.url }}" class="font-semibold text-[color:var(--admin-accent)]">
+              <a href="{{ activity_gpx.url }}" class="font-semibold text-(--admin-accent)">
                 Current: {{ activity_gpx.name }}
               </a>
-              <label class="flex items-center gap-2 text-[color:var(--admin-warn)]">
-                <input type="checkbox" name="gpx_remove" value="1" class="h-4 w-4 rounded border-[color:var(--admin-border)] text-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]">
+              <label class="flex items-center gap-2 text-(--admin-warn)">
+                <input type="checkbox" name="gpx_remove" value="1" class="h-4 w-4 rounded border-(--admin-border) text-(--admin-accent) focus:ring-(--admin-accent)">
                 <span>Remove GPX</span>
               </label>
             </div>
@@ -169,51 +169,51 @@
         </div>
       </div>
 
-      <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-5 shadow-sm" data-kind-section="event">
-        <div class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)] mb-3">Event details</div>
+      <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs" data-kind-section="event">
+        <div class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted) mb-3">Event details</div>
         <div class="grid gap-4 sm:grid-cols-2">
           <div>
-            <label for="{{ form.event_start.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Start</label>
+            <label for="{{ form.event_start.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Start</label>
             {{ form.event_start }}
             {{ form.event_start.errors }}
           </div>
           <div>
-            <label for="{{ form.event_end.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">End (optional)</label>
+            <label for="{{ form.event_end.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">End (optional)</label>
             {{ form.event_end }}
             {{ form.event_end.errors }}
           </div>
           <div>
-            <label for="{{ form.event_location.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Location</label>
+            <label for="{{ form.event_location.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Location</label>
             {{ form.event_location }}
             {{ form.event_location.errors }}
           </div>
           <div>
-            <label for="{{ form.event_url.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Event URL (optional)</label>
+            <label for="{{ form.event_url.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Event URL (optional)</label>
             {{ form.event_url }}
             {{ form.event_url.errors }}
           </div>
         </div>
-        <p class="mt-3 text-xs text-[color:var(--admin-muted)]">Use the content field above for the event description.</p>
+        <p class="mt-3 text-xs text-(--admin-muted)">Use the content field above for the event description.</p>
       </div>
 
-      <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-5 shadow-sm" data-kind-section="rsvp">
-        <div class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)] mb-3">RSVP</div>
+      <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs" data-kind-section="rsvp">
+        <div class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted) mb-3">RSVP</div>
         <div class="grid gap-4">
           <div>
-            <label for="{{ form.rsvp_value.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Response</label>
+            <label for="{{ form.rsvp_value.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Response</label>
             {{ form.rsvp_value }}
             {{ form.rsvp_value.errors }}
           </div>
         </div>
-        <p class="mt-3 text-xs text-[color:var(--admin-muted)]">Set the event URL in the target URL field in the right column.</p>
+        <p class="mt-3 text-xs text-(--admin-muted)">Set the event URL in the target URL field in the right column.</p>
       </div>
 
-      <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-5 shadow-sm" data-kind-section="checkin">
+      <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs" data-kind-section="checkin">
         <div class="flex items-center justify-between gap-2 mb-3">
-          <div class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Check-in</div>
+          <div class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Check-in</div>
           <button
             type="button"
-            class="rounded-full border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-accent)] transition hover:bg-[color:var(--admin-bg)]"
+            class="rounded-full border border-(--admin-border) px-3 py-1 text-xs font-semibold text-(--admin-accent) transition hover:bg-(--admin-bg)"
             data-geolocate-btn
           >
             Use my location
@@ -221,56 +221,56 @@
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
           <div class="sm:col-span-2">
-            <label for="{{ form.checkin_name.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Place name</label>
+            <label for="{{ form.checkin_name.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Place name</label>
             {{ form.checkin_name }}
             {{ form.checkin_name.errors }}
           </div>
           <div>
-            <label for="{{ form.checkin_latitude.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Latitude</label>
+            <label for="{{ form.checkin_latitude.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Latitude</label>
             {{ form.checkin_latitude }}
             {{ form.checkin_latitude.errors }}
           </div>
           <div>
-            <label for="{{ form.checkin_longitude.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Longitude</label>
+            <label for="{{ form.checkin_longitude.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Longitude</label>
             {{ form.checkin_longitude }}
             {{ form.checkin_longitude.errors }}
           </div>
         </div>
-        <div id="checkin-map" class="mt-4 h-64 rounded-2xl border border-[color:var(--admin-border)]" data-checkin-map></div>
+        <div id="checkin-map" class="mt-4 h-64 rounded-2xl border border-(--admin-border)" data-checkin-map></div>
         <div id="checkin-suggestions" class="mt-3 hidden">
-          <p class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)] mb-2">Nearby places</p>
+          <p class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted) mb-2">Nearby places</p>
           <div id="checkin-suggestions-list" class="flex flex-wrap gap-2"></div>
         </div>
-        <p class="mt-2 text-xs text-[color:var(--admin-muted)]">Enter coordinates, click the map, or use your device location.</p>
+        <p class="mt-2 text-xs text-(--admin-muted)">Enter coordinates, click the map, or use your device location.</p>
       </div>
 
-      <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-5 shadow-sm" data-kind-section="photo">
+      <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs" data-kind-section="photo">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <label
               for="photo-uploader"
-              class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+              class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
             >
               Photos
             </label>
-            <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Drop a few images and add alt text or captions.</p>
+            <p class="mt-1 text-xs text-(--admin-muted)">Drop a few images and add alt text or captions.</p>
           </div>
           <button
             type="button"
-            class="rounded-full border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+            class="rounded-full border border-(--admin-border) px-3 py-1 text-xs font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
             data-photo-trigger
           >
             Upload photos
           </button>
         </div>
         <div
-          class="mt-4 flex min-h-[140px] flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] px-4 py-6 text-center text-sm text-[color:var(--admin-muted)] transition"
+          class="mt-4 flex min-h-[140px] flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-(--admin-border) bg-(--admin-bg) px-4 py-6 text-center text-sm text-(--admin-muted) transition"
           data-photo-dropzone
           role="button"
           tabindex="0"
           aria-label="Upload photos"
         >
-          <span class="text-sm font-semibold text-[color:var(--admin-ink)]">Drop images here</span>
+          <span class="text-sm font-semibold text-(--admin-ink)">Drop images here</span>
           <span class="text-xs">or click to browse</span>
         </div>
         <label for="photo-uploader" class="sr-only">Upload photos</label>
@@ -283,24 +283,24 @@
           class="sr-only"
         >
         <div id="photo-grid" class="mt-4 grid gap-4 sm:grid-cols-2"></div>
-        <div id="photo-empty" class="mt-3 text-xs text-[color:var(--admin-muted)]">
+        <div id="photo-empty" class="mt-3 text-xs text-(--admin-muted)">
           No photos yet. Photo posts can be just images and a short caption.
         </div>
         <div id="photo-metadata-fields"></div>
       </div>
 
-      <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-5 shadow-sm">
-        <div class="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Organization</div>
+      <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs">
+        <div class="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-(--admin-muted)">Organization</div>
         <div class="flex items-center justify-between gap-2">
           <label
             for="{{ form.tags_text.id_for_label }}"
-            class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+            class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
           >
             Tags
           </label>
           <button
             type="button"
-            class="rounded-full border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-accent)] transition hover:bg-[color:var(--admin-bg)]"
+            class="rounded-full border border-(--admin-border) px-3 py-1 text-xs font-semibold text-(--admin-accent) transition hover:bg-(--admin-bg)"
             data-suggest-tags-btn
           >
             Suggest tags
@@ -316,17 +316,17 @@
           {{ form.tags_text }}
           <div class="tag-suggestions" data-tag-suggestions hidden></div>
         </div>
-        <p class="mt-1 text-xs text-[color:var(--admin-muted)]">{{ form.tags_text.help_text }}</p>
+        <p class="mt-1 text-xs text-(--admin-muted)">{{ form.tags_text.help_text }}</p>
         {{ form.tags_text.errors }}
       </div>
     </div>
     <div class="space-y-5">
-      <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-5 shadow-sm">
-        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Publishing</div>
+      <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs">
+        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-(--admin-muted)">Publishing</div>
         <div class="mt-4">
           <label
             for="{{ form.published_on.id_for_label }}"
-            class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+            class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
           >
             Publish time
           </label>
@@ -334,7 +334,7 @@
           {{ form.published_on.errors }}
         </div>
         <div class="mt-4 flex items-center gap-2">
-          <label class="flex items-center gap-2 text-sm font-semibold text-[color:var(--admin-muted)]">
+          <label class="flex items-center gap-2 text-sm font-semibold text-(--admin-muted)">
             {{ form.save_as_draft }}
             <span>Save as draft</span>
           </label>
@@ -343,7 +343,7 @@
         <div class="mt-4">
           <label
             for="{{ form.mastodon_syndicate.id_for_label }}"
-            class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+            class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
           >
             Mastodon
           </label>
@@ -353,72 +353,72 @@
         {% endif %}
       </div>
 
-      <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-5 shadow-sm">
-        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Post targets</div>
-        <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Only required for interaction-style posts.</p>
+      <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs">
+        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-(--admin-muted)">Post targets</div>
+        <p class="mt-1 text-xs text-(--admin-muted)">Only required for interaction-style posts.</p>
         <div class="mt-4 space-y-4">
           <div data-kind-section="like">
             <label
               for="{{ form.like_of.id_for_label }}"
-              class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+              class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
             >
               Like URL
             </label>
             {{ form.like_of }}
-            <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Required for like posts.</p>
+            <p class="mt-1 text-xs text-(--admin-muted)">Required for like posts.</p>
             {{ form.like_of.errors }}
           </div>
           <div data-kind-section="repost">
             <label
               for="{{ form.repost_of.id_for_label }}"
-              class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+              class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
             >
               Repost URL
             </label>
             {{ form.repost_of }}
-            <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Required for reposts.</p>
+            <p class="mt-1 text-xs text-(--admin-muted)">Required for reposts.</p>
             {{ form.repost_of.errors }}
           </div>
           <div data-kind-section="reply rsvp">
             <label
               for="{{ form.in_reply_to.id_for_label }}"
-              class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+              class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
             >
               Target URL
             </label>
             {{ form.in_reply_to }}
-            <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Required for replies and RSVPs.</p>
+            <p class="mt-1 text-xs text-(--admin-muted)">Required for replies and RSVPs.</p>
             {{ form.in_reply_to.errors }}
           </div>
           <div data-kind-section="bookmark">
             <label
               for="{{ form.bookmark_of.id_for_label }}"
-              class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+              class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
             >
               Bookmark URL
             </label>
             {{ form.bookmark_of }}
-            <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Required for bookmarks.</p>
+            <p class="mt-1 text-xs text-(--admin-muted)">Required for bookmarks.</p>
             {{ form.bookmark_of.errors }}
           </div>
         </div>
       </div>
 
-      <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-5 shadow-sm">
-        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Advanced</div>
+      <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs">
+        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-(--admin-muted)">Advanced</div>
         <div class="mt-4">
           <label
             for="{{ form.slug.id_for_label }}"
-            class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+            class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
           >
             Slug
           </label>
           {{ form.slug }}
-          <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Leave blank to auto-generate.</p>
+          <p class="mt-1 text-xs text-(--admin-muted)">Leave blank to auto-generate.</p>
           {{ form.slug.errors }}
         </div>
         <div class="mt-4 flex items-center gap-2">
-          <label class="flex items-center gap-2 text-sm font-semibold text-[color:var(--admin-warn)]">
+          <label class="flex items-center gap-2 text-sm font-semibold text-(--admin-warn)">
             {{ form.deleted }}
             <span>Mark as deleted</span>
           </label>
@@ -426,15 +426,15 @@
       </div>
     </div>
   </div>
-  <div class="sticky bottom-4 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] px-4 py-3 shadow-sm">
+  <div class="sticky bottom-4 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-(--admin-border) bg-(--admin-surface) px-4 py-3 shadow-xs">
     <button
       type="submit"
-      class="rounded-xl bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+      class="rounded-xl bg-(--admin-accent) px-5 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)"
     >
       Save post
     </button>
     {% if post %}
-      <span class="text-xs text-[color:var(--admin-muted)]">
+      <span class="text-xs text-(--admin-muted)">
         {% if post.published_on %}Published{% else %}Draft{% endif %}
       </span>
     {% endif %}
@@ -503,11 +503,11 @@
     kindPills.forEach((pill) => {
       const isActive = pill.dataset.kindValue === kind;
       pill.setAttribute("aria-pressed", isActive ? "true" : "false");
-      pill.classList.toggle("bg-[color:var(--admin-accent)]", isActive);
+      pill.classList.toggle("bg-(--admin-accent)", isActive);
       pill.classList.toggle("text-white", isActive);
-      pill.classList.toggle("border-[color:var(--admin-accent)]", isActive);
-      pill.classList.toggle("border-[color:var(--admin-border)]", !isActive);
-      pill.classList.toggle("text-[color:var(--admin-ink)]", !isActive);
+      pill.classList.toggle("border-(--admin-accent)", isActive);
+      pill.classList.toggle("border-(--admin-border)", !isActive);
+      pill.classList.toggle("text-(--admin-ink)", !isActive);
     });
   }
 
@@ -583,12 +583,12 @@
   function buildCard(item, idx) {
     const card = document.createElement("div");
     card.className =
-      "flex flex-col gap-3 rounded-2xl border border-[color:var(--admin-border)] bg-white p-3 shadow-sm";
+      "flex flex-col gap-3 rounded-2xl border border-(--admin-border) bg-white p-3 shadow-xs";
 
     const img = document.createElement("img");
     img.src = item.url;
     img.alt = "Selected image preview";
-    img.className = "h-40 w-full rounded-xl object-cover bg-[color:var(--admin-bg)]";
+    img.className = "h-40 w-full rounded-xl object-cover bg-(--admin-bg)";
 
     const meta = document.createElement("div");
     meta.className = "flex flex-col gap-2";
@@ -599,7 +599,7 @@
     altInput.setAttribute("aria-label", "Alt text");
     altInput.value = item.alt || "";
     altInput.className =
-      "w-full rounded-xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-xs focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]";
+      "w-full rounded-xl border border-(--admin-border) bg-white px-3 py-2 text-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)";
     altInput.addEventListener("input", (event) => {
       item.alt = event.target.value;
     });
@@ -609,7 +609,7 @@
     captionInput.setAttribute("aria-label", "Caption");
     captionInput.value = item.caption || "";
     captionInput.className =
-      "w-full rounded-xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-xs focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]";
+      "w-full rounded-xl border border-(--admin-border) bg-white px-3 py-2 text-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)";
     captionInput.rows = 2;
     captionInput.addEventListener("input", (event) => {
       item.caption = event.target.value;
@@ -626,7 +626,7 @@
     up.textContent = "Move up";
     up.disabled = idx === 0;
     up.className =
-      "rounded-full border border-[color:var(--admin-border)] px-3 py-1 font-semibold text-[color:var(--admin-ink)] disabled:cursor-not-allowed disabled:opacity-60";
+      "rounded-full border border-(--admin-border) px-3 py-1 font-semibold text-(--admin-ink) disabled:cursor-not-allowed disabled:opacity-60";
     up.addEventListener("click", () => moveCard(idx, -1));
 
     const down = document.createElement("button");
@@ -634,14 +634,14 @@
     down.textContent = "Move down";
     down.disabled = idx === photoData.length - 1;
     down.className =
-      "rounded-full border border-[color:var(--admin-border)] px-3 py-1 font-semibold text-[color:var(--admin-ink)] disabled:cursor-not-allowed disabled:opacity-60";
+      "rounded-full border border-(--admin-border) px-3 py-1 font-semibold text-(--admin-ink) disabled:cursor-not-allowed disabled:opacity-60";
     down.addEventListener("click", () => moveCard(idx, 1));
 
     const copy = document.createElement("button");
     copy.type = "button";
     copy.textContent = "Copy URL";
     copy.className =
-      "rounded-full border border-[color:var(--admin-border)] px-3 py-1 font-semibold text-[color:var(--admin-ink)]";
+      "rounded-full border border-(--admin-border) px-3 py-1 font-semibold text-(--admin-ink)";
     copy.addEventListener("click", () => copyUrlToClipboard(item.url));
 
     const remove = document.createElement("button");
@@ -775,16 +775,16 @@
 
     dropzone.addEventListener("dragover", (event) => {
       event.preventDefault();
-      dropzone.classList.add("border-[color:var(--admin-accent)]");
+      dropzone.classList.add("border-(--admin-accent)");
     });
 
     dropzone.addEventListener("dragleave", () => {
-      dropzone.classList.remove("border-[color:var(--admin-accent)]");
+      dropzone.classList.remove("border-(--admin-accent)");
     });
 
     dropzone.addEventListener("drop", (event) => {
       event.preventDefault();
-      dropzone.classList.remove("border-[color:var(--admin-accent)]");
+      dropzone.classList.remove("border-(--admin-accent)");
       const files = Array.from(event.dataTransfer.files || []).filter((file) =>
         file.type.startsWith("image/")
       );
@@ -858,7 +858,7 @@
           const btn = document.createElement("button");
           btn.type = "button";
           btn.className =
-            "rounded-full border border-[color:var(--admin-border)] bg-white px-3 py-1.5 text-xs font-semibold text-[color:var(--admin-ink)] shadow-sm transition hover:border-[color:var(--admin-accent)] hover:text-[color:var(--admin-accent)]";
+            "rounded-full border border-(--admin-border) bg-white px-3 py-1.5 text-xs font-semibold text-(--admin-ink) shadow-xs transition hover:border-(--admin-accent) hover:text-(--admin-accent)";
           const dist = place.distance_km < 1
             ? `${Math.round(place.distance_km * 1000)} m`
             : `${place.distance_km} km`;
@@ -944,9 +944,13 @@
           const css = document.createElement("link");
           css.rel = "stylesheet";
           css.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+          css.integrity = "sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H";
+          css.crossOrigin = "anonymous";
           document.head.appendChild(css);
           const js = document.createElement("script");
           js.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+          js.integrity = "sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH";
+          js.crossOrigin = "anonymous";
           js.onload = () => {
             initCheckinMap();
             setTimeout(() => map && map.invalidateSize(), 100);

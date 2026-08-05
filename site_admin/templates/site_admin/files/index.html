@@ -4,31 +4,31 @@
 
 {% block content %}
   <div class="flex flex-col gap-6">
-    <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+    <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Media Library</p>
+          <p class="text-xs font-semibold uppercase tracking-[0.24em] text-(--admin-muted)">Media Library</p>
           <h1 class="mt-2 text-2xl font-semibold">Files</h1>
-          <p class="mt-1 text-sm text-[color:var(--admin-muted)]">Browse uploads, copy URLs, and manage attachment metadata.</p>
+          <p class="mt-1 text-sm text-(--admin-muted)">Browse uploads, copy URLs, and manage attachment metadata.</p>
         </div>
         <a
           href="{% url 'site_admin:file_create' %}"
-          class="rounded-xl bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+          class="rounded-xl bg-(--admin-accent) px-4 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)"
         >
           + Upload file
         </a>
       </div>
     </section>
 
-    <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+    <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
       {% if page_obj.object_list %}
         <div class="mb-4 flex items-center justify-between gap-3 text-xs">
-          <div class="font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">{{ paginator.count }} total files</div>
-          <div class="text-[color:var(--admin-muted)]">Page {{ page_obj.number }} of {{ paginator.num_pages }}</div>
+          <div class="font-semibold uppercase tracking-wide text-(--admin-muted)">{{ paginator.count }} total files</div>
+          <div class="text-(--admin-muted)">Page {{ page_obj.number }} of {{ paginator.num_pages }}</div>
         </div>
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {% for asset in page_obj.object_list %}
-            <div class="overflow-hidden rounded-2xl border border-[color:var(--admin-border)] bg-white shadow-sm transition hover:-translate-y-0.5">
+            <div class="overflow-hidden rounded-2xl border border-(--admin-border) bg-white shadow-xs transition hover:-translate-y-0.5">
               <a href="{{ asset.file.url }}" class="block" target="_blank" rel="noopener">
                 {% if asset.kind == "image" %}
                   <img
@@ -38,8 +38,8 @@
                     loading="lazy"
                   />
                 {% else %}
-                  <div class="flex h-40 items-center justify-center bg-[color:var(--admin-bg)]">
-                    <span class="rounded-full border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+                  <div class="flex h-40 items-center justify-center bg-(--admin-bg)">
+                    <span class="rounded-full border border-(--admin-border) px-3 py-1 text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">
                       {{ asset.get_kind_display }}
                     </span>
                   </div>
@@ -50,21 +50,21 @@
                   <div class="truncate text-sm font-semibold" title="{{ asset.caption|default:asset.alt_text|default:asset }}">
                     {{ asset.caption|default:asset.alt_text|default:asset }}
                   </div>
-                  <span class="rounded-full border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+                  <span class="rounded-full border border-(--admin-border) bg-(--admin-bg) px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-(--admin-muted)">
                     {{ asset.get_kind_display }}
                   </span>
                 </div>
-                <div class="mt-1 flex items-center justify-between text-xs text-[color:var(--admin-muted)]">
+                <div class="mt-1 flex items-center justify-between text-xs text-(--admin-muted)">
                   <span>{{ asset.created_at|date:"M j, Y" }}</span>
                 </div>
                 <div class="mt-3 flex flex-wrap items-center gap-3 text-xs">
                   <a
                     href="{% url 'site_admin:file_edit' file_id=asset.id %}"
-                    class="font-semibold text-[color:var(--admin-accent)]"
+                    class="font-semibold text-(--admin-accent)"
                   >
                     Edit details
                   </a>
-                  <a href="{{ asset.file.url }}" class="text-[color:var(--admin-muted)]" target="_blank" rel="noopener">
+                  <a href="{{ asset.file.url }}" class="text-(--admin-muted)" target="_blank" rel="noopener">
                     Open file
                   </a>
                   <a
@@ -80,14 +80,14 @@
         </div>
 
         <div class="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm">
-          <div class="text-[color:var(--admin-muted)]">
+          <div class="text-(--admin-muted)">
             Page {{ page_obj.number }} of {{ paginator.num_pages }}
           </div>
           <div class="flex items-center gap-2">
             {% if page_obj.has_previous %}
               <a
                 href="?page={{ page_obj.previous_page_number }}{% if base_query %}&{{ base_query }}{% endif %}"
-                class="rounded-full border border-[color:var(--admin-border)] px-3 py-1.5 font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+                class="rounded-full border border-(--admin-border) px-3 py-1.5 font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
               >
                 Previous
               </a>
@@ -95,7 +95,7 @@
             {% if page_obj.has_next %}
               <a
                 href="?page={{ page_obj.next_page_number }}{% if base_query %}&{{ base_query }}{% endif %}"
-                class="rounded-full border border-[color:var(--admin-border)] px-3 py-1.5 font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+                class="rounded-full border border-(--admin-border) px-3 py-1.5 font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
               >
                 Next
               </a>
@@ -103,7 +103,7 @@
           </div>
         </div>
       {% else %}
-        <div class="rounded-2xl border border-dashed border-[color:var(--admin-border)] p-6 text-sm text-[color:var(--admin-muted)]">
+        <div class="rounded-2xl border border-dashed border-(--admin-border) p-6 text-sm text-(--admin-muted)">
           No files uploaded yet.
         </div>
       {% endif %}

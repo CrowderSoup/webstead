@@ -5,18 +5,18 @@
 {% block content %}
   <div class="flex flex-col gap-6">
     {% include "site_admin/_section_subnav.html" with section="analytics" %}
-    <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+    <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div class="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Traffic Intelligence</div>
+          <div class="text-xs font-semibold uppercase tracking-[0.24em] text-(--admin-muted)">Traffic Intelligence</div>
           <h1 class="mt-2 text-2xl font-semibold">Analytics</h1>
-          <p class="mt-1 text-sm text-[color:var(--admin-muted)]">
+          <p class="mt-1 text-sm text-(--admin-muted)">
             Site activity from {{ start_date|date:"M j, Y" }} to {{ end_date|date:"M j, Y" }}.
           </p>
         </div>
         <a
           href="{% url 'site_admin:dashboard' %}"
-          class="rounded-xl border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+          class="rounded-xl border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
         >
           Back to dashboard
         </a>
@@ -26,36 +26,36 @@
           {% for preset in presets.values %}
             <a
               href="{% url 'site_admin:analytics_dashboard' %}?start={{ preset.start }}&end={{ preset.end }}"
-              class="rounded-xl border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)] transition hover:bg-[color:var(--admin-bg)]"
+              class="rounded-xl border border-(--admin-border) px-3 py-1 text-xs font-semibold uppercase tracking-wide text-(--admin-muted) transition hover:bg-(--admin-bg)"
             >
               {{ preset.label }}
             </a>
           {% endfor %}
         </div>
         <form method="get" class="flex flex-wrap items-end gap-2">
-            <label for="analytics-start" class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+            <label for="analytics-start" class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">
               <span>Start date</span>
               <input
                 type="date"
                 name="start"
                 value="{{ start_date|date:'Y-m-d' }}"
                 id="analytics-start"
-                class="w-40 rounded-xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm"
+                class="w-40 rounded-xl border border-(--admin-border) bg-white px-3 py-2 text-sm"
               />
             </label>
-            <label for="analytics-end" class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+            <label for="analytics-end" class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">
               <span>End date</span>
               <input
                 type="date"
                 name="end"
                 value="{{ end_date|date:'Y-m-d' }}"
                 id="analytics-end"
-                class="w-40 rounded-xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm"
+                class="w-40 rounded-xl border border-(--admin-border) bg-white px-3 py-2 text-sm"
               />
             </label>
             <button
               type="submit"
-              class="rounded-xl bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+              class="rounded-xl bg-(--admin-accent) px-4 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)"
             >
               Update
             </button>
@@ -64,26 +64,26 @@
 
 
       <div class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div class="rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] p-4">
-          <div class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Page views</div>
+        <div class="rounded-2xl border border-(--admin-border) bg-(--admin-bg) p-4">
+          <div class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Page views</div>
           <div class="mt-2 text-2xl font-semibold">
             {{ stats.total_page_views|default:0 }}
           </div>
         </div>
-        <div class="rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] p-4">
-          <div class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Sessions</div>
+        <div class="rounded-2xl border border-(--admin-border) bg-(--admin-bg) p-4">
+          <div class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Sessions</div>
           <div class="mt-2 text-2xl font-semibold">
             {{ stats.unique_sessions|default:0 }}
           </div>
         </div>
-        <div class="rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] p-4">
-          <div class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Users</div>
+        <div class="rounded-2xl border border-(--admin-border) bg-(--admin-bg) p-4">
+          <div class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Users</div>
           <div class="mt-2 text-2xl font-semibold">
             {{ stats.unique_users|default:0 }}
           </div>
         </div>
-        <div class="rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] p-4">
-          <div class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Avg. time (sec)</div>
+        <div class="rounded-2xl border border-(--admin-border) bg-(--admin-bg) p-4">
+          <div class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Avg. time (sec)</div>
           <div class="mt-2 text-2xl font-semibold">
             {{ stats.avg_duration|default:0|floatformat:0 }}
           </div>
@@ -92,16 +92,16 @@
     </section>
 
     <section class="grid gap-6 lg:grid-cols-[2fr,1fr]">
-      <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+      <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
         <div class="flex items-center justify-between">
           <h2 class="text-lg font-semibold">Traffic trend</h2>
-          <span class="text-sm text-[color:var(--admin-muted)]">Views vs sessions</span>
+          <span class="text-sm text-(--admin-muted)">Views vs sessions</span>
         </div>
         <div class="mt-4 h-64">
           <canvas id="analytics-trend-chart" class="h-full w-full" role="img" aria-label="Traffic trend chart"></canvas>
         </div>
       </div>
-      <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+      <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
         <h2 class="text-lg font-semibold">Visitors by country</h2>
         <div class="mt-4 h-64">
           <canvas id="analytics-country-chart" class="h-full w-full" role="img" aria-label="Visitors by country chart"></canvas>
@@ -110,60 +110,60 @@
     </section>
 
     <section class="grid gap-6 lg:grid-cols-[2fr,1fr]">
-      <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+      <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
         <h2 class="text-lg font-semibold">Top pages</h2>
         <div class="mt-4 h-64">
           <canvas id="analytics-pages-chart" class="h-full w-full" role="img" aria-label="Top pages chart"></canvas>
         </div>
       </div>
-      <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+      <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
         <h2 class="text-lg font-semibold">Top referrers</h2>
         <div class="mt-4 space-y-3 text-sm">
           {% for row in top_referrers %}
             <div class="flex items-center justify-between gap-3">
-              <div class="truncate text-[color:var(--admin-ink)]" title="{{ row.referrer }}">
+              <div class="truncate text-(--admin-ink)" title="{{ row.referrer }}">
                 {{ row.referrer }}
               </div>
-              <div class="rounded-xl bg-[color:var(--admin-bg)] px-2 py-1 text-xs font-semibold text-[color:var(--admin-muted)]">
+              <div class="rounded-xl bg-(--admin-bg) px-2 py-1 text-xs font-semibold text-(--admin-muted)">
                 {{ row.count }}
               </div>
             </div>
           {% empty %}
-            <p class="text-sm text-[color:var(--admin-muted)]">No referrers yet.</p>
+            <p class="text-sm text-(--admin-muted)">No referrers yet.</p>
           {% endfor %}
         </div>
       </div>
     </section>
 
-    <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+    <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
       <div class="flex items-center justify-between">
         <h2 class="text-lg font-semibold">Top user agents</h2>
         <a
           href="{% url 'site_admin:analytics_user_agents' %}?start={{ start_date|date:'Y-m-d' }}&end={{ end_date|date:'Y-m-d' }}"
-          class="text-sm font-semibold text-[color:var(--admin-muted)] transition hover:text-[color:var(--admin-ink)]"
+          class="text-sm font-semibold text-(--admin-muted) transition hover:text-(--admin-ink)"
         >
           View all
         </a>
       </div>
-      <div class="mt-4 overflow-hidden rounded-2xl border border-[color:var(--admin-border)]">
+      <div class="mt-4 overflow-hidden rounded-2xl border border-(--admin-border)">
         <table class="min-w-full table-fixed text-left text-sm">
-          <thead class="bg-[color:var(--admin-bg)] text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+          <thead class="bg-(--admin-bg) text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">
             <tr>
               <th scope="col" class="px-4 py-3 w-full">User agent</th>
               <th scope="col" class="px-4 py-3 w-24">Count</th>
               <th scope="col" class="px-4 py-3 w-28">Action</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-[color:var(--admin-border)]">
+          <tbody class="divide-y divide-(--admin-border)">
             {% for row in top_user_agents %}
               <tr>
-                <td class="px-4 py-3 text-[color:var(--admin-ink)] min-w-0 max-w-0 overflow-hidden">
+                <td class="px-4 py-3 text-(--admin-ink) min-w-0 max-w-0 overflow-hidden">
                   <div class="block w-full truncate" title="{{ row.user_agent }}">{{ row.user_agent|default:"(unknown)" }}</div>
                 </td>
-                <td class="px-4 py-3 text-[color:var(--admin-ink)]">{{ row.count }}</td>
+                <td class="px-4 py-3 text-(--admin-ink)">{{ row.count }}</td>
                 <td class="px-4 py-3">
                   {% if row.user_agent in ignored_user_agents %}
-                    <span class="rounded-xl bg-[color:var(--admin-bg)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-muted)]">
+                    <span class="rounded-xl bg-(--admin-bg) px-3 py-1 text-xs font-semibold text-(--admin-muted)">
                       Ignored
                     </span>
                   {% else %}
@@ -175,7 +175,7 @@
                       <input type="hidden" name="next" value="{% url 'site_admin:analytics_dashboard' %}?start={{ start_date|date:'Y-m-d' }}&end={{ end_date|date:'Y-m-d' }}" />
                       <button
                         type="submit"
-                        class="rounded-xl border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+                        class="rounded-xl border border-(--admin-border) px-3 py-1 text-xs font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
                       >
                         Ignore
                       </button>
@@ -185,7 +185,7 @@
               </tr>
             {% empty %}
               <tr>
-                <td colspan="3" class="px-4 py-3 text-[color:var(--admin-muted)]">No user agent data yet.</td>
+                <td colspan="3" class="px-4 py-3 text-(--admin-muted)">No user agent data yet.</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -193,19 +193,19 @@
       </div>
     </section>
 
-    <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+    <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
       <div class="flex items-center justify-between">
         <h2 class="text-lg font-semibold">Errors (4xx / 5xx)</h2>
         <a
           href="{% url 'site_admin:analytics_errors_by_user_agent' %}?start={{ start_date|date:'Y-m-d' }}&end={{ end_date|date:'Y-m-d' }}"
-          class="text-sm font-semibold text-[color:var(--admin-muted)] transition hover:text-[color:var(--admin-ink)]"
+          class="text-sm font-semibold text-(--admin-muted) transition hover:text-(--admin-ink)"
         >
           Group by user agent
         </a>
       </div>
-      <div class="mt-4 overflow-hidden rounded-2xl border border-[color:var(--admin-border)]">
+      <div class="mt-4 overflow-hidden rounded-2xl border border-(--admin-border)">
         <table class="min-w-full text-left text-sm">
-          <thead class="bg-[color:var(--admin-bg)] text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+          <thead class="bg-(--admin-bg) text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">
             <tr>
               <th scope="col" class="px-4 py-3">Path</th>
               <th scope="col" class="px-4 py-3">Status</th>
@@ -213,19 +213,19 @@
               <th scope="col" class="px-4 py-3">Action</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-[color:var(--admin-border)]">
+          <tbody class="divide-y divide-(--admin-border)">
             {% for row in error_visits %}
               <tr>
-                <td class="px-4 py-3 text-[color:var(--admin-ink)]">{{ row.path|default:"(unknown)" }}</td>
-                <td class="px-4 py-3 text-[color:var(--admin-ink)]">{{ row.response_status_code|default:"-" }}</td>
-                <td class="px-4 py-3 text-[color:var(--admin-ink)]">{{ row.count }}</td>
+                <td class="px-4 py-3 text-(--admin-ink)">{{ row.path|default:"(unknown)" }}</td>
+                <td class="px-4 py-3 text-(--admin-ink)">{{ row.response_status_code|default:"-" }}</td>
+                <td class="px-4 py-3 text-(--admin-ink)">{{ row.count }}</td>
                 <td class="px-4 py-3">
                   {% if row.path %}
                     <div class="flex flex-wrap gap-2">
                       {% if row.response_status_code == 404 %}
                         <a
                           href="{% url 'site_admin:redirect_create' %}?from={{ row.path|urlencode }}"
-                          class="rounded-xl border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+                          class="rounded-xl border border-(--admin-border) px-3 py-1 text-xs font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
                         >
                           Create redirect
                         </a>
@@ -238,20 +238,20 @@
                         <input type="hidden" name="end" value="{{ end_date|date:'Y-m-d' }}" />
                         <button
                           type="submit"
-                          class="rounded-xl border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+                          class="rounded-xl border border-(--admin-border) px-3 py-1 text-xs font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
                         >
                           Delete visits
                         </button>
                       </form>
                     </div>
                   {% else %}
-                    <span class="text-xs text-[color:var(--admin-muted)]">—</span>
+                    <span class="text-xs text-(--admin-muted)">—</span>
                   {% endif %}
                 </td>
               </tr>
             {% empty %}
               <tr>
-                <td colspan="4" class="px-4 py-3 text-[color:var(--admin-muted)]">No error responses recorded.</td>
+                <td colspan="4" class="px-4 py-3 text-(--admin-muted)">No error responses recorded.</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -267,7 +267,11 @@
   {{ daily_sessions|json_script:"analytics-daily-sessions" }}
   {{ top_paths|json_script:"analytics-top-paths" }}
   {{ countries|json_script:"analytics-countries" }}
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script
+    src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"
+    integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ"
+    crossorigin="anonymous"
+  ></script>
   <script>
     const labels = JSON.parse(
       document.getElementById("analytics-daily-labels").textContent

@@ -48,7 +48,7 @@ class PostFilterForm(forms.Form):
         for field in self.fields.values():
             field.widget.attrs.setdefault(
                 "class",
-                "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+                "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
             )
 
 
@@ -164,12 +164,12 @@ class PostForm(forms.ModelForm):
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.setdefault(
                     "class",
-                    "h-4 w-4 rounded border-[color:var(--admin-border)] text-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+                    "h-4 w-4 rounded border-(--admin-border) text-(--admin-accent) focus:ring-(--admin-accent)",
                 )
             else:
                 field.widget.attrs.setdefault(
                     "class",
-                    "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+                    "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
                 )
             if name == "activity_type":
                 field.widget.attrs.setdefault("list", "activity-type-list")
@@ -282,7 +282,7 @@ class PageFilterForm(forms.Form):
         for field in self.fields.values():
             field.widget.attrs.setdefault(
                 "class",
-                "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+                "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
             )
 
 
@@ -313,7 +313,7 @@ class WebmentionFilterForm(forms.Form):
         for field in self.fields.values():
             field.widget.attrs.setdefault(
                 "class",
-                "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+                "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
             )
 
 
@@ -347,7 +347,7 @@ class ErrorLogFilterForm(forms.Form):
         for field in self.fields.values():
             field.widget.attrs.setdefault(
                 "class",
-                "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+                "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
             )
 
 
@@ -385,7 +385,7 @@ class TaskLogFilterForm(forms.Form):
         for field in self.fields.values():
             field.widget.attrs.setdefault(
                 "class",
-                "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+                "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
             )
 
 
@@ -410,7 +410,7 @@ class IndieAuthFilterForm(forms.Form):
         for field in self.fields.values():
             field.widget.attrs.setdefault(
                 "class",
-                "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+                "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
             )
 
 
@@ -443,7 +443,7 @@ class CommentFilterForm(forms.Form):
         for field in self.fields.values():
             field.widget.attrs.setdefault(
                 "class",
-                "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+                "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
             )
 
 
@@ -460,7 +460,7 @@ class WebmentionCreateForm(forms.Form):
         for field in self.fields.values():
             field.widget.attrs.setdefault(
                 "class",
-                "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+                "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
             )
         self.fields["source"].widget.attrs.setdefault("placeholder", "https://")
         self.fields["target"].widget.attrs.setdefault("placeholder", "https://")
@@ -489,12 +489,12 @@ class PageForm(forms.ModelForm):
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.setdefault(
                     "class",
-                    "h-4 w-4 rounded border-[color:var(--admin-border)] text-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+                    "h-4 w-4 rounded border-(--admin-border) text-(--admin-accent) focus:ring-(--admin-accent)",
                 )
             else:
                 field.widget.attrs.setdefault(
                     "class",
-                    "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+                    "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
                 )
         self.fields["slug"].widget.attrs.setdefault(
             "data-slug-source", "input[name='title']"
@@ -528,12 +528,12 @@ class FileForm(forms.ModelForm):
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.setdefault(
                     "class",
-                    "h-4 w-4 rounded border-[color:var(--admin-border)] text-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+                    "h-4 w-4 rounded border-(--admin-border) text-(--admin-accent) focus:ring-(--admin-accent)",
                 )
             else:
                 field.widget.attrs.setdefault(
                     "class",
-                    "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+                    "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
                 )
 
 
@@ -589,12 +589,12 @@ class SiteConfigurationForm(forms.ModelForm):
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.setdefault(
                     "class",
-                    "h-4 w-4 rounded border-[color:var(--admin-border)] text-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+                    "h-4 w-4 rounded border-(--admin-border) text-(--admin-accent) focus:ring-(--admin-accent)",
                 )
             else:
                 field.widget.attrs.setdefault(
                     "class",
-                    "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+                    "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
                 )
 
 
@@ -607,7 +607,7 @@ class ThemeUploadForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.fields["archive"].widget.attrs.setdefault(
             "class",
-            "block w-full text-sm text-[color:var(--admin-ink)] file:mr-4 file:rounded-full file:border-0 file:bg-[color:var(--admin-bg)] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[color:var(--admin-ink)] hover:file:bg-[color:var(--admin-border)]",
+            "block w-full text-sm text-(--admin-ink) file:mr-4 file:rounded-full file:border-0 file:bg-(--admin-bg) file:px-4 file:py-2 file:text-sm file:font-semibold file:text-(--admin-ink) hover:file:bg-(--admin-border)",
         )
 
     def clean_archive(self):
@@ -634,7 +634,7 @@ class ThemeGitInstallForm(forms.Form):
         for name in ("git_url", "slug", "ref"):
             self.fields[name].widget.attrs.setdefault(
                 "class",
-                "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+                "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
             )
         self.fields["slug"].widget.attrs.setdefault(
             "data-slug-source", "input[name='git_url']"
@@ -652,7 +652,7 @@ class ThemeFileForm(forms.Form):
         widget=forms.Textarea(
             attrs={
                 "rows": 25,
-                "class": "w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 font-mono text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+                "class": "w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 font-mono text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
             }
         )
     )
@@ -665,11 +665,11 @@ class ThemeFileForm(forms.Form):
             self.fields["path"].required = False
         self.fields["theme"].widget.attrs.setdefault(
             "class",
-            "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+            "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
         )
         self.fields["path"].widget.attrs.setdefault(
             "class",
-            "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+            "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
         )
 
 
@@ -769,18 +769,18 @@ def _theme_settings_field(field_type, *, label, required, help_text, definition)
     if isinstance(field.widget, forms.CheckboxInput):
         field.widget.attrs.setdefault(
             "class",
-            "h-4 w-4 rounded border-[color:var(--admin-border)] text-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+            "h-4 w-4 rounded border-(--admin-border) text-(--admin-accent) focus:ring-(--admin-accent)",
         )
     elif isinstance(field.widget, forms.MultiWidget):
         for subwidget in field.widget.widgets:
             subwidget.attrs.setdefault(
                 "class",
-                "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+                "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
             )
     else:
         field.widget.attrs.setdefault(
             "class",
-            "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+            "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
         )
     return field
 
@@ -941,7 +941,7 @@ class MenuForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["title"].widget.attrs.setdefault(
             "class",
-            "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+            "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
         )
 
 
@@ -954,17 +954,17 @@ class MenuItemForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["text"].widget.attrs.setdefault(
             "class",
-            "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+            "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
         )
         self.fields["text"].widget.attrs.setdefault("placeholder", "Label")
         self.fields["url"].widget.attrs.setdefault(
             "class",
-            "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+            "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
         )
         self.fields["url"].widget.attrs.setdefault("placeholder", "/about or https://...")
         self.fields["weight"].widget.attrs.setdefault(
             "class",
-            "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+            "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
         )
         self.fields["weight"].widget.attrs.setdefault("min", "0")
         self.fields["weight"].widget.attrs.setdefault("inputmode", "numeric")
@@ -979,17 +979,17 @@ class RedirectForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["from_path"].widget.attrs.setdefault(
             "class",
-            "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+            "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
         )
         self.fields["from_path"].widget.attrs.setdefault("placeholder", "/old/")
         self.fields["to_path"].widget.attrs.setdefault(
             "class",
-            "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+            "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
         )
         self.fields["to_path"].widget.attrs.setdefault("placeholder", "/new/ or https://...")
         self.fields["redirect_type"].widget.attrs.setdefault(
             "class",
-            "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+            "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
         )
 
 
@@ -1002,11 +1002,11 @@ class UserAgentBotRuleForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["enabled"].widget.attrs.setdefault(
             "class",
-            "h-4 w-4 rounded border-[color:var(--admin-border)] text-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+            "h-4 w-4 rounded border-(--admin-border) text-(--admin-accent) focus:ring-(--admin-accent)",
         )
         self.fields["pattern"].widget.attrs.setdefault(
             "class",
-            "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm font-mono focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+            "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs font-mono focus:border-(--admin-accent) focus:ring-(--admin-accent)",
         )
         self.fields["pattern"].widget.attrs.setdefault("rows", 4)
         self.fields["pattern"].widget.attrs.setdefault(
@@ -1058,7 +1058,7 @@ class HCardForm(forms.ModelForm):
         for field in self.fields.values():
             field.widget.attrs.setdefault(
                 "class",
-                "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+                "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
             )
 
 
@@ -1077,7 +1077,7 @@ class HCardUrlForm(forms.ModelForm):
         for field in self.fields.values():
             field.widget.attrs.setdefault(
                 "class",
-                "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+                "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
             )
 
     def clean(self):
@@ -1112,7 +1112,7 @@ class HCardEmailForm(forms.ModelForm):
         for field in self.fields.values():
             field.widget.attrs.setdefault(
                 "class",
-                "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+                "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
             )
 
 
@@ -1141,7 +1141,7 @@ class IndieAuthClientForm(forms.ModelForm):
         for field in self.fields.values():
             field.widget.attrs.setdefault(
                 "class",
-                "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]",
+                "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
             )
 
     def clean_redirect_uris_text(self):
@@ -1160,7 +1160,7 @@ class IndieAuthClientForm(forms.ModelForm):
 
 
 class PluginGitInstallForm(forms.Form):
-    FIELD_CLASS = "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]"
+    FIELD_CLASS = "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)"
 
     git_url = forms.URLField(
         label="Git URL",
@@ -1183,7 +1183,7 @@ class PluginGitInstallForm(forms.Form):
 
 
 class WidgetInstanceForm(forms.Form):
-    FIELD_CLASS = "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]"
+    FIELD_CLASS = "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)"
 
     widget_type = forms.ChoiceField(label="Widget type", choices=[])
     area = forms.ChoiceField(label="Area", choices=[])
@@ -1301,9 +1301,9 @@ class WidgetInstanceForm(forms.Form):
 
 
 _ADMIN_INPUT_CLASS = (
-    "mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white "
-    "px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] "
-    "focus:ring-[color:var(--admin-accent)]"
+    "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white "
+    "px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) "
+    "focus:ring-(--admin-accent)"
 )
 
 

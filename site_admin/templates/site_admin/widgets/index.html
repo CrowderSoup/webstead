@@ -7,13 +7,13 @@
     {% include "site_admin/_section_subnav.html" with section="settings" %}
     <section class="flex flex-wrap items-center justify-between gap-4">
       <div>
-        <div class="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Site settings &rsaquo; <a href="{% url 'site_admin:plugin_list' %}" class="hover:text-[color:var(--admin-ink)]">Plugins</a> &rsaquo; Widgets</div>
+        <div class="text-xs font-semibold uppercase tracking-[0.24em] text-(--admin-muted)">Site settings &rsaquo; <a href="{% url 'site_admin:plugin_list' %}" class="hover:text-(--admin-ink)">Plugins</a> &rsaquo; Widgets</div>
         <h1 class="text-2xl font-semibold">Widgets</h1>
-        <p class="mt-1 text-sm text-[color:var(--admin-muted)]">Configure widgets shown in theme areas.</p>
+        <p class="mt-1 text-sm text-(--admin-muted)">Configure widgets shown in theme areas.</p>
       </div>
       <a
         href="{% url 'site_admin:widget_add' %}"
-        class="rounded-xl bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+        class="rounded-xl bg-(--admin-accent) px-4 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)"
       >
         Add widget
       </a>
@@ -21,29 +21,29 @@
 
 
     {% if not areas %}
-    <div class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
-      <p class="text-sm text-[color:var(--admin-muted)]">The active theme does not declare any widget areas. Switch to a theme that supports widgets, or add <code>widget_areas</code> to your theme.json.</p>
+    <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
+      <p class="text-sm text-(--admin-muted)">The active theme does not declare any widget areas. Switch to a theme that supports widgets, or add <code>widget_areas</code> to your theme.json.</p>
     </div>
     {% else %}
 
-    <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+    <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
       {% if widgets %}
-      <ul class="divide-y divide-[color:var(--admin-border)]">
+      <ul class="divide-y divide-(--admin-border)">
         {% for widget in widgets %}
         <li class="flex flex-wrap items-center justify-between gap-4 py-4 first:pt-0 last:pb-0">
           <div>
             <p class="font-semibold">
               {{ widget.display_title }}
-              {% if not widget.is_active %}<span class="ml-2 rounded-xl bg-[color:var(--admin-border)] px-2 py-0.5 text-xs text-[color:var(--admin-muted)]">Inactive</span>{% endif %}
+              {% if not widget.is_active %}<span class="ml-2 rounded-xl bg-(--admin-border) px-2 py-0.5 text-xs text-(--admin-muted)">Inactive</span>{% endif %}
             </p>
-            <p class="text-sm text-[color:var(--admin-muted)]">
+            <p class="text-sm text-(--admin-muted)">
               {% if widget.configured_title %}{{ widget.widget_type_label }} &middot; {% endif %}Area: {{ widget.area }} &middot; Order: {{ widget.order }}
             </p>
           </div>
           <div class="flex gap-2">
             <a
               href="{% url 'site_admin:widget_edit' pk=widget.pk %}"
-              class="rounded-xl border border-[color:var(--admin-border)] px-3 py-1 text-sm font-semibold transition hover:bg-[color:var(--admin-bg)]"
+              class="rounded-xl border border-(--admin-border) px-3 py-1 text-sm font-semibold transition hover:bg-(--admin-bg)"
             >
               Edit
             </a>
@@ -62,7 +62,7 @@
         {% endfor %}
       </ul>
       {% else %}
-      <p class="text-sm text-[color:var(--admin-muted)]">No widgets yet. <a href="{% url 'site_admin:widget_add' %}" class="text-[color:var(--admin-accent)] hover:underline">Add one</a>.</p>
+      <p class="text-sm text-(--admin-muted)">No widgets yet. <a href="{% url 'site_admin:widget_add' %}" class="text-(--admin-accent) hover:underline">Add one</a>.</p>
       {% endif %}
     </section>
     {% endif %}
