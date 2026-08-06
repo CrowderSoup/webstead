@@ -164,6 +164,21 @@
           Control whether Mastodon replies are ingested into the Microsub home timeline.
         </p>
       </div>
+      <div class="mt-5 flex items-center justify-between max-w-md">
+        <label for="timeline_include_reblogs" class="text-sm font-medium">
+          Include boosts/reposts
+          <p class="mt-0.5 text-xs font-normal text-(--admin-muted)">
+            Off by default — only original posts are ingested into the Microsub timeline channel.
+          </p>
+        </label>
+        <input
+          type="checkbox"
+          id="timeline_include_reblogs"
+          name="timeline_include_reblogs"
+          {% if account.timeline_include_reblogs %}checked{% endif %}
+          class="h-4 w-4 rounded border-(--admin-border) text-(--admin-accent)"
+        >
+      </div>
     </section>
 
     <div class="mt-4 flex justify-end">
