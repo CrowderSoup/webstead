@@ -66,6 +66,11 @@ class MastodonAccount(models.Model):
         default=TIMELINE_REPLIES_ALL,
         help_text="Control whether replies are ingested into the Mastodon home timeline channel.",
     )
+    timeline_include_reblogs = models.BooleanField(
+        default=False,
+        help_text="Include boosts/reposts from the home timeline in the Mastodon timeline channel. "
+                  "Off by default so only original posts are ingested.",
+    )
     notifications_channel = models.ForeignKey(
         "microsub.Channel",
         null=True,

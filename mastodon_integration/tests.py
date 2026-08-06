@@ -119,6 +119,60 @@ class PollMastodonTimelineReplyFilterTests(TestCase):
 
         self.assertFalse(Entry.objects.filter(channel=self.channel).exists())
 
+    def _reblog_status(self, status_id: str, *, original_id: str = "0"):
+        created_at = timezone.now() + timedelta(seconds=int(status_id))
+        original = self._status(original_id, author_id="99")
+        return {
+            "id": status_id,
+            "content": "",
+            "url": f"https://social.example/@alice/{status_id}",
+            "created_at": created_at,
+            "in_reply_to_id": None,
+            "in_reply_to_account_id": None,
+            "account": {
+                "id": "10",
+                "display_name": "Alice",
+                "username": "alice",
+                "url": "https://social.example/@alice",
+                "avatar": "https://social.example/media/alice.jpg",
+            },
+            "reblog": original,
+        }
+
+    @patch("mastodon_integration.client.get_client")
+    def test_default_mode_skips_reblogs(self, mock_get_client):
+        mock_client = MagicMock()
+        mock_client.timeline_home.return_value = [self._reblog_status("6")]
+        mock_get_client.return_value = mock_client
+
+        poll_mastodon_timeline()
+
+        self.assertFalse(Entry.objects.filter(channel=self.channel).exists())
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.last_timeline_id, "6")
+
+    @patch("mastodon_integration.client.get_client")
+    def test_default_mode_keeps_original_posts(self, mock_get_client):
+        mock_client = MagicMock()
+        mock_client.timeline_home.return_value = [self._status("7")]
+        mock_get_client.return_value = mock_client
+
+        poll_mastodon_timeline()
+
+        self.assertEqual(Entry.objects.filter(channel=self.channel).count(), 1)
+
+    @patch("mastodon_integration.client.get_client")
+    def test_include_reblogs_opt_in_keeps_reblogs(self, mock_get_client):
+        self.account.timeline_include_reblogs = True
+        self.account.save(update_fields=["timeline_include_reblogs"])
+        mock_client = MagicMock()
+        mock_client.timeline_home.return_value = [self._reblog_status("8")]
+        mock_get_client.return_value = mock_client
+
+        poll_mastodon_timeline()
+
+        self.assertEqual(Entry.objects.filter(channel=self.channel).count(), 1)
+
     @patch("mastodon_integration.client.get_client")
     def test_timeline_entries_are_attached_to_managed_subscription(self, mock_get_client):
         mock_client = MagicMock()

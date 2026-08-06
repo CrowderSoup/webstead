@@ -4469,7 +4469,13 @@ def mastodon_settings(request):
                 account.timeline_channel_id = int(tl_channel_id) if tl_channel_id else None
                 account.notifications_channel_id = int(notif_channel_id) if notif_channel_id else None
                 account.timeline_reply_filter = timeline_reply_filter
-                account.save(update_fields=["timeline_channel", "notifications_channel", "timeline_reply_filter"])
+                account.timeline_include_reblogs = request.POST.get("timeline_include_reblogs") == "on"
+                account.save(update_fields=[
+                    "timeline_channel",
+                    "notifications_channel",
+                    "timeline_reply_filter",
+                    "timeline_include_reblogs",
+                ])
                 from mastodon_integration.subscriptions import sync_managed_subscriptions
 
                 sync_managed_subscriptions(account)

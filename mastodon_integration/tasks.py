@@ -69,6 +69,11 @@ def _timeline_content_status(status):
 def _should_store_timeline_status(status, account) -> bool:
     from .models import MastodonAccount
 
+    # Boosts/reposts are excluded by default — only original posts are wanted
+    # in the Microsub timeline channel unless explicitly opted in.
+    if _get(status, "reblog") and not account.timeline_include_reblogs:
+        return False
+
     reply_filter = account.timeline_reply_filter or MastodonAccount.TIMELINE_REPLIES_ALL
     if reply_filter == MastodonAccount.TIMELINE_REPLIES_ALL:
         return True
