@@ -137,6 +137,26 @@ class HealthzTests(TestCase):
         self.assertTrue(response["Content-Type"].startswith("text/plain"))
         self.assertEqual(response.content.decode(), "ok")
 
+    @override_settings(ALLOWED_HOSTS=["crowdersoup.com"])
+    def test_bypasses_allowed_hosts_validation(self):
+        # Kamal-proxy health-checks a freshly deployed container directly by
+        # its Docker container ID, which will never be in ALLOWED_HOSTS.
+        response = self.client.get("/healthz", HTTP_HOST="ed940c7a5a56:8000")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content.decode(), "ok")
+
+    @override_settings(ALLOWED_HOSTS=["crowdersoup.com"])
+    def test_disallowed_host_on_other_paths_still_returns_clean_400(self):
+        # A bad Host header on any other path should still be rejected, and
+        # rendering that 400 page must not itself blow up (context
+        # processors/templates used to call request.build_absolute_uri()
+        # unconditionally, which re-raises DisallowedHost while Django is
+        # already handling one).
+        response = self.client.get("/", HTTP_HOST="ed940c7a5a56:8000")
+
+        self.assertEqual(response.status_code, 400)
+
 
 class SitemapTests(TestCase):
     def test_includes_public_routes_and_excludes_admin(self):

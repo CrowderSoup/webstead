@@ -73,7 +73,7 @@
     <meta name="visit-id" content="{{ request.visit_id }}">
     <script src="{% static 'js/webstead.js' %}"></script>
 
-    {% with og_title=og_title|default:settings.title og_description=og_description|default:settings.tagline og_image=og_image|default:og_default_image og_url=og_url|default:request.build_absolute_uri og_type=og_type|default:"website" og_image_alt=og_image_alt|default:settings.title %}
+    {% with og_title=og_title|default:settings.title og_description=og_description|default:settings.tagline og_image=og_image|default:og_default_image og_url=og_url|default:request_url og_type=og_type|default:"website" og_image_alt=og_image_alt|default:settings.title %}
     <meta property="og:site_name" content="{{ settings.title }}">
     <meta property="og:title" content="{{ og_title }}">
     <meta property="og:description" content="{{ og_description }}">

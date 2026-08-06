@@ -1,6 +1,7 @@
 import markdown
 
 from django.core.cache import cache
+from django.core.exceptions import DisallowedHost
 from django.urls import NoReverseMatch, reverse
 from django.utils.safestring import mark_safe
 from django.db.models import Q
@@ -44,14 +45,22 @@ def site_configuration(request):
     feed_url = None
     try:
         feed_url = request.build_absolute_uri(reverse("posts_feed"))
-    except NoReverseMatch:
+    except (NoReverseMatch, DisallowedHost):
         feed_url = None
 
     theme_settings = get_active_theme_settings()
     home_feed_mode = theme_settings.get("home_feed_mode", "blog")
     posts_index_url = get_posts_index_url()
 
-    og_default_image = default_image_url(request, settings=settings, site_author_hcard=site_author_hcard)
+    try:
+        og_default_image = default_image_url(request, settings=settings, site_author_hcard=site_author_hcard)
+    except DisallowedHost:
+        og_default_image = None
+
+    try:
+        request_url = request.build_absolute_uri()
+    except DisallowedHost:
+        request_url = None
 
     return {
         "settings": settings,
@@ -63,6 +72,7 @@ def site_configuration(request):
         "site_author_hcard": site_author_hcard,
         "site_author_display_name": site_author_display_name,
         "og_default_image": og_default_image,
+        "request_url": request_url,
     }
 
 

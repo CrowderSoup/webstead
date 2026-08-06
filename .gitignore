@@ -70,3 +70,5 @@ celerybeat-schedule*
 
 # Kamal
 .kamal/secrets
+.kamal/secrets.*
+!.kamal/secrets.example

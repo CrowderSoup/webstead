@@ -135,6 +135,7 @@ if DEBUG:
 # ---------------------------------------------------------------------------
 
 MIDDLEWARE = [
+    "core.middleware.HealthCheckMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "analytics.middleware.AnalyticsMiddleware",
