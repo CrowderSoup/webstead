@@ -8,18 +8,18 @@
   <div>
     <label
       for="{{ form.from_path.id_for_label }}"
-      class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+      class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
     >
       From path
     </label>
     {{ form.from_path }}
     {{ form.from_path.errors }}
-    <p class="mt-1 text-xs text-[color:var(--admin-muted)]">Matches the URL path, like <code>/about/</code>.</p>
+    <p class="mt-1 text-xs text-(--admin-muted)">Matches the URL path, like <code>/about/</code>.</p>
   </div>
   <div>
     <label
       for="{{ form.to_path.id_for_label }}"
-      class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+      class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
     >
       To path
     </label>
@@ -32,14 +32,14 @@
       </datalist>
     {% endif %}
     {{ form.to_path.errors }}
-    <p class="mt-1 text-xs text-[color:var(--admin-muted)]">
+    <p class="mt-1 text-xs text-(--admin-muted)">
       Use a path or full URL. Start typing to search known site paths.
     </p>
   </div>
   <div>
     <label
       for="{{ form.redirect_type.id_for_label }}"
-      class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]"
+      class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
     >
       Redirect type
     </label>
@@ -49,7 +49,7 @@
   <div class="flex flex-wrap items-center gap-3">
     <button
       type="submit"
-      class="rounded-full bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+      class="rounded-full bg-(--admin-accent) px-5 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)"
     >
       Save redirect
     </button>

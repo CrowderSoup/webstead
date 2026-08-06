@@ -1,11 +1,11 @@
 {% with current=request.resolver_match.url_name|default:'' %}
   {% if section == "settings" %}
-    <section class="sticky top-24 z-20 rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-3 shadow-sm">
+    <section class="sticky top-24 z-20 rounded-2xl border border-(--admin-border) bg-(--admin-surface) p-3 shadow-xs">
       <div class="flex flex-wrap items-center justify-between gap-3">
-        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Settings</div>
-        <div class="text-sm font-medium text-[color:var(--admin-muted)]">
+        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-(--admin-muted)">Settings</div>
+        <div class="text-sm font-medium text-(--admin-muted)">
           Settings /
-          <span class="text-[color:var(--admin-ink)]">
+          <span class="text-(--admin-ink)">
             {% if current == 'site_settings' %}
               General
             {% elif current == 'theme_settings' or current == 'theme_file_edit' or current == 'theme_install_detail' %}
@@ -31,19 +31,19 @@
         </div>
       </div>
       <nav class="mt-3 hidden items-center gap-2 overflow-x-auto pb-1 md:flex" aria-label="Settings sections">
-        <a href="{% url 'site_admin:site_settings' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'site_settings' %}bg-[color:var(--admin-accent)] text-white{% else %}border border-[color:var(--admin-border)] text-[color:var(--admin-ink)] hover:bg-[color:var(--admin-bg)]{% endif %}">General</a>
-        <a href="{% url 'site_admin:theme_settings' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'theme_settings' or current == 'theme_file_edit' or current == 'theme_install_detail' %}bg-[color:var(--admin-accent)] text-white{% else %}border border-[color:var(--admin-border)] text-[color:var(--admin-ink)] hover:bg-[color:var(--admin-bg)]{% endif %}">Themes</a>
-        <a href="{% url 'site_admin:menu_list' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'menu_list' or current == 'menu_create' or current == 'menu_edit' or current == 'menu_item_delete' %}bg-[color:var(--admin-accent)] text-white{% else %}border border-[color:var(--admin-border)] text-[color:var(--admin-ink)] hover:bg-[color:var(--admin-bg)]{% endif %}">Menus</a>
-        <a href="{% url 'site_admin:plugin_list' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'plugin_list' or current == 'plugin_install' or current == 'widget_list' or current == 'widget_add' or current == 'widget_edit' or current == 'widget_delete' %}bg-[color:var(--admin-accent)] text-white{% else %}border border-[color:var(--admin-border)] text-[color:var(--admin-ink)] hover:bg-[color:var(--admin-bg)]{% endif %}">Plugins</a>
-        <a href="{% url 'site_admin:indieauth_settings' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'indieauth_settings' or current == 'indieauth_client_create' or current == 'indieauth_client_detail' or current == 'indieauth_client_edit' %}bg-[color:var(--admin-accent)] text-white{% else %}border border-[color:var(--admin-border)] text-[color:var(--admin-ink)] hover:bg-[color:var(--admin-bg)]{% endif %}">IndieAuth</a>
-        <a href="{% url 'site_admin:microsub_channel_list' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'microsub_channel_list' or current == 'microsub_channel_create' or current == 'microsub_channel_detail' or current == 'microsub_channel_edit' or current == 'microsub_channel_delete' or current == 'microsub_channel_reorder' or current == 'microsub_channel_mark_read' or current == 'microsub_feed_add' or current == 'microsub_feed_remove' or current == 'microsub_import_opml' %}bg-[color:var(--admin-accent)] text-white{% else %}border border-[color:var(--admin-border)] text-[color:var(--admin-ink)] hover:bg-[color:var(--admin-bg)]{% endif %}">Microsub</a>
-        <a href="{% url 'site_admin:mastodon_settings' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'mastodon_settings' or current == 'mastodon_disconnect' or current == 'mastodon_manual_sync' %}bg-[color:var(--admin-accent)] text-white{% else %}border border-[color:var(--admin-border)] text-[color:var(--admin-ink)] hover:bg-[color:var(--admin-bg)]{% endif %}">Mastodon</a>
-        <a href="{% url 'site_admin:error_log_list' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'error_log_list' or current == 'error_log_detail' or current == 'micropub_error_list' or current == 'micropub_error_detail' or current == 'indieauth_error_list' or current == 'indieauth_error_detail' %}bg-[color:var(--admin-accent)] text-white{% else %}border border-[color:var(--admin-border)] text-[color:var(--admin-ink)] hover:bg-[color:var(--admin-bg)]{% endif %}">Error Logs</a>
-        <a href="{% url 'site_admin:task_log_list' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'task_log_list' or current == 'task_log_detail' %}bg-[color:var(--admin-accent)] text-white{% else %}border border-[color:var(--admin-border)] text-[color:var(--admin-ink)] hover:bg-[color:var(--admin-bg)]{% endif %}">Task Log</a>
+        <a href="{% url 'site_admin:site_settings' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'site_settings' %}bg-(--admin-accent) text-white{% else %}border border-(--admin-border) text-(--admin-ink) hover:bg-(--admin-bg){% endif %}">General</a>
+        <a href="{% url 'site_admin:theme_settings' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'theme_settings' or current == 'theme_file_edit' or current == 'theme_install_detail' %}bg-(--admin-accent) text-white{% else %}border border-(--admin-border) text-(--admin-ink) hover:bg-(--admin-bg){% endif %}">Themes</a>
+        <a href="{% url 'site_admin:menu_list' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'menu_list' or current == 'menu_create' or current == 'menu_edit' or current == 'menu_item_delete' %}bg-(--admin-accent) text-white{% else %}border border-(--admin-border) text-(--admin-ink) hover:bg-(--admin-bg){% endif %}">Menus</a>
+        <a href="{% url 'site_admin:plugin_list' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'plugin_list' or current == 'plugin_install' or current == 'widget_list' or current == 'widget_add' or current == 'widget_edit' or current == 'widget_delete' %}bg-(--admin-accent) text-white{% else %}border border-(--admin-border) text-(--admin-ink) hover:bg-(--admin-bg){% endif %}">Plugins</a>
+        <a href="{% url 'site_admin:indieauth_settings' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'indieauth_settings' or current == 'indieauth_client_create' or current == 'indieauth_client_detail' or current == 'indieauth_client_edit' %}bg-(--admin-accent) text-white{% else %}border border-(--admin-border) text-(--admin-ink) hover:bg-(--admin-bg){% endif %}">IndieAuth</a>
+        <a href="{% url 'site_admin:microsub_channel_list' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'microsub_channel_list' or current == 'microsub_channel_create' or current == 'microsub_channel_detail' or current == 'microsub_channel_edit' or current == 'microsub_channel_delete' or current == 'microsub_channel_reorder' or current == 'microsub_channel_mark_read' or current == 'microsub_feed_add' or current == 'microsub_feed_remove' or current == 'microsub_import_opml' %}bg-(--admin-accent) text-white{% else %}border border-(--admin-border) text-(--admin-ink) hover:bg-(--admin-bg){% endif %}">Microsub</a>
+        <a href="{% url 'site_admin:mastodon_settings' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'mastodon_settings' or current == 'mastodon_disconnect' or current == 'mastodon_manual_sync' %}bg-(--admin-accent) text-white{% else %}border border-(--admin-border) text-(--admin-ink) hover:bg-(--admin-bg){% endif %}">Mastodon</a>
+        <a href="{% url 'site_admin:error_log_list' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'error_log_list' or current == 'error_log_detail' or current == 'micropub_error_list' or current == 'micropub_error_detail' or current == 'indieauth_error_list' or current == 'indieauth_error_detail' %}bg-(--admin-accent) text-white{% else %}border border-(--admin-border) text-(--admin-ink) hover:bg-(--admin-bg){% endif %}">Error Logs</a>
+        <a href="{% url 'site_admin:task_log_list' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'task_log_list' or current == 'task_log_detail' %}bg-(--admin-accent) text-white{% else %}border border-(--admin-border) text-(--admin-ink) hover:bg-(--admin-bg){% endif %}">Task Log</a>
       </nav>
       <div class="mt-3 md:hidden">
-        <label for="section-settings-nav" class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Settings section</label>
-        <select id="section-settings-nav" class="mt-1 w-full rounded-xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm" onchange="if (this.value) window.location.href=this.value;">
+        <label for="section-settings-nav" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Settings section</label>
+        <select id="section-settings-nav" class="mt-1 w-full rounded-xl border border-(--admin-border) bg-white px-3 py-2 text-sm" onchange="if (this.value) window.location.href=this.value;">
           <option value="{% url 'site_admin:site_settings' %}" {% if current == 'site_settings' %}selected{% endif %}>General</option>
           <option value="{% url 'site_admin:theme_settings' %}" {% if current == 'theme_settings' or current == 'theme_file_edit' or current == 'theme_install_detail' %}selected{% endif %}>Themes</option>
           <option value="{% url 'site_admin:menu_list' %}" {% if current == 'menu_list' or current == 'menu_create' or current == 'menu_edit' or current == 'menu_item_delete' %}selected{% endif %}>Menus</option>
@@ -57,27 +57,27 @@
       </div>
     </section>
   {% elif section == "analytics" %}
-    <section class="sticky top-24 z-20 rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-3 shadow-sm">
+    <section class="sticky top-24 z-20 rounded-2xl border border-(--admin-border) bg-(--admin-surface) p-3 shadow-xs">
       <div class="flex flex-wrap items-center justify-between gap-3">
-        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Analytics</div>
-        <div class="text-sm font-medium text-[color:var(--admin-muted)]">
+        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-(--admin-muted)">Analytics</div>
+        <div class="text-sm font-medium text-(--admin-muted)">
           Analytics /
-          <span class="text-[color:var(--admin-ink)]">
+          <span class="text-(--admin-ink)">
             {% if current == 'analytics_dashboard' %}Overview{% elif current == 'analytics_user_agents' %}User Agents{% elif current == 'analytics_bot_detection' %}Bot Detection{% elif current == 'analytics_ignored_user_agents' %}Ignored Agents{% elif current == 'analytics_errors_by_user_agent' %}Errors{% elif current == 'redirect_list' or current == 'redirect_create' or current == 'redirect_edit' or current == 'redirect_delete' %}Redirects{% else %}Section{% endif %}
           </span>
         </div>
       </div>
       <nav class="mt-3 hidden items-center gap-2 overflow-x-auto pb-1 md:flex" aria-label="Analytics sections">
-        <a href="{% url 'site_admin:analytics_dashboard' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'analytics_dashboard' %}bg-[color:var(--admin-accent)] text-white{% else %}border border-[color:var(--admin-border)] text-[color:var(--admin-ink)] hover:bg-[color:var(--admin-bg)]{% endif %}">Overview</a>
-        <a href="{% url 'site_admin:analytics_user_agents' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'analytics_user_agents' %}bg-[color:var(--admin-accent)] text-white{% else %}border border-[color:var(--admin-border)] text-[color:var(--admin-ink)] hover:bg-[color:var(--admin-bg)]{% endif %}">User Agents</a>
-        <a href="{% url 'site_admin:analytics_bot_detection' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'analytics_bot_detection' %}bg-[color:var(--admin-accent)] text-white{% else %}border border-[color:var(--admin-border)] text-[color:var(--admin-ink)] hover:bg-[color:var(--admin-bg)]{% endif %}">Bot Detection</a>
-        <a href="{% url 'site_admin:analytics_ignored_user_agents' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'analytics_ignored_user_agents' %}bg-[color:var(--admin-accent)] text-white{% else %}border border-[color:var(--admin-border)] text-[color:var(--admin-ink)] hover:bg-[color:var(--admin-bg)]{% endif %}">Ignored Agents</a>
-        <a href="{% url 'site_admin:analytics_errors_by_user_agent' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'analytics_errors_by_user_agent' %}bg-[color:var(--admin-accent)] text-white{% else %}border border-[color:var(--admin-border)] text-[color:var(--admin-ink)] hover:bg-[color:var(--admin-bg)]{% endif %}">Errors</a>
-        <a href="{% url 'site_admin:redirect_list' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'redirect_list' or current == 'redirect_create' or current == 'redirect_edit' or current == 'redirect_delete' %}bg-[color:var(--admin-accent)] text-white{% else %}border border-[color:var(--admin-border)] text-[color:var(--admin-ink)] hover:bg-[color:var(--admin-bg)]{% endif %}">Redirects</a>
+        <a href="{% url 'site_admin:analytics_dashboard' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'analytics_dashboard' %}bg-(--admin-accent) text-white{% else %}border border-(--admin-border) text-(--admin-ink) hover:bg-(--admin-bg){% endif %}">Overview</a>
+        <a href="{% url 'site_admin:analytics_user_agents' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'analytics_user_agents' %}bg-(--admin-accent) text-white{% else %}border border-(--admin-border) text-(--admin-ink) hover:bg-(--admin-bg){% endif %}">User Agents</a>
+        <a href="{% url 'site_admin:analytics_bot_detection' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'analytics_bot_detection' %}bg-(--admin-accent) text-white{% else %}border border-(--admin-border) text-(--admin-ink) hover:bg-(--admin-bg){% endif %}">Bot Detection</a>
+        <a href="{% url 'site_admin:analytics_ignored_user_agents' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'analytics_ignored_user_agents' %}bg-(--admin-accent) text-white{% else %}border border-(--admin-border) text-(--admin-ink) hover:bg-(--admin-bg){% endif %}">Ignored Agents</a>
+        <a href="{% url 'site_admin:analytics_errors_by_user_agent' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'analytics_errors_by_user_agent' %}bg-(--admin-accent) text-white{% else %}border border-(--admin-border) text-(--admin-ink) hover:bg-(--admin-bg){% endif %}">Errors</a>
+        <a href="{% url 'site_admin:redirect_list' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'redirect_list' or current == 'redirect_create' or current == 'redirect_edit' or current == 'redirect_delete' %}bg-(--admin-accent) text-white{% else %}border border-(--admin-border) text-(--admin-ink) hover:bg-(--admin-bg){% endif %}">Redirects</a>
       </nav>
       <div class="mt-3 md:hidden">
-        <label for="section-analytics-nav" class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Analytics section</label>
-        <select id="section-analytics-nav" class="mt-1 w-full rounded-xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm" onchange="if (this.value) window.location.href=this.value;">
+        <label for="section-analytics-nav" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Analytics section</label>
+        <select id="section-analytics-nav" class="mt-1 w-full rounded-xl border border-(--admin-border) bg-white px-3 py-2 text-sm" onchange="if (this.value) window.location.href=this.value;">
           <option value="{% url 'site_admin:analytics_dashboard' %}" {% if current == 'analytics_dashboard' %}selected{% endif %}>Overview</option>
           <option value="{% url 'site_admin:analytics_user_agents' %}" {% if current == 'analytics_user_agents' %}selected{% endif %}>User Agents</option>
           <option value="{% url 'site_admin:analytics_bot_detection' %}" {% if current == 'analytics_bot_detection' %}selected{% endif %}>Bot Detection</option>
@@ -88,24 +88,24 @@
       </div>
     </section>
   {% elif section == "interactions" %}
-    <section class="sticky top-24 z-20 rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-3 shadow-sm">
+    <section class="sticky top-24 z-20 rounded-2xl border border-(--admin-border) bg-(--admin-surface) p-3 shadow-xs">
       <div class="flex flex-wrap items-center justify-between gap-3">
-        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Engagement</div>
-        <div class="text-sm font-medium text-[color:var(--admin-muted)]">
+        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-(--admin-muted)">Engagement</div>
+        <div class="text-sm font-medium text-(--admin-muted)">
           Interactions /
-          <span class="text-[color:var(--admin-ink)]">
+          <span class="text-(--admin-ink)">
             {% if current == 'interactions' %}Overview{% elif current == 'comment_list' or current == 'comment_detail' or current == 'comment_approve' or current == 'comment_mark_spam' or current == 'comment_delete' %}Comments{% elif current == 'webmention_list' or current == 'webmention_detail' or current == 'webmention_create' or current == 'webmention_approve' or current == 'webmention_reject' or current == 'webmention_delete' or current == 'webmention_resend' %}Webmentions{% else %}Section{% endif %}
           </span>
         </div>
       </div>
       <nav class="mt-3 hidden items-center gap-2 overflow-x-auto pb-1 md:flex" aria-label="Interactions sections">
-        <a href="{% url 'site_admin:interactions' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'interactions' %}bg-[color:var(--admin-accent)] text-white{% else %}border border-[color:var(--admin-border)] text-[color:var(--admin-ink)] hover:bg-[color:var(--admin-bg)]{% endif %}">Overview</a>
-        <a href="{% url 'site_admin:comment_list' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'comment_list' or current == 'comment_detail' or current == 'comment_approve' or current == 'comment_mark_spam' or current == 'comment_delete' %}bg-[color:var(--admin-accent)] text-white{% else %}border border-[color:var(--admin-border)] text-[color:var(--admin-ink)] hover:bg-[color:var(--admin-bg)]{% endif %}">Comments</a>
-        <a href="{% url 'site_admin:webmention_list' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'webmention_list' or current == 'webmention_detail' or current == 'webmention_create' or current == 'webmention_approve' or current == 'webmention_reject' or current == 'webmention_delete' or current == 'webmention_resend' %}bg-[color:var(--admin-accent)] text-white{% else %}border border-[color:var(--admin-border)] text-[color:var(--admin-ink)] hover:bg-[color:var(--admin-bg)]{% endif %}">Webmentions</a>
+        <a href="{% url 'site_admin:interactions' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'interactions' %}bg-(--admin-accent) text-white{% else %}border border-(--admin-border) text-(--admin-ink) hover:bg-(--admin-bg){% endif %}">Overview</a>
+        <a href="{% url 'site_admin:comment_list' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'comment_list' or current == 'comment_detail' or current == 'comment_approve' or current == 'comment_mark_spam' or current == 'comment_delete' %}bg-(--admin-accent) text-white{% else %}border border-(--admin-border) text-(--admin-ink) hover:bg-(--admin-bg){% endif %}">Comments</a>
+        <a href="{% url 'site_admin:webmention_list' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'webmention_list' or current == 'webmention_detail' or current == 'webmention_create' or current == 'webmention_approve' or current == 'webmention_reject' or current == 'webmention_delete' or current == 'webmention_resend' %}bg-(--admin-accent) text-white{% else %}border border-(--admin-border) text-(--admin-ink) hover:bg-(--admin-bg){% endif %}">Webmentions</a>
       </nav>
       <div class="mt-3 md:hidden">
-        <label for="section-interactions-nav" class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Interactions section</label>
-        <select id="section-interactions-nav" class="mt-1 w-full rounded-xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm" onchange="if (this.value) window.location.href=this.value;">
+        <label for="section-interactions-nav" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Interactions section</label>
+        <select id="section-interactions-nav" class="mt-1 w-full rounded-xl border border-(--admin-border) bg-white px-3 py-2 text-sm" onchange="if (this.value) window.location.href=this.value;">
           <option value="{% url 'site_admin:interactions' %}" {% if current == 'interactions' %}selected{% endif %}>Overview</option>
           <option value="{% url 'site_admin:comment_list' %}" {% if current == 'comment_list' or current == 'comment_detail' or current == 'comment_approve' or current == 'comment_mark_spam' or current == 'comment_delete' %}selected{% endif %}>Comments</option>
           <option value="{% url 'site_admin:webmention_list' %}" {% if current == 'webmention_list' or current == 'webmention_detail' or current == 'webmention_create' or current == 'webmention_approve' or current == 'webmention_reject' or current == 'webmention_delete' or current == 'webmention_resend' %}selected{% endif %}>Webmentions</option>

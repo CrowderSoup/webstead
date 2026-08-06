@@ -7,33 +7,33 @@
     {% include "site_admin/_section_subnav.html" with section="settings" %}
     <section class="flex flex-wrap items-center justify-between gap-4">
       <div>
-        <div class="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Extensions</div>
+        <div class="text-xs font-semibold uppercase tracking-[0.24em] text-(--admin-muted)">Extensions</div>
         <h1 class="mt-2 text-2xl font-semibold">Plugins</h1>
-        <p class="mt-1 text-sm text-[color:var(--admin-muted)]">Manage installed plugins. Third-party plugins require a server restart after install.</p>
+        <p class="mt-1 text-sm text-(--admin-muted)">Manage installed plugins. Third-party plugins require a server restart after install.</p>
       </div>
       <a
         href="{% url 'site_admin:plugin_install' %}"
-        class="rounded-xl bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+        class="rounded-xl bg-(--admin-accent) px-4 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)"
       >
         Install plugin
       </a>
     </section>
 
 
-    <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+    <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
       {% if plugins %}
-      <ul class="divide-y divide-[color:var(--admin-border)]">
+      <ul class="divide-y divide-(--admin-border)">
         {% for entry in plugins %}
         <li class="flex flex-wrap items-center justify-between gap-4 py-4 first:pt-0 last:pb-0">
           <div>
             <p class="font-semibold">
               {% if entry.manage_url %}
-              <a href="{{ entry.manage_url }}" class="hover:text-[color:var(--admin-accent)]">{{ entry.install.label|default:entry.install.name }}</a>
+              <a href="{{ entry.manage_url }}" class="hover:text-(--admin-accent)">{{ entry.install.label|default:entry.install.name }}</a>
               {% else %}
               {{ entry.install.label|default:entry.install.name }}
               {% endif %}
             </p>
-            <p class="text-sm text-[color:var(--admin-muted)]">
+            <p class="text-sm text-(--admin-muted)">
               {{ entry.install.django_app }}{% if entry.install.version %} &middot; v{{ entry.install.version }}{% endif %} &middot; {{ entry.install.get_source_type_display }}
             </p>
           </div>
@@ -41,7 +41,7 @@
             {% if entry.manage_url %}
             <a
               href="{{ entry.manage_url }}"
-              class="rounded-xl border border-[color:var(--admin-border)] px-3 py-1 text-sm font-semibold transition hover:bg-[color:var(--admin-bg)]"
+              class="rounded-xl border border-(--admin-border) px-3 py-1 text-sm font-semibold transition hover:bg-(--admin-bg)"
             >
               Manage
             </a>
@@ -51,7 +51,7 @@
               {% csrf_token %}
               <button
                 type="submit"
-                class="rounded-xl border border-[color:var(--admin-border)] px-3 py-1 text-sm font-semibold transition hover:bg-[color:var(--admin-bg)]"
+                class="rounded-xl border border-(--admin-border) px-3 py-1 text-sm font-semibold transition hover:bg-(--admin-bg)"
               >
                 Update
               </button>
@@ -74,7 +74,7 @@
         {% endfor %}
       </ul>
       {% else %}
-      <p class="text-sm text-[color:var(--admin-muted)]">No plugins installed yet. <a href="{% url 'site_admin:plugin_install' %}" class="text-[color:var(--admin-accent)] hover:underline">Install one</a>.</p>
+      <p class="text-sm text-(--admin-muted)">No plugins installed yet. <a href="{% url 'site_admin:plugin_install' %}" class="text-(--admin-accent) hover:underline">Install one</a>.</p>
       {% endif %}
     </section>
   </div>

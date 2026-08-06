@@ -7,35 +7,35 @@
     {% include "site_admin/_section_subnav.html" with section="settings" %}
     <section class="flex flex-wrap items-center justify-between gap-4">
       <div>
-        <div class="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Site settings &rsaquo; <a href="{% url 'site_admin:plugin_list' %}" class="hover:text-[color:var(--admin-ink)]">Plugins</a> &rsaquo; <a href="{% url 'site_admin:widget_list' %}" class="hover:text-[color:var(--admin-ink)]">Widgets</a></div>
+        <div class="text-xs font-semibold uppercase tracking-[0.24em] text-(--admin-muted)">Site settings &rsaquo; <a href="{% url 'site_admin:plugin_list' %}" class="hover:text-(--admin-ink)">Plugins</a> &rsaquo; <a href="{% url 'site_admin:widget_list' %}" class="hover:text-(--admin-ink)">Widgets</a></div>
         <h1 class="text-2xl font-semibold">{% if widget %}Edit Widget{% else %}Add Widget{% endif %}</h1>
       </div>
       <a
         href="{% url 'site_admin:widget_list' %}"
-        class="rounded-xl border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+        class="rounded-xl border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
       >
         Back to widgets
       </a>
     </section>
 
 
-    <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+    <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
       <form method="post" class="space-y-4">
         {% csrf_token %}
         {% for field in form %}
         <div>
-          <label for="{{ field.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+          <label for="{{ field.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">
             {{ field.label }}
           </label>
           {% if field.field.widget.input_type == "checkbox" %}
           <div class="mt-1 flex items-center gap-2">
             {{ field }}
-            <span class="text-sm text-[color:var(--admin-muted)]">{{ field.help_text }}</span>
+            <span class="text-sm text-(--admin-muted)">{{ field.help_text }}</span>
           </div>
           {% else %}
           {{ field }}
           {% if field.help_text %}
-          <p class="mt-1 text-xs text-[color:var(--admin-muted)]">{{ field.help_text }}</p>
+          <p class="mt-1 text-xs text-(--admin-muted)">{{ field.help_text }}</p>
           {% endif %}
           {% endif %}
           {% if field.errors %}
@@ -53,13 +53,13 @@
         <div class="flex gap-3 pt-2">
           <button
             type="submit"
-            class="rounded-xl bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+            class="rounded-xl bg-(--admin-accent) px-5 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)"
           >
             {% if widget %}Save changes{% else %}Add widget{% endif %}
           </button>
           <a
             href="{% url 'site_admin:widget_list' %}"
-            class="rounded-xl border border-[color:var(--admin-border)] px-5 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+            class="rounded-xl border border-(--admin-border) px-5 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
           >
             Cancel
           </a>

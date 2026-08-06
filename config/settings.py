@@ -71,6 +71,28 @@ TURNSTILE_SECRET_KEY = env("TURNSTILE_SECRET_KEY", default="")
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
 
+if not DEBUG:
+    # The app sits behind a TLS-terminating proxy (see SECURE_PROXY_SSL_HEADER
+    # above), so it's safe to mark cookies secure-only and enable HSTS here.
+    #
+    # Kamal-proxy already terminates TLS and redirects http->https at the edge
+    # (see proxy.ssl in config/deploy*.yml), so SECURE_SSL_REDIRECT defaults
+    # off to avoid a redundant/incorrect redirect if SECURE_PROXY_SSL_HEADER
+    # isn't seen (e.g. CI, or requests that reach the app directly). Flip it
+    # on via env if the proxy setup ever changes.
+    SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=False)
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    CSRF_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    CSRF_COOKIE_SAMESITE = "Lax"
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = "same-origin"
+    SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=60 * 60 * 24 * 365)
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", default=True)
+    SECURE_HSTS_PRELOAD = env.bool("SECURE_HSTS_PRELOAD", default=True)
+
 # ---------------------------------------------------------------------------
 # Applications
 # ---------------------------------------------------------------------------

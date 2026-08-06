@@ -1,0 +1,9 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/forms";
+@source "../templates/site_admin";
+
+@theme {
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui;
+  --font-display: "Bitter", ui-serif, Georgia;
+  --shadow-panel: 0 18px 40px rgba(14, 20, 26, 0.06);
+}

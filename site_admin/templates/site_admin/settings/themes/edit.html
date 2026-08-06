@@ -3,9 +3,24 @@
 {% block title %}Theme files{% endblock %}
 
 {% block head %}
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material.min.css" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldgutter.min.css" />
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.21/codemirror.min.css"
+    integrity="sha384-+yu/aRBj6vcneAvmF5a9GnugX+oBXin9PIagi4luaaD4tgG0uTA4LU6LRtE053dS"
+    crossorigin="anonymous"
+  />
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.21/theme/material.min.css"
+    integrity="sha384-vVto5ZUTH1hbuIqRaHQA1jM9RkJR575D7BlSuCUX8jCQS8E2vU9makXUNb0GgEnO"
+    crossorigin="anonymous"
+  />
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.21/addon/fold/foldgutter.min.css"
+    integrity="sha384-FLRk0racal2ypfWQlXhbIihoTAkc8aVN+4E0L/SatAm4vzfWLoLCsEUi9NFkUkpa"
+    crossorigin="anonymous"
+  />
   <style>
     .CodeMirror {
       border: 1px solid #e5dfd6;
@@ -21,16 +36,16 @@
     {% include "site_admin/_section_subnav.html" with section="settings" %}
       <section class="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <div class="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Site settings</div>
+          <div class="text-xs font-semibold uppercase tracking-[0.24em] text-(--admin-muted)">Site settings</div>
           <h1 class="text-2xl font-semibold">Theme files</h1>
-          <p class="mt-1 text-sm text-[color:var(--admin-muted)]">
+          <p class="mt-1 text-sm text-(--admin-muted)">
             Edit templates and assets. Changes sync to storage.
           </p>
         </div>
         <div class="flex flex-wrap items-center gap-3">
           <a
             href="{% url 'site_admin:theme_settings' %}"
-            class="rounded-xl border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+            class="rounded-xl border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
           >
             Back to themes
           </a>
@@ -38,9 +53,9 @@
       </section>
 
 
-      <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+      <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
         {% if not theme_choices %}
-          <p class="text-sm text-[color:var(--admin-muted)]">No themes available to edit yet.</p>
+          <p class="text-sm text-(--admin-muted)">No themes available to edit yet.</p>
         {% else %}
           <form method="post" class="space-y-4" novalidate>
             {% csrf_token %}
@@ -49,23 +64,23 @@
                 {{ form.non_field_errors }}
               </div>
             {% endif %}
-            <div class="grid gap-4 md:grid-cols-2 items-end rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] p-4">
+            <div class="grid gap-4 md:grid-cols-2 items-end rounded-2xl border border-(--admin-border) bg-(--admin-bg) p-4">
               <div>
-                <label class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]" for="{{ form.theme.id_for_label }}">
+                <label class="block text-xs uppercase tracking-wide text-(--admin-muted)" for="{{ form.theme.id_for_label }}">
                   Theme
                 </label>
                 {{ form.theme }}
                 {{ form.theme.errors }}
               </div>
               <div class="hidden">
-                <label class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]" for="{{ form.path.id_for_label }}">
+                <label class="block text-xs uppercase tracking-wide text-(--admin-muted)" for="{{ form.path.id_for_label }}">
                   File
                 </label>
                 {{ form.path }}
               </div>
             </div>
             {% if not file_choices %}
-              <p class="text-sm text-[color:var(--admin-muted)]">No editable files found for this theme yet.</p>
+              <p class="text-sm text-(--admin-muted)">No editable files found for this theme yet.</p>
             {% endif %}
 
             <div class="grid gap-4 md:grid-cols-4">
@@ -75,24 +90,24 @@
                 </div>
                 <div
                   id="file-tree"
-                  class="mt-2 h-[640px] overflow-auto rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] p-2"
+                  class="mt-2 h-[640px] overflow-auto rounded-2xl border border-(--admin-border) bg-(--admin-bg) p-2"
                 ></div>
                 <div class="mt-3 flex gap-2">
                   <button
                     type="button"
                     id="new-file-btn"
-                    class="rounded-xl border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+                    class="rounded-xl border border-(--admin-border) px-3 py-1 text-xs font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
                   >
                     New file
                   </button>
                 </div>
-                <p class="mt-2 text-xs text-[color:var(--admin-muted)]">
+                <p class="mt-2 text-xs text-(--admin-muted)">
                   Includes HTML, CSS, JS, text, and JSON files.
                 </p>
               </div>
               <div class="md:col-span-3 space-y-3">
                 <div>
-                  <label class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]" for="{{ form.content.id_for_label }}">
+                  <label class="block text-xs uppercase tracking-wide text-(--admin-muted)" for="{{ form.content.id_for_label }}">
                     Content
                   </label>
                   {{ form.content }}
@@ -103,14 +118,14 @@
                     type="submit"
                     name="save"
                     value="1"
-                    class="rounded-xl bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+                    class="rounded-xl bg-(--admin-accent) px-5 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)"
                   >
                     Save file
                   </button>
                   <button
                     type="button"
                     id="delete-button"
-                    class="rounded-xl border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+                    class="rounded-xl border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
                   >
                     Delete
                   </button>
@@ -124,28 +139,28 @@
     </div>
   </div>
 
-  <div id="unsaved-modal" class="fixed inset-0 hidden items-center justify-center bg-black bg-opacity-40 p-4">
+  <div id="unsaved-modal" class="fixed inset-0 hidden items-center justify-center bg-black/40 p-4">
     <div class="w-full max-w-lg rounded-3xl bg-white p-6 shadow-lg">
       <h2 class="text-lg font-semibold">Unsaved changes</h2>
-      <p class="mt-2 text-sm text-[color:var(--admin-muted)]">
+      <p class="mt-2 text-sm text-(--admin-muted)">
         You have unsaved changes. Save before loading a new file, or discard them.
       </p>
       <div class="mt-4 flex flex-wrap justify-end gap-3">
         <button
           id="unsaved-cancel"
-          class="rounded-xl border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+          class="rounded-xl border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
         >
           Cancel
         </button>
         <button
           id="unsaved-discard"
-          class="rounded-xl border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+          class="rounded-xl border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
         >
           Discard changes
         </button>
         <button
           id="unsaved-save"
-          class="rounded-xl bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+          class="rounded-xl bg-(--admin-accent) px-5 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)"
         >
           Save changes
         </button>
@@ -156,21 +171,81 @@
 {% block body_end %}
   {{ file_choices|json_script:"file-choices-data" }}
   {{ directory_choices|json_script:"dir-choices-data" }}
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/markdown/markdown.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closetag.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldcode.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldgutter.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/brace-fold.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/comment-fold.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/indent-fold.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/xml-fold.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/markdown-fold.min.js"></script>
+    <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.21/codemirror.min.js"
+    integrity="sha384-9U1Q651nM8dXXMlY1nZ5Ko3fuCxC8qSDmMZ3mdwVLmlg1gDP1YblgqD+TR7j4R3A"
+    crossorigin="anonymous"
+  ></script>
+    <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.21/mode/xml/xml.min.js"
+    integrity="sha384-/iGmj8Jn/9Y1Eg3gOiCZVzkeuNiyIymSwPnke3a7qgX2XxvUnE4VYv4tYcvXNBNo"
+    crossorigin="anonymous"
+  ></script>
+    <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.21/mode/javascript/javascript.min.js"
+    integrity="sha384-vp2VirdLPTOa/snvCOGonJjoxSHEMIy/r8JSAwp2Hy+cLI8b9mnTtE2Opi/jRP7R"
+    crossorigin="anonymous"
+  ></script>
+    <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.21/mode/css/css.min.js"
+    integrity="sha384-aSjWQcLyokUq8my3WvsKfhPGBD75e8bWemF9xHRsBd5HJMuKsZSkoWaRhxjfvLcz"
+    crossorigin="anonymous"
+  ></script>
+    <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.21/mode/htmlmixed/htmlmixed.min.js"
+    integrity="sha384-1aKCSUVTeD/IQ5bbogUnKbYENtGPtBrhsmbW4fMgjX26uYQ9DamlxoF2PR+NudxS"
+    crossorigin="anonymous"
+  ></script>
+    <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.21/mode/markdown/markdown.min.js"
+    integrity="sha384-W/VQZvPUU4QTwzr6TFoYn1qeCwJmoEla9SNqb8feArmQhlp+QbnU7Pd2x0zH1mNs"
+    crossorigin="anonymous"
+  ></script>
+    <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.21/addon/edit/closetag.min.js"
+    integrity="sha384-FkOhLeEYMK9Kvx37+ck8rtldDJqDpqy93MNEOehSCt3llAI99uzAmzy2fyiDvNTl"
+    crossorigin="anonymous"
+  ></script>
+    <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.21/addon/edit/matchbrackets.min.js"
+    integrity="sha384-ODYimwLJo3jkkM+v24kimaS5FaFjpMuADqSVYrQSGNgZRLJthFB9KeZy5QEv8gly"
+    crossorigin="anonymous"
+  ></script>
+    <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.21/addon/fold/foldcode.min.js"
+    integrity="sha384-uPa80eA/2n8iD0qiCJiqnDxbFl00JgVQEqHaE3LjnJshRWfRyJwAtpFf6V2gWC1y"
+    crossorigin="anonymous"
+  ></script>
+    <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.21/addon/fold/foldgutter.min.js"
+    integrity="sha384-TKTj5G2ZhKDZvKNy4OyoI7kj28VjrwfMB4HlEYg4yE5XWhLaQr3St9FoOlHPW81I"
+    crossorigin="anonymous"
+  ></script>
+    <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.21/addon/fold/brace-fold.min.js"
+    integrity="sha384-uHXI+eoX/XAJuCAK28/0E7zL1sWs1P9fMsyAh6CrMNjXMgPQ8LwYJYR/uVavmTBr"
+    crossorigin="anonymous"
+  ></script>
+    <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.21/addon/fold/comment-fold.min.js"
+    integrity="sha384-a7BMxoSZwTSMsz6OzMR/+7/B5Dr03Lk4UgQfzcNrIUqDSGNxd/0jY11xjCdlKmUO"
+    crossorigin="anonymous"
+  ></script>
+    <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.21/addon/fold/indent-fold.min.js"
+    integrity="sha384-b/QIXdmhooSd7bcUDvIzgc1sfPkftXh5XbwRIUra2N73KoksYq2fZ36NEtEkbV5e"
+    crossorigin="anonymous"
+  ></script>
+    <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.21/addon/fold/xml-fold.min.js"
+    integrity="sha384-/GA5irULnjKI+hwpz7WrEpZfIFQCwIE+2UpEPa2cFDynllCw9jCtk/rRda0kSRzg"
+    crossorigin="anonymous"
+  ></script>
+    <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.21/addon/fold/markdown-fold.min.js"
+    integrity="sha384-/rDr8M3jgjiPuoPexL/RH3kLRPxNHbL51tu23qdaonMkMn/WdJZbZiN4a0AoN+Mx"
+    crossorigin="anonymous"
+  ></script>
   <script type="text/javascript">
     window.addEventListener("load", () => {
       const textarea = document.getElementById("{{ form.content.id_for_label }}");
@@ -426,7 +501,7 @@
 
               const caret = document.createElement("button");
               caret.type = "button";
-              caret.className = "inline-flex w-4 justify-center text-gray-500 focus:outline-none";
+              caret.className = "inline-flex w-4 justify-center text-gray-500 focus:outline-hidden";
               caret.textContent = node.expanded ? "v" : ">";
 
               const label = document.createElement("span");

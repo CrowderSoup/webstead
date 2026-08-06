@@ -5,37 +5,37 @@
 {% block content %}
   <div class="flex flex-col gap-6">
     {% include "site_admin/_section_subnav.html" with section="interactions" %}
-    <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+    <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
       <div>
-        <p class="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Engagement Inbox</p>
+        <p class="text-xs font-semibold uppercase tracking-[0.24em] text-(--admin-muted)">Engagement Inbox</p>
         <h1 class="mt-2 text-2xl font-semibold">Interactions</h1>
-        <p class="mt-1 text-sm text-[color:var(--admin-muted)]">
+        <p class="mt-1 text-sm text-(--admin-muted)">
           Review and moderate incoming comments and webmentions in one place.
         </p>
       </div>
       <div class="mt-4 grid gap-3 sm:grid-cols-2">
-        <div class="rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] p-4">
-          <div class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Pending comments</div>
+        <div class="rounded-2xl border border-(--admin-border) bg-(--admin-bg) p-4">
+          <div class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Pending comments</div>
           <div class="mt-2 text-3xl font-semibold">{{ pending_comment_count }}</div>
         </div>
-        <div class="rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] p-4">
-          <div class="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">Pending webmentions</div>
+        <div class="rounded-2xl border border-(--admin-border) bg-(--admin-bg) p-4">
+          <div class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Pending webmentions</div>
           <div class="mt-2 text-3xl font-semibold">{{ pending_webmention_count }}</div>
         </div>
       </div>
     </section>
 
-    <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+    <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 class="text-lg font-semibold">Comments to review</h2>
-          <p class="text-sm text-[color:var(--admin-muted)]">
+          <p class="text-sm text-(--admin-muted)">
             {{ pending_comment_count }} pending review.
           </p>
         </div>
         <a
           href="{% url 'site_admin:comment_list' %}?status=pending"
-          class="text-sm font-semibold text-[color:var(--admin-accent)]"
+          class="text-sm font-semibold text-(--admin-accent)"
         >
           View comments
         </a>
@@ -44,38 +44,38 @@
         {% for comment in pending_comments %}
           <a
             href="{% url 'site_admin:comment_detail' comment_id=comment.id %}"
-            class="rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] p-4 transition hover:border-[color:var(--admin-accent)]"
+            class="rounded-2xl border border-(--admin-border) bg-(--admin-bg) p-4 transition hover:border-(--admin-accent)"
           >
             <div class="flex flex-wrap items-center justify-between gap-2">
               <div class="text-sm font-semibold">{{ comment.author_name }}</div>
-              <span class="rounded-xl bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+              <span class="rounded-xl bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">
                 {{ comment.get_status_display }}
               </span>
             </div>
-            <div class="mt-2 text-sm text-[color:var(--admin-muted)]">
+            <div class="mt-2 text-sm text-(--admin-muted)">
               {{ comment.excerpt|default:comment.content|truncatechars:120 }}
             </div>
-            <div class="mt-2 text-xs text-[color:var(--admin-muted)]">
+            <div class="mt-2 text-xs text-(--admin-muted)">
               {{ comment.post.title|default:comment.post.slug }} · {{ comment.created_at|date:"M j, Y" }}
             </div>
           </a>
         {% empty %}
-          <p class="text-sm text-[color:var(--admin-muted)]">No comments waiting for review.</p>
+          <p class="text-sm text-(--admin-muted)">No comments waiting for review.</p>
         {% endfor %}
       </div>
     </section>
 
-    <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+    <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 class="text-lg font-semibold">Incoming webmentions</h2>
-          <p class="text-sm text-[color:var(--admin-muted)]">
+          <p class="text-sm text-(--admin-muted)">
             {{ pending_webmention_count }} pending approval.
           </p>
         </div>
         <a
           href="{% url 'site_admin:webmention_list' %}?direction=incoming&status=pending"
-          class="text-sm font-semibold text-[color:var(--admin-accent)]"
+          class="text-sm font-semibold text-(--admin-accent)"
         >
           View webmentions
         </a>
@@ -84,18 +84,18 @@
         {% for mention in pending_webmentions %}
           <a
             href="{% url 'site_admin:webmention_detail' mention_id=mention.id %}"
-            class="rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] p-4 transition hover:border-[color:var(--admin-accent)]"
+            class="rounded-2xl border border-(--admin-border) bg-(--admin-bg) p-4 transition hover:border-(--admin-accent)"
           >
             <div class="flex flex-wrap items-center justify-between gap-2">
               <div class="text-sm font-semibold">{{ mention.get_mention_type_display }}</div>
-              <span class="rounded-xl bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+              <span class="rounded-xl bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">
                 Pending
               </span>
             </div>
-            <div class="mt-2 text-sm text-[color:var(--admin-muted)]">
+            <div class="mt-2 text-sm text-(--admin-muted)">
               {{ mention.source|truncatechars:80 }}
             </div>
-            <div class="mt-2 text-xs text-[color:var(--admin-muted)]">
+            <div class="mt-2 text-xs text-(--admin-muted)">
               {% if mention.target_post %}
                 {{ mention.target_post.title|default:mention.target_post.slug }}
               {% else %}
@@ -105,7 +105,7 @@
             </div>
           </a>
         {% empty %}
-          <p class="text-sm text-[color:var(--admin-muted)]">No incoming webmentions waiting for review.</p>
+          <p class="text-sm text-(--admin-muted)">No incoming webmentions waiting for review.</p>
         {% endfor %}
       </div>
     </section>

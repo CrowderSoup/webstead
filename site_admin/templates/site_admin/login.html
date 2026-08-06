@@ -12,18 +12,7 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ["Space Grotesk", "ui-sans-serif", "system-ui"],
-            },
-          },
-        },
-      };
-    </script>
+    <link rel="stylesheet" href="{% static 'site_admin/css/admin.css' %}" />
     <script>
       (function () {
         const storageKey = "admin-theme";
@@ -82,17 +71,17 @@
       }
     </style>
   </head>
-  <body class="min-h-screen bg-[color:var(--admin-bg)] text-[color:var(--admin-ink)]">
+  <body class="min-h-screen bg-(--admin-bg) text-(--admin-ink)">
     <main class="mx-auto flex min-h-screen w-full max-w-5xl items-center px-4 py-12">
-      <div class="grid w-full gap-8 rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-8 shadow-sm lg:grid-cols-[1.2fr,1fr]">
+      <div class="grid w-full gap-8 rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-8 shadow-xs lg:grid-cols-[1.2fr,1fr]">
         <section class="space-y-4">
-          <p class="text-xs uppercase tracking-[0.3em] text-[color:var(--admin-muted)]">
+          <p class="text-xs uppercase tracking-[0.3em] text-(--admin-muted)">
             Site Admin
           </p>
           <h1 class="text-3xl font-semibold leading-tight">
             Sign in to manage your site.
           </h1>
-          <p class="text-sm text-[color:var(--admin-muted)]">
+          <p class="text-sm text-(--admin-muted)">
             Use your staff credentials to access pages, posts, and site settings.
           </p>
         </section>
@@ -106,7 +95,7 @@
             <div>
               <label
                 for="{{ form.username.id_for_label }}"
-                class="text-sm font-medium text-[color:var(--admin-muted)]"
+                class="text-sm font-medium text-(--admin-muted)"
               >
                 Username
               </label>
@@ -116,7 +105,7 @@
             <div>
               <label
                 for="{{ form.password.id_for_label }}"
-                class="text-sm font-medium text-[color:var(--admin-muted)]"
+                class="text-sm font-medium text-(--admin-muted)"
               >
                 Password
               </label>
@@ -125,7 +114,7 @@
             </div>
             <button
               type="submit"
-              class="inline-flex w-full items-center justify-center rounded-full bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+              class="inline-flex w-full items-center justify-center rounded-full bg-(--admin-accent) px-4 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)"
             >
               Sign in
             </button>

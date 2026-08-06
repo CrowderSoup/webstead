@@ -11,22 +11,22 @@
     {% include "site_admin/_section_subnav.html" with section="settings" %}
       <section class="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <div class="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Appearance</div>
+          <div class="text-xs font-semibold uppercase tracking-[0.24em] text-(--admin-muted)">Appearance</div>
           <h1 class="mt-2 text-2xl font-semibold">Themes</h1>
-          <p class="mt-1 text-sm text-[color:var(--admin-muted)]">Upload new themes, edit files, and review installs.</p>
+          <p class="mt-1 text-sm text-(--admin-muted)">Upload new themes, edit files, and review installs.</p>
         </div>
         <div class="flex flex-wrap items-center gap-3">
           {% if active_theme_slug %}
             <a
               href="{% url 'site_admin:theme_file_edit' slug=active_theme_slug %}"
-              class="rounded-xl border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+              class="rounded-xl border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
             >
               Edit active theme
             </a>
           {% endif %}
           <a
             href="{% url 'site_admin:site_settings' %}"
-            class="rounded-xl border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+            class="rounded-xl border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
           >
             Back to general
           </a>
@@ -34,27 +34,27 @@
       </section>
 
 
-      <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+      <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
         <h2 class="text-lg font-semibold">Install theme</h2>
-        <p class="mt-1 text-sm text-[color:var(--admin-muted)]">
+        <p class="mt-1 text-sm text-(--admin-muted)">
           Add a theme from a zip archive or a public git repository. Files are synced to storage.
         </p>
         <form method="post" enctype="multipart/form-data" class="mt-4 space-y-4">
           {% csrf_token %}
           <input type="hidden" name="action" value="install_theme" />
           <div>
-            <div class="text-xs uppercase tracking-wide text-[color:var(--admin-muted)]">Source</div>
-            <div class="mt-2 inline-flex rounded-xl border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] p-1">
+            <div class="text-xs uppercase tracking-wide text-(--admin-muted)">Source</div>
+            <div class="mt-2 inline-flex rounded-xl border border-(--admin-border) bg-(--admin-bg) p-1">
               <button
                 type="button"
-                class="rounded-xl px-4 py-1 text-xs font-semibold uppercase tracking-wide transition {% if install_source == 'git' %}bg-[color:var(--admin-accent)] text-white{% else %}text-[color:var(--admin-muted)]{% endif %}"
+                class="rounded-xl px-4 py-1 text-xs font-semibold uppercase tracking-wide transition {% if install_source == 'git' %}bg-(--admin-accent) text-white{% else %}text-(--admin-muted){% endif %}"
                 data-install-source-button="git"
               >
                 Git repository
               </button>
               <button
                 type="button"
-                class="rounded-xl px-4 py-1 text-xs font-semibold uppercase tracking-wide transition {% if install_source == 'upload' %}bg-[color:var(--admin-accent)] text-white{% else %}text-[color:var(--admin-muted)]{% endif %}"
+                class="rounded-xl px-4 py-1 text-xs font-semibold uppercase tracking-wide transition {% if install_source == 'upload' %}bg-(--admin-accent) text-white{% else %}text-(--admin-muted){% endif %}"
                 data-install-source-button="upload"
               >
                 Upload zip
@@ -68,7 +68,7 @@
               {{ upload_form.archive.errors }}
               {{ upload_form.archive }}
               {% if upload_form.archive.help_text %}
-                <p class="mt-2 text-xs text-[color:var(--admin-muted)]">{{ upload_form.archive.help_text }}</p>
+                <p class="mt-2 text-xs text-(--admin-muted)">{{ upload_form.archive.help_text }}</p>
               {% endif %}
             </div>
           </div>
@@ -80,56 +80,56 @@
           >
             {{ git_form.non_field_errors }}
             <div>
-              <label class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]" for="{{ git_form.git_url.id_for_label }}">
+              <label class="block text-xs uppercase tracking-wide text-(--admin-muted)" for="{{ git_form.git_url.id_for_label }}">
                 {{ git_form.git_url.label }}
               </label>
               {{ git_form.git_url.errors }}
               {{ git_form.git_url }}
               {% if git_form.git_url.help_text %}
-                <p class="mt-2 text-xs text-[color:var(--admin-muted)]">{{ git_form.git_url.help_text }}</p>
+                <p class="mt-2 text-xs text-(--admin-muted)">{{ git_form.git_url.help_text }}</p>
               {% endif %}
             </div>
             <div class="mt-4 grid gap-4 sm:grid-cols-2">
               <div>
-                <label class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]" for="{{ git_form.slug.id_for_label }}">
+                <label class="block text-xs uppercase tracking-wide text-(--admin-muted)" for="{{ git_form.slug.id_for_label }}">
                   {{ git_form.slug.label }}
                 </label>
                 {{ git_form.slug.errors }}
                 {{ git_form.slug }}
               </div>
               <div>
-                <label class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]" for="{{ git_form.ref.id_for_label }}">
+                <label class="block text-xs uppercase tracking-wide text-(--admin-muted)" for="{{ git_form.ref.id_for_label }}">
                   {{ git_form.ref.label }}
                 </label>
                 {{ git_form.ref.errors }}
                 {{ git_form.ref }}
                 <datalist id="theme-git-ref-options" data-git-ref-list></datalist>
                 {% if git_form.ref.help_text %}
-                  <p class="mt-2 text-xs text-[color:var(--admin-muted)]">{{ git_form.ref.help_text }}</p>
+                  <p class="mt-2 text-xs text-(--admin-muted)">{{ git_form.ref.help_text }}</p>
                 {% endif %}
               </div>
             </div>
           </div>
           <button
             type="submit"
-            class="rounded-xl bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+            class="rounded-xl bg-(--admin-accent) px-5 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)"
           >
             Install theme
           </button>
         </form>
       </section>
 
-      <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+      <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 class="text-lg font-semibold">Theme settings</h2>
-            <p class="mt-1 text-sm text-[color:var(--admin-muted)]">
+            <p class="mt-1 text-sm text-(--admin-muted)">
               Customize the active theme using its declared settings.
             </p>
           </div>
           {% if active_theme %}
-            <div class="text-sm text-[color:var(--admin-muted)]">
-              Active: <span class="font-semibold text-[color:var(--admin-ink)]">{{ active_theme.label }}</span>
+            <div class="text-sm text-(--admin-muted)">
+              Active: <span class="font-semibold text-(--admin-ink)">{{ active_theme.label }}</span>
             </div>
           {% endif %}
         </div>
@@ -140,14 +140,14 @@
             {{ theme_settings_form.non_field_errors }}
             {% if theme_settings_groups %}
               {% for group in theme_settings_groups %}
-                <div class="rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] p-4">
-                  <div class="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">
+                <div class="rounded-2xl border border-(--admin-border) bg-(--admin-bg) p-4">
+                  <div class="text-xs font-semibold uppercase tracking-[0.2em] text-(--admin-muted)">
                     {{ group.label }}
                   </div>
                   <div class="mt-4 grid gap-4 md:grid-cols-2">
                     {% for field in group.fields %}
                       <div>
-                        <label class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]" for="{{ field.id_for_label }}">
+                        <label class="block text-xs uppercase tracking-wide text-(--admin-muted)" for="{{ field.id_for_label }}">
                           {{ field.label }}
                         </label>
                         {{ field.errors }}
@@ -156,7 +156,7 @@
                             {{ field }}
                             <input
                               type="text"
-                              class="w-28 rounded-2xl border-2 border-[color:var(--admin-border)] bg-white px-3 py-2 text-xs font-mono text-[color:var(--admin-ink)]"
+                              class="w-28 rounded-2xl border-2 border-(--admin-border) bg-white px-3 py-2 text-xs font-mono text-(--admin-ink)"
                               value="{{ field.value|default:field.initial|default:'#000000' }}"
                               data-theme-color-value
                               readonly
@@ -166,7 +166,7 @@
                           {{ field }}
                         {% endif %}
                         {% if field.help_text %}
-                          <p class="mt-2 text-xs text-[color:var(--admin-muted)]">{{ field.help_text }}</p>
+                          <p class="mt-2 text-xs text-(--admin-muted)">{{ field.help_text }}</p>
                         {% endif %}
                       </div>
                     {% endfor %}
@@ -178,7 +178,7 @@
               <div class="grid gap-4 md:grid-cols-2">
                 {% for field in theme_settings_ungrouped_fields %}
                   <div>
-                    <label class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]" for="{{ field.id_for_label }}">
+                    <label class="block text-xs uppercase tracking-wide text-(--admin-muted)" for="{{ field.id_for_label }}">
                       {{ field.label }}
                     </label>
                     {{ field.errors }}
@@ -187,7 +187,7 @@
                         {{ field }}
                         <input
                           type="text"
-                          class="w-28 rounded-2xl border-2 border-[color:var(--admin-border)] bg-white px-3 py-2 text-xs font-mono text-[color:var(--admin-ink)]"
+                          class="w-28 rounded-2xl border-2 border-(--admin-border) bg-white px-3 py-2 text-xs font-mono text-(--admin-ink)"
                           value="{{ field.value|default:field.initial|default:'#000000' }}"
                           data-theme-color-value
                           readonly
@@ -197,7 +197,7 @@
                       {{ field }}
                     {% endif %}
                     {% if field.help_text %}
-                      <p class="mt-2 text-xs text-[color:var(--admin-muted)]">{{ field.help_text }}</p>
+                      <p class="mt-2 text-xs text-(--admin-muted)">{{ field.help_text }}</p>
                     {% endif %}
                   </div>
                 {% endfor %}
@@ -205,13 +205,13 @@
             {% endif %}
             <button
               type="submit"
-              class="rounded-xl bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+              class="rounded-xl bg-(--admin-accent) px-5 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)"
             >
               Save theme settings
             </button>
           </form>
         {% else %}
-          <div class="mt-4 rounded-2xl border border-dashed border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] p-6 text-center text-sm text-[color:var(--admin-muted)]">
+          <div class="mt-4 rounded-2xl border border-dashed border-(--admin-border) bg-(--admin-bg) p-6 text-center text-sm text-(--admin-muted)">
             {% if active_theme %}
               This theme does not define any custom settings.
             {% else %}
@@ -259,9 +259,9 @@
               });
               sourceButtons.forEach((button) => {
                 const isActive = button.dataset.installSourceButton === selected;
-                button.classList.toggle("bg-[color:var(--admin-accent)]", isActive);
+                button.classList.toggle("bg-(--admin-accent)", isActive);
                 button.classList.toggle("text-white", isActive);
-                button.classList.toggle("text-[color:var(--admin-muted)]", !isActive);
+                button.classList.toggle("text-(--admin-muted)", !isActive);
               });
             };
             const initial = sourceInput.value || "git";
@@ -276,11 +276,11 @@
         });
       </script>
 
-      <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+      <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 class="text-lg font-semibold">Themes inventory</h2>
-            <p class="mt-1 text-sm text-[color:var(--admin-muted)]">Review installed themes, local presence, and sync status.</p>
+            <p class="mt-1 text-sm text-(--admin-muted)">Review installed themes, local presence, and sync status.</p>
           </div>
           <div class="flex flex-wrap items-center gap-3">
             <form method="post">
@@ -288,7 +288,7 @@
               <input type="hidden" name="action" value="check_theme_storage" />
               <button
                 type="submit"
-                class="rounded-xl border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+                class="rounded-xl border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
               >
                 Check storage for themes
               </button>
@@ -297,11 +297,11 @@
         </div>
         <form method="get" class="mt-4 flex flex-wrap items-end gap-4">
           <div>
-            <label for="theme-inventory-source" class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]">Source</label>
+            <label for="theme-inventory-source" class="block text-xs uppercase tracking-wide text-(--admin-muted)">Source</label>
             <select
               name="source_type"
               id="theme-inventory-source"
-              class="mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]"
+              class="mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)"
             >
               <option value="">All</option>
               {% for value, label in source_choices %}
@@ -310,11 +310,11 @@
             </select>
           </div>
           <div>
-            <label for="theme-inventory-status" class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]">Status</label>
+            <label for="theme-inventory-status" class="block text-xs uppercase tracking-wide text-(--admin-muted)">Status</label>
             <select
               name="status"
               id="theme-inventory-status"
-              class="mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]"
+              class="mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)"
             >
               <option value="">All</option>
               {% for value, label in status_choices %}
@@ -323,27 +323,27 @@
             </select>
           </div>
           <div>
-            <label for="theme-inventory-search" class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]">Search</label>
+            <label for="theme-inventory-search" class="block text-xs uppercase tracking-wide text-(--admin-muted)">Search</label>
             <input
               type="text"
               name="q"
               value="{{ filters.q }}"
               id="theme-inventory-search"
               placeholder="Slug or source ref"
-              class="mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]"
+              class="mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)"
             />
           </div>
           <div class="flex gap-2">
             <button
               type="submit"
-              class="rounded-xl border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+              class="rounded-xl border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
             >
               Filter
             </button>
             {% if filters.source_type or filters.status or filters.q %}
               <a
                 href="{% url 'site_admin:theme_settings' %}"
-                class="rounded-xl border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+                class="rounded-xl border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
               >
                 Clear
               </a>
@@ -352,9 +352,9 @@
         </form>
         {% if inventory_rows %}
           <div class="mt-4 overflow-x-auto">
-            <table class="w-full table-fixed border border-[color:var(--admin-border)] text-sm">
+            <table class="w-full table-fixed border border-(--admin-border) text-sm">
               <thead>
-                <tr class="bg-[color:var(--admin-bg)] text-left">
+                <tr class="bg-(--admin-bg) text-left">
                   <th class="w-5/12 p-3 font-semibold">Theme</th>
                   <th class="w-5/12 p-3 font-semibold">Details</th>
                   <th class="w-2/12 p-3 font-semibold">Actions</th>
@@ -362,24 +362,24 @@
               </thead>
               <tbody>
                 {% for row in inventory_rows %}
-                  <tr class="border-t border-[color:var(--admin-border)]">
+                  <tr class="border-t border-(--admin-border)">
                     <td class="p-3">
                       <div class="flex flex-wrap items-center gap-2">
                         <span>{{ row.label }}</span>
                         {% if row.is_active %}
-                          <span class="rounded-xl bg-[color:var(--admin-bg)] px-2 py-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+                          <span class="rounded-xl bg-(--admin-bg) px-2 py-1 text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">
                             Active
                           </span>
                         {% endif %}
                       </div>
-                      <div class="mt-2 text-xs text-[color:var(--admin-muted)]">
+                      <div class="mt-2 text-xs text-(--admin-muted)">
                         <span class="font-mono">{{ row.slug }}</span>
-                        <span class="mx-2 text-[color:var(--admin-border)]">•</span>
+                        <span class="mx-2 text-(--admin-border)">•</span>
                         <span>{{ row.version }}</span>
                       </div>
                     </td>
                     <td class="p-3">
-                      <div class="flex flex-wrap gap-2 text-xs text-[color:var(--admin-muted)]">
+                      <div class="flex flex-wrap gap-2 text-xs text-(--admin-muted)">
                         <span>Author: {{ row.author }}</span>
                         <span>Files: {% if row.local_present %}{{ row.file_count }}{% else %}-{% endif %}</span>
                         {% if row.local_present %}
@@ -392,7 +392,7 @@
                         <span>Last synced: {{ row.last_synced_at|date:"Y-m-d H:i"|default:"-" }}</span>
                       </div>
                       {% if row.source_ref or row.source_url %}
-                        <div class="mt-2 text-xs font-mono text-[color:var(--admin-muted)] break-all">
+                        <div class="mt-2 text-xs font-mono text-(--admin-muted) break-all">
                           {{ row.source_ref|default:row.source_url }}
                         </div>
                       {% endif %}
@@ -402,7 +402,7 @@
                         {% if row.local_present %}
                           <a
                             href="{% url 'site_admin:theme_file_edit' slug=row.slug %}"
-                            class="rounded-xl border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+                            class="rounded-xl border border-(--admin-border) px-3 py-1 text-xs font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
                           >
                             Manage files
                           </a>
@@ -410,7 +410,7 @@
                         {% if row.install %}
                           <a
                             href="{% url 'site_admin:theme_install_detail' slug=row.install.slug %}"
-                            class="rounded-xl border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+                            class="rounded-xl border border-(--admin-border) px-3 py-1 text-xs font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
                           >
                             Install info
                           </a>
@@ -423,7 +423,7 @@
             </table>
           </div>
         {% else %}
-          <div class="mt-4 rounded-2xl border border-dashed border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] p-6 text-center text-sm text-[color:var(--admin-muted)]">
+          <div class="mt-4 rounded-2xl border border-dashed border-(--admin-border) bg-(--admin-bg) p-6 text-center text-sm text-(--admin-muted)">
             No themes found yet. Upload a theme or sync storage to get started.
           </div>
         {% endif %}

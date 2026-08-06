@@ -11,13 +11,13 @@
     {% include "site_admin/_section_subnav.html" with section="settings" %}
       <section class="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <div class="text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--admin-muted)]">Site settings</div>
+          <div class="text-xs font-semibold uppercase tracking-[0.24em] text-(--admin-muted)">Site settings</div>
           <h1 class="text-2xl font-semibold">Theme install: {{ install.slug }}</h1>
         </div>
         <div class="flex flex-wrap items-center gap-3">
           <a
             href="{% url 'site_admin:theme_settings' %}"
-            class="rounded-xl border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+            class="rounded-xl border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
           >
             Back to themes
           </a>
@@ -25,87 +25,87 @@
       </section>
 
 
-      <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
-        <table class="min-w-full border border-[color:var(--admin-border)] text-sm">
+      <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
+        <table class="min-w-full border border-(--admin-border) text-sm">
           <tbody>
-            <tr class="border-t border-[color:var(--admin-border)]">
+            <tr class="border-t border-(--admin-border)">
               <th class="p-3 text-left font-semibold">Slug</th>
               <td class="p-3 font-mono text-xs">{{ install.slug }}</td>
             </tr>
-            <tr class="border-t border-[color:var(--admin-border)]">
+            <tr class="border-t border-(--admin-border)">
               <th class="p-3 text-left font-semibold">Source type</th>
               <td class="p-3">{{ install.source_type }}</td>
             </tr>
-            <tr class="border-t border-[color:var(--admin-border)]">
+            <tr class="border-t border-(--admin-border)">
               <th class="p-3 text-left font-semibold">Source ref</th>
               <td class="p-3 font-mono text-xs">{{ install.source_ref|default:"-" }}</td>
             </tr>
-            <tr class="border-t border-[color:var(--admin-border)]">
+            <tr class="border-t border-(--admin-border)">
               <th class="p-3 text-left font-semibold">Source URL</th>
               <td class="p-3 font-mono text-xs">{{ source_url|default:"-" }}</td>
             </tr>
-            <tr class="border-t border-[color:var(--admin-border)]">
+            <tr class="border-t border-(--admin-border)">
               <th class="p-3 text-left font-semibold">Version</th>
               <td class="p-3">{{ install.version|default:"-" }}</td>
             </tr>
-            <tr class="border-t border-[color:var(--admin-border)]">
+            <tr class="border-t border-(--admin-border)">
               <th class="p-3 text-left font-semibold">Checksum</th>
               <td class="p-3 font-mono text-xs">{{ install.checksum|default:"-" }}</td>
             </tr>
-            <tr class="border-t border-[color:var(--admin-border)]">
+            <tr class="border-t border-(--admin-border)">
               <th class="p-3 text-left font-semibold">Installed at</th>
               <td class="p-3">{{ install.installed_at|date:"Y-m-d H:i"|default:"-" }}</td>
             </tr>
-            <tr class="border-t border-[color:var(--admin-border)]">
+            <tr class="border-t border-(--admin-border)">
               <th class="p-3 text-left font-semibold">Last synced at</th>
               <td class="p-3">{{ install.last_synced_at|date:"Y-m-d H:i"|default:"-" }}</td>
             </tr>
-            <tr class="border-t border-[color:var(--admin-border)]">
+            <tr class="border-t border-(--admin-border)">
               <th class="p-3 text-left font-semibold">Last synced commit</th>
               <td class="p-3 font-mono text-xs">{{ install.last_synced_commit|default:"-" }}</td>
             </tr>
-            <tr class="border-t border-[color:var(--admin-border)]">
+            <tr class="border-t border-(--admin-border)">
               <th class="p-3 text-left font-semibold">Last sync status</th>
               <td class="p-3">{{ install.last_sync_status|default:"-" }}</td>
             </tr>
           </tbody>
         </table>
       </section>
-      <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+      <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
         <h2 class="text-lg font-semibold">Storage healthcheck</h2>
-        <p class="mt-1 text-sm text-[color:var(--admin-muted)]">
+        <p class="mt-1 text-sm text-(--admin-muted)">
           Validate theme storage access and ensure installs can sync correctly.
         </p>
         <form method="post" class="mt-4 flex flex-wrap items-center gap-3">
           {% csrf_token %}
           <input type="hidden" name="action" value="theme_storage_healthcheck" />
-          <label class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+          <label class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">
             <input
               type="checkbox"
               name="write_test"
-              class="h-4 w-4 rounded border border-[color:var(--admin-border)] text-[color:var(--admin-accent)]"
+              class="h-4 w-4 rounded border border-(--admin-border) text-(--admin-accent)"
             />
             Write test
           </label>
           <button
             type="submit"
-            class="rounded-xl border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+            class="rounded-xl border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
           >
             Run storage healthcheck
           </button>
         </form>
       </section>
       {% if install.source_type == "git" %}
-        <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+        <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
           <h2 class="text-lg font-semibold">Update theme</h2>
-          <p class="mt-1 text-sm text-[color:var(--admin-muted)]">
+          <p class="mt-1 text-sm text-(--admin-muted)">
             Update to the latest commit on the stored ref, or supply a ref to use.
           </p>
           <form method="post" class="mt-4 space-y-4" data-git-ref-endpoint="{% url 'site_admin:theme_git_refs' %}">
             {% csrf_token %}
             <input type="hidden" name="git_url" value="{{ source_url }}" data-git-url-input />
             <div>
-              <label class="block text-xs uppercase tracking-wide text-[color:var(--admin-muted)]" for="theme-update-ref">Git ref (optional)</label>
+              <label class="block text-xs uppercase tracking-wide text-(--admin-muted)" for="theme-update-ref">Git ref (optional)</label>
               <input
                 type="text"
                 name="ref"
@@ -113,13 +113,13 @@
                 placeholder="{{ install.source_ref|default:'default branch' }}"
                 list="theme-git-ref-options"
                 data-git-ref-input
-                class="mt-1 w-full rounded-2xl border border-[color:var(--admin-border)] bg-white px-3 py-2 text-sm shadow-sm focus:border-[color:var(--admin-accent)] focus:ring-[color:var(--admin-accent)]"
+                class="mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)"
               />
               <datalist id="theme-git-ref-options" data-git-ref-list></datalist>
             </div>
             <button
               type="submit"
-              class="rounded-xl bg-[color:var(--admin-accent)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+              class="rounded-xl bg-(--admin-accent) px-5 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)"
             >
               Update theme
             </button>

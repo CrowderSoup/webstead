@@ -7,46 +7,46 @@
     {% include "site_admin/_section_subnav.html" with section="analytics" %}
       <section class="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <div class="text-sm uppercase tracking-[0.2em] text-[color:var(--admin-muted)]">Analytics</div>
+          <div class="text-sm uppercase tracking-[0.2em] text-(--admin-muted)">Analytics</div>
           <h1 class="text-2xl font-semibold">Redirects</h1>
-          <p class="mt-1 text-sm text-[color:var(--admin-muted)]">Forward old URLs to their new destinations.</p>
+          <p class="mt-1 text-sm text-(--admin-muted)">Forward old URLs to their new destinations.</p>
         </div>
         <div class="flex flex-wrap items-center gap-3">
           <a
             href="{% url 'site_admin:redirect_create' %}"
-            class="rounded-full bg-[color:var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--admin-accent-strong)]"
+            class="rounded-full bg-(--admin-accent) px-4 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)"
           >
             New redirect
           </a>
           <a
             href="{% url 'site_admin:analytics_dashboard' %}"
-            class="rounded-full border border-[color:var(--admin-border)] px-4 py-2 text-sm font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+            class="rounded-full border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
           >
             Back to overview
           </a>
         </div>
       </section>
 
-      <section class="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+      <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
         <div class="grid gap-4 md:grid-cols-2">
           {% for redirect_obj in redirects %}
-            <div class="flex flex-col gap-4 rounded-2xl border border-[color:var(--admin-border)] bg-white p-4">
+            <div class="flex flex-col gap-4 rounded-2xl border border-(--admin-border) bg-white p-4">
               <div>
-                <div class="text-sm text-[color:var(--admin-muted)]">From</div>
+                <div class="text-sm text-(--admin-muted)">From</div>
                 <div class="text-lg font-semibold">{{ redirect_obj.from_path }}</div>
               </div>
               <div>
-                <div class="text-sm text-[color:var(--admin-muted)]">To</div>
+                <div class="text-sm text-(--admin-muted)">To</div>
                 <div class="text-lg font-semibold break-all">{{ redirect_obj.to_path }}</div>
               </div>
               <div class="flex flex-wrap items-center justify-between gap-3">
-                <span class="rounded-full bg-[color:var(--admin-bg)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-muted)]">
+                <span class="rounded-full bg-(--admin-bg) px-3 py-1 text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">
                   {{ redirect_obj.get_redirect_type_display }}
                 </span>
                 <div class="flex flex-wrap items-center gap-2">
                   <a
                     href="{% url 'site_admin:redirect_edit' redirect_id=redirect_obj.id %}"
-                    class="rounded-full border border-[color:var(--admin-border)] px-3 py-1 text-xs font-semibold text-[color:var(--admin-ink)] transition hover:bg-[color:var(--admin-bg)]"
+                    class="rounded-full border border-(--admin-border) px-3 py-1 text-xs font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
                   >
                     Edit
                   </a>
@@ -63,7 +63,7 @@
               </div>
             </div>
           {% empty %}
-            <div class="rounded-2xl border border-dashed border-[color:var(--admin-border)] bg-[color:var(--admin-bg)] p-6 text-center text-sm text-[color:var(--admin-muted)]">
+            <div class="rounded-2xl border border-dashed border-(--admin-border) bg-(--admin-bg) p-6 text-center text-sm text-(--admin-muted)">
               No redirects yet. Create one to forward old URLs.
             </div>
           {% endfor %}
