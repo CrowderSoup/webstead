@@ -582,6 +582,23 @@ def _apply_categories(post, categories, *, clear_first=False):
         post.tags.add(tag)
 
 
+def _remove_photo_attachments(post, urls):
+    normalized_urls = set()
+    for item in urls:
+        if isinstance(item, dict):
+            item = item.get("url")
+        if isinstance(item, str) and item:
+            normalized_urls.add(item)
+
+    attachments = post.attachments.filter(asset__kind=File.IMAGE).select_related("asset")
+    for attachment in attachments:
+        asset = attachment.asset
+        if urls == [] or asset.file.url in normalized_urls:
+            attachment.delete()
+            if not asset.is_in_use():
+                asset.delete()
+
+
 def _handle_update_action(request, data):
     insufficient = _require_scope(request, "update")
     if insufficient:
@@ -611,10 +628,18 @@ def _handle_update_action(request, data):
     if error:
         return error
 
+    if "location" in normalized_replace and post.kind != Post.CHECKIN:
+        return HttpResponseBadRequest("location is only editable on check-in posts")
+
     if "content" in normalized_replace:
         new_content = _first_value({"content": normalized_replace["content"]}, "content")
         if new_content is not None:
             post.content = new_content
+
+    if "name" in normalized_replace:
+        new_name = _first_value({"name": normalized_replace["name"]}, "name")
+        if new_name:
+            post.title = new_name
 
     if "category" in normalized_replace:
         _apply_categories(post, normalized_replace["category"], clear_first=True)
@@ -630,6 +655,29 @@ def _handle_update_action(request, data):
             post.tags.filter(tag=tag_slug).delete()
         if normalized_delete["category"] == []:
             post.tags.clear()
+
+    if "location" in normalized_replace:
+        new_location = _first_value({"location": normalized_replace["location"]}, "location")
+        geo = _parse_geo_uri(new_location) if new_location else None
+        if geo:
+            if not isinstance(post.mf2, dict):
+                post.mf2 = {}
+            checkin = {"latitude": geo["latitude"], "longitude": geo["longitude"]}
+            if post.title:
+                checkin["name"] = post.title
+            post.mf2["checkin"] = checkin
+
+    if "photo" in normalized_delete:
+        _remove_photo_attachments(post, normalized_delete["photo"])
+
+    if "photo" in normalized_replace:
+        _remove_photo_attachments(post, [])
+        _attach_uploaded_photos(request, post)
+        _attach_remote_photos(normalized_replace, post)
+
+    if "photo" in normalized_add:
+        _attach_uploaded_photos(request, post)
+        _attach_remote_photos(normalized_add, post)
 
     post.save()
     source_url = request.build_absolute_uri(post.get_absolute_url())

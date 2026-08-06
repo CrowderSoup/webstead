@@ -1,15 +1,18 @@
 import json
+import tempfile
 import urllib.error
 from urllib.parse import parse_qs, urlparse
 from unittest.mock import patch, MagicMock
 from types import SimpleNamespace
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.test.utils import override_settings
 from django.urls import reverse
 
 from blog.models import Post, Tag
 from core.models import RequestErrorLog, SiteConfiguration
+from files.models import Attachment, File
 from micropub.models import Webmention
 from micropub.webmention import (
     send_bridgy_publish_webmentions,
@@ -136,6 +139,231 @@ class MicropubViewTests(TestCase):
         tags = set(post.tags.values_list("tag", flat=True))
         self.assertIn("added", tags)
         self.assertNotIn("existing", tags)
+
+    @patch("micropub.views._authorized", return_value=(True, ["update"]))
+    def test_update_replaces_name(self, _authorized):
+        post = Post.objects.create(title="Old Name", slug="page-name", content="hi")
+        original_slug = post.slug
+        payload = {
+            "action": "update",
+            "url": "https://example.com/blog/post/page-name/",
+            "replace": {"name": ["New Name"]},
+        }
+        response = self.client.post(
+            MICROPUB_URL,
+            data=json.dumps(payload),
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer token",
+        )
+        self.assertEqual(response.status_code, 204)
+        post.refresh_from_db()
+        self.assertEqual(post.title, "New Name")
+        self.assertEqual(post.slug, original_slug)
+
+    @patch("micropub.views._authorized", return_value=(True, ["update"]))
+    def test_update_replaces_name_ignores_empty_string(self, _authorized):
+        post = Post.objects.create(title="Keep Me", slug="page-name-empty", content="hi")
+        payload = {
+            "action": "update",
+            "url": "https://example.com/blog/post/page-name-empty/",
+            "replace": {"name": [""]},
+        }
+        response = self.client.post(
+            MICROPUB_URL,
+            data=json.dumps(payload),
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer token",
+        )
+        self.assertEqual(response.status_code, 204)
+        post.refresh_from_db()
+        self.assertEqual(post.title, "Keep Me")
+
+    @patch("micropub.views._authorized", return_value=(True, ["update"]))
+    def test_update_replaces_location_on_checkin_post(self, _authorized):
+        post = Post.objects.create(
+            title="Coffee Shop",
+            slug="page-checkin",
+            content="Checked in",
+            kind=Post.CHECKIN,
+        )
+        payload = {
+            "action": "update",
+            "url": "https://example.com/blog/post/page-checkin/",
+            "replace": {"location": ["geo:40.7,-74.0"]},
+        }
+        response = self.client.post(
+            MICROPUB_URL,
+            data=json.dumps(payload),
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer token",
+        )
+        self.assertEqual(response.status_code, 204)
+        post.refresh_from_db()
+        self.assertEqual(
+            post.mf2.get("checkin"),
+            {"latitude": 40.7, "longitude": -74.0, "name": "Coffee Shop"},
+        )
+
+    @patch("micropub.views._authorized", return_value=(True, ["update"]))
+    def test_update_location_rejected_on_non_checkin_post(self, _authorized):
+        post = Post.objects.create(title="Article", slug="page-not-checkin", content="hi")
+        payload = {
+            "action": "update",
+            "url": "https://example.com/blog/post/page-not-checkin/",
+            "replace": {"location": ["geo:40.7,-74.0"], "content": ["Should not persist"]},
+        }
+        response = self.client.post(
+            MICROPUB_URL,
+            data=json.dumps(payload),
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer token",
+        )
+        self.assertEqual(response.status_code, 400)
+        post.refresh_from_db()
+        self.assertNotIn("checkin", post.mf2)
+        self.assertEqual(post.content, "hi")
+
+    @patch("micropub.tasks.download_post_photo.delay")
+    @patch("micropub.views._authorized", return_value=(True, ["update"]))
+    def test_update_add_photo_via_url(self, _authorized, mock_delay):
+        post = Post.objects.create(title="Photo Post", slug="page-add-photo", content="hi")
+        payload = {
+            "action": "update",
+            "url": "https://example.com/blog/post/page-add-photo/",
+            "add": {"photo": ["https://example.com/photo.jpg"]},
+        }
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                MICROPUB_URL,
+                data=json.dumps(payload),
+                content_type="application/json",
+                HTTP_AUTHORIZATION="Bearer token",
+            )
+        self.assertEqual(response.status_code, 204)
+        mock_delay.assert_called_once_with(post.pk, "https://example.com/photo.jpg")
+
+    @patch("micropub.tasks.download_post_photo.delay")
+    @patch("micropub.views._authorized", return_value=(True, ["update"]))
+    def test_update_add_photo_via_dict(self, _authorized, mock_delay):
+        post = Post.objects.create(title="Photo Post", slug="page-add-photo-dict", content="hi")
+        payload = {
+            "action": "update",
+            "url": "https://example.com/blog/post/page-add-photo-dict/",
+            "add": {"photo": [{"value": "https://example.com/p.jpg", "alt": "desc"}]},
+        }
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                MICROPUB_URL,
+                data=json.dumps(payload),
+                content_type="application/json",
+                HTTP_AUTHORIZATION="Bearer token",
+            )
+        self.assertEqual(response.status_code, 204)
+        mock_delay.assert_called_once_with(post.pk, "https://example.com/p.jpg", "desc")
+
+    @patch("micropub.views._authorized", return_value=(True, ["update"]))
+    def test_update_delete_photo_by_url(self, _authorized):
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                post = Post.objects.create(title="Photo Post", slug="page-delete-photo", content="hi")
+                upload = SimpleUploadedFile("photo.jpg", b"fake-image-data", content_type="image/jpeg")
+                asset = File.objects.create(kind=File.IMAGE, file=upload)
+                Attachment.objects.create(content_object=post, asset=asset, role="photo")
+                asset_url = asset.file.url
+
+                payload = {
+                    "action": "update",
+                    "url": "https://example.com/blog/post/page-delete-photo/",
+                    "delete": {"photo": [asset_url]},
+                }
+                response = self.client.post(
+                    MICROPUB_URL,
+                    data=json.dumps(payload),
+                    content_type="application/json",
+                    HTTP_AUTHORIZATION="Bearer token",
+                )
+                self.assertEqual(response.status_code, 204)
+                self.assertEqual(post.attachments.filter(asset__kind=File.IMAGE).count(), 0)
+                self.assertFalse(File.objects.filter(pk=asset.pk).exists())
+
+    @patch("micropub.views._authorized", return_value=(True, ["update"]))
+    def test_update_delete_photo_keeps_shared_asset(self, _authorized):
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                post = Post.objects.create(title="Photo Post", slug="page-shared-photo", content="hi")
+                other_post = Post.objects.create(title="Other Post", slug="page-shared-photo-2", content="hi")
+                upload = SimpleUploadedFile("photo.jpg", b"fake-image-data", content_type="image/jpeg")
+                asset = File.objects.create(kind=File.IMAGE, file=upload)
+                Attachment.objects.create(content_object=post, asset=asset, role="photo")
+                Attachment.objects.create(content_object=other_post, asset=asset, role="photo")
+                asset_url = asset.file.url
+
+                payload = {
+                    "action": "update",
+                    "url": "https://example.com/blog/post/page-shared-photo/",
+                    "delete": {"photo": [asset_url]},
+                }
+                response = self.client.post(
+                    MICROPUB_URL,
+                    data=json.dumps(payload),
+                    content_type="application/json",
+                    HTTP_AUTHORIZATION="Bearer token",
+                )
+                self.assertEqual(response.status_code, 204)
+                self.assertEqual(post.attachments.filter(asset__kind=File.IMAGE).count(), 0)
+                self.assertTrue(File.objects.filter(pk=asset.pk).exists())
+                self.assertEqual(other_post.attachments.filter(asset__kind=File.IMAGE).count(), 1)
+
+    @patch("micropub.tasks.download_post_photo.delay")
+    @patch("micropub.views._authorized", return_value=(True, ["update"]))
+    def test_update_replace_photo_clears_and_readds(self, _authorized, mock_delay):
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                post = Post.objects.create(title="Photo Post", slug="page-replace-photo", content="hi")
+                upload = SimpleUploadedFile("photo.jpg", b"fake-image-data", content_type="image/jpeg")
+                asset = File.objects.create(kind=File.IMAGE, file=upload)
+                Attachment.objects.create(content_object=post, asset=asset, role="photo")
+
+                payload = {
+                    "action": "update",
+                    "url": "https://example.com/blog/post/page-replace-photo/",
+                    "replace": {"photo": ["https://example.com/new.jpg"]},
+                }
+                with self.captureOnCommitCallbacks(execute=True):
+                    response = self.client.post(
+                        MICROPUB_URL,
+                        data=json.dumps(payload),
+                        content_type="application/json",
+                        HTTP_AUTHORIZATION="Bearer token",
+                    )
+                self.assertEqual(response.status_code, 204)
+                self.assertEqual(post.attachments.filter(asset__kind=File.IMAGE).count(), 0)
+                self.assertFalse(File.objects.filter(pk=asset.pk).exists())
+                mock_delay.assert_called_once_with(post.pk, "https://example.com/new.jpg")
+
+    @patch("micropub.views._authorized", return_value=(True, ["update"]))
+    def test_update_delete_all_photos_empty_list(self, _authorized):
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                post = Post.objects.create(title="Photo Post", slug="page-delete-all-photos", content="hi")
+                for name in ("photo1.jpg", "photo2.jpg"):
+                    upload = SimpleUploadedFile(name, b"fake-image-data", content_type="image/jpeg")
+                    asset = File.objects.create(kind=File.IMAGE, file=upload)
+                    Attachment.objects.create(content_object=post, asset=asset, role="photo")
+
+                payload = {
+                    "action": "update",
+                    "url": "https://example.com/blog/post/page-delete-all-photos/",
+                    "delete": ["photo"],
+                }
+                response = self.client.post(
+                    MICROPUB_URL,
+                    data=json.dumps(payload),
+                    content_type="application/json",
+                    HTTP_AUTHORIZATION="Bearer token",
+                )
+                self.assertEqual(response.status_code, 204)
+                self.assertEqual(post.attachments.filter(asset__kind=File.IMAGE).count(), 0)
 
     @patch("micropub.views._authorized", return_value=(True, ["read"]))
     def test_source_query_returns_properties(self, _authorized):
