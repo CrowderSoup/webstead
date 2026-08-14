@@ -3,6 +3,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from microsub.models import BlockedUser, Channel, Entry, Subscription
+from microsub.utils import apply_timeline_filters, ensure_photo_list
 from microsub.views import _channel_json, _entry_json, _require_scope, _store_entries
 
 
@@ -184,6 +185,34 @@ class StoreEntriesTests(TestCase):
         count = _store_entries(self.channel, self.sub, entries)
         self.assertEqual(count, 3)
 
+    def test_checkin_venue_data_survives_storage(self):
+        """
+        Regression guard: checkin venue data (name/geo) already survives
+        _hentry_to_jf2 parsing (see test_checkin_embedded_hcard in
+        test_feed_parser.py) -- this locks in that it also survives the
+        full _store_entries -> Entry.save() -> normalize_entry_data path,
+        which nothing previously tested end-to-end.
+        """
+        entries = [
+            {
+                "_uid": "https://venue.example.com/checkin/1",
+                "type": "entry",
+                "checkin": {
+                    "type": "card",
+                    "name": "Coffee Shop",
+                    "latitude": "37.7749",
+                    "longitude": "-122.4194",
+                },
+            }
+        ]
+        count = _store_entries(self.channel, self.sub, entries)
+        self.assertEqual(count, 1)
+        entry = Entry.objects.get(uid="https://venue.example.com/checkin/1")
+        self.assertTrue(entry.kind_checkin)
+        self.assertEqual(entry.data["checkin"]["name"], "Coffee Shop")
+        self.assertEqual(entry.data["checkin"]["latitude"], "37.7749")
+        self.assertEqual(entry.data["checkin"]["longitude"], "-122.4194")
+
     def test_skips_future_entries_from_blocked_author(self):
         BlockedUser.objects.create(channel=self.channel, url="https://blocked.example/")
         count = _store_entries(
@@ -198,3 +227,117 @@ class StoreEntriesTests(TestCase):
         )
         self.assertEqual(count, 0)
         self.assertFalse(Entry.objects.filter(uid="blocked-entry").exists())
+
+
+class EnsurePhotoListTests(TestCase):
+    def test_none_returns_empty_list(self):
+        self.assertEqual(ensure_photo_list(None), [])
+
+    def test_plain_string_wrapped_in_list(self):
+        self.assertEqual(ensure_photo_list("https://example.com/p.jpg"), ["https://example.com/p.jpg"])
+
+    def test_list_of_plain_strings(self):
+        self.assertEqual(
+            ensure_photo_list(["https://a.example/1.jpg", "https://a.example/2.jpg"]),
+            ["https://a.example/1.jpg", "https://a.example/2.jpg"],
+        )
+
+    def test_dict_without_alt_collapses_to_string(self):
+        self.assertEqual(
+            ensure_photo_list([{"value": "https://a.example/1.jpg"}]),
+            ["https://a.example/1.jpg"],
+        )
+
+    def test_dict_with_alt_preserved(self):
+        self.assertEqual(
+            ensure_photo_list([{"value": "https://a.example/1.jpg", "alt": "A cat"}]),
+            [{"value": "https://a.example/1.jpg", "alt": "A cat"}],
+        )
+
+    def test_dict_with_blank_alt_collapses_to_string(self):
+        self.assertEqual(
+            ensure_photo_list([{"value": "https://a.example/1.jpg", "alt": "  "}]),
+            ["https://a.example/1.jpg"],
+        )
+
+    def test_mixed_list(self):
+        self.assertEqual(
+            ensure_photo_list([
+                {"value": "https://a.example/1.jpg", "alt": "One"},
+                "https://a.example/2.jpg",
+            ]),
+            [
+                {"value": "https://a.example/1.jpg", "alt": "One"},
+                "https://a.example/2.jpg",
+            ],
+        )
+
+    def test_dict_without_value_or_url_is_skipped(self):
+        self.assertEqual(ensure_photo_list([{"alt": "orphaned alt text"}]), [])
+
+
+class ApplyTimelineFiltersTests(TestCase):
+    """Shared filter helper used by _get_timeline, _content_search_qs, and the admin debug view."""
+
+    def setUp(self):
+        self.channel = Channel.objects.create(uid="ch", name="Channel")
+        now = timezone.now()
+        self.photo_entry = Entry.objects.create(
+            channel=self.channel,
+            uid="photo-1",
+            data={"photo": ["https://example.com/p.jpg"]},
+            published=now,
+            author_url="https://alice.example/",
+            source_url="https://alice.example/feed",
+        )
+        self.note_entry = Entry.objects.create(
+            channel=self.channel,
+            uid="note-1",
+            data={"content": {"text": "hello"}},
+            published=now,
+            author_url="https://bob.example/",
+            source_url="https://bob.example/feed",
+        )
+
+    def _base_qs(self):
+        return Entry.objects.filter(channel=self.channel)
+
+    def test_no_filters_returns_everything(self):
+        qs = apply_timeline_filters(self._base_qs())
+        self.assertEqual(qs.count(), 2)
+
+    def test_filters_by_kind(self):
+        qs = apply_timeline_filters(self._base_qs(), kinds=["photo"])
+        self.assertEqual(list(qs), [self.photo_entry])
+
+    def test_unknown_kind_returns_none(self):
+        qs = apply_timeline_filters(self._base_qs(), kinds=["not-a-real-kind"])
+        self.assertEqual(qs.count(), 0)
+
+    def test_filters_by_single_author(self):
+        qs = apply_timeline_filters(self._base_qs(), author="https://alice.example/")
+        self.assertEqual(list(qs), [self.photo_entry])
+
+    def test_filters_by_multiple_authors(self):
+        qs = apply_timeline_filters(
+            self._base_qs(), author=["https://alice.example/", "https://bob.example/"]
+        )
+        self.assertEqual(qs.count(), 2)
+
+    def test_filters_by_single_source(self):
+        qs = apply_timeline_filters(self._base_qs(), source="https://bob.example/feed")
+        self.assertEqual(list(qs), [self.note_entry])
+
+    def test_filters_by_category(self):
+        tagged = Entry.objects.create(
+            channel=self.channel,
+            uid="tagged-1",
+            data={"category": ["news"]},
+            published=timezone.now(),
+        )
+        qs = apply_timeline_filters(self._base_qs(), categories=["news"])
+        self.assertEqual(list(qs), [tagged])
+
+    def test_no_matching_author_returns_empty(self):
+        qs = apply_timeline_filters(self._base_qs(), author="https://nobody.example/")
+        self.assertEqual(qs.count(), 0)

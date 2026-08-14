@@ -78,6 +78,38 @@ def ensure_string_list(value) -> list[str]:
     return result
 
 
+def ensure_photo_list(value) -> list:
+    """
+    Like ensure_string_list, but preserves {"value": url, "alt": ...} dict
+    form for photos that carry alt text, instead of collapsing everything
+    to a bare URL string. Items without alt text still collapse to plain
+    strings, matching ensure_string_list's existing output shape.
+    """
+    if value in (None, ""):
+        return []
+    if isinstance(value, (list, tuple, set)):
+        items = value
+    else:
+        items = [value]
+    result: list = []
+    for item in items:
+        if isinstance(item, str):
+            item = item.strip()
+            if item:
+                result.append(item)
+        elif isinstance(item, dict):
+            url = item.get("value") or item.get("url", "")
+            url = url.strip() if isinstance(url, str) else ""
+            if not url:
+                continue
+            alt = item.get("alt")
+            if isinstance(alt, str) and alt.strip():
+                result.append({"value": url, "alt": alt.strip()})
+            else:
+                result.append(url)
+    return result
+
+
 def extract_content_text(data: dict) -> str:
     content = data.get("content")
     if isinstance(content, dict):
@@ -103,7 +135,7 @@ def tokenize_text(value: str) -> list[str]:
 
 
 def infer_kind_flags(data: dict) -> dict[str, bool]:
-    photos = ensure_string_list(data.get("photo"))
+    photos = ensure_photo_list(data.get("photo"))
     videos = ensure_string_list(data.get("video"))
     audio = ensure_string_list(data.get("audio"))
     return {
@@ -131,7 +163,7 @@ def normalize_entry_data(
     payload["uid"] = str(internal_uid or uid)
 
     for prop in ARRAY_PROPERTIES:
-        values = ensure_string_list(payload.get(prop))
+        values = ensure_photo_list(payload.get(prop)) if prop == "photo" else ensure_string_list(payload.get(prop))
         if values:
             payload[prop] = values
         elif prop in payload:
@@ -228,3 +260,61 @@ def profile_prefix_q(field_name: str, profile_urls: Iterable[str]) -> Q:
         query |= Q(**{field_name: normalized})
         query |= Q(**{f"{field_name}__startswith": prefix})
     return query
+
+
+def _as_value_list(value) -> list[str]:
+    """Coerce a single value or an iterable of values into a plain list of strings."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value] if value else []
+    return [item for item in value if item]
+
+
+def apply_timeline_filters(
+    qs,
+    *,
+    source: str | Iterable[str] = "",
+    author: str | Iterable[str] = "",
+    categories: Iterable[str] | None = None,
+    kinds: Iterable[str] | None = None,
+):
+    """
+    Apply the non-spec source/author/category/kind filters to an Entry queryset.
+
+    `source`/`author` accept a single value or an iterable of values (OR
+    semantics across multiple values via `__in`). Shared by `_get_timeline`,
+    `_content_search_qs`, and the admin timeline debug view so the three
+    callers can't drift apart on filter semantics.
+
+    If `kinds` is non-empty but none of the values map to a known kind, the
+    queryset is filtered to empty rather than left unfiltered.
+    """
+    sources = [normalize_url(value) for value in _as_value_list(source)]
+    sources = [value for value in sources if value]
+    if sources:
+        qs = qs.filter(source_url__in=sources)
+
+    authors = [normalize_profile_url(value) for value in _as_value_list(author)]
+    authors = [value for value in authors if value]
+    if authors:
+        qs = qs.filter(author_url__in=authors)
+
+    normalized_categories = [normalize_category(value) for value in (categories or [])]
+    normalized_categories = [value for value in normalized_categories if value]
+    if normalized_categories:
+        qs = qs.filter(search_categories__value__in=normalized_categories)
+
+    normalized_kinds = normalize_repeated_values(kinds or [])
+    if normalized_kinds:
+        kind_query = Q()
+        for kind in normalized_kinds:
+            field_name = KIND_FIELD_MAP.get(kind)
+            if field_name:
+                kind_query |= Q(**{field_name: True})
+        qs = qs.filter(kind_query) if kind_query else qs.none()
+
+    if normalized_categories:
+        qs = qs.distinct()
+
+    return qs

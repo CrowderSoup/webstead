@@ -6,7 +6,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
-from .utils import normalize_entry_data, normalize_url
+from .utils import extract_content_text, normalize_entry_data, normalize_url
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +194,39 @@ def _author_from_mf2(author_val, base_url: str) -> dict | None:
     return _mf2_embedded_to_jf2(author_val, base_url)
 
 
+def _mf2_activity_to_jf2(val, base_url: str) -> dict | None:
+    """
+    Convert an embedded mf2 h-activity object to a JF2 dict.
+
+    Unlike _mf2_embedded_to_jf2 (a fixed allowlist for h-card/h-adr fields),
+    this generically passes through every x-*-prefixed property verbatim
+    instead of requiring an allowlist entry per stat -- new extension
+    properties added to strava_integration.importer._build_mf2 round-trip
+    automatically. See docs/microsub-extensions.md.
+    """
+    if not isinstance(val, dict):
+        return None
+    props = val.get("properties", {})
+    if not isinstance(props, dict):
+        return None
+    out: dict = {"type": "activity"}
+
+    for key in ("activity-type", "name"):
+        vals = props.get(key, [])
+        if vals and isinstance(vals[0], str):
+            out[key] = vals[0]
+
+    track_vals = props.get("track", [])
+    if track_vals and isinstance(track_vals[0], str):
+        out["track"] = urljoin(base_url, track_vals[0])
+
+    for key, vals in props.items():
+        if key.startswith("x-") and vals and isinstance(vals[0], str):
+            out[key] = vals[0]
+
+    return out if len(out) > 1 else None
+
+
 def _hentry_to_jf2(item: dict, base_url: str) -> dict:
     props = item.get("properties", {})
 
@@ -259,6 +292,14 @@ def _hentry_to_jf2(item: dict, base_url: str) -> dict:
             if card:
                 entry[jf2_key] = card
 
+    # Embedded activity object (Strava-style h-activity with x-*-prefixed
+    # extension properties) — non-spec, additive. See docs/microsub-extensions.md.
+    activity_vals = props.get("activity", [])
+    if activity_vals:
+        activity = _mf2_activity_to_jf2(activity_vals[0], base_url)
+        if activity:
+            entry["activity"] = activity
+
     # Multi-value URL arrays
     def _url_vals(key: str) -> list[str]:
         out = []
@@ -271,7 +312,29 @@ def _hentry_to_jf2(item: dict, base_url: str) -> dict:
                     out.append(urljoin(base_url, u))
         return out
 
-    for mf2_key in ("photo", "video", "audio", "syndication"):
+    def _photo_vals() -> list:
+        """Like _url_vals, but keeps {"value": url, "alt": ...} when alt text is present."""
+        out: list = []
+        for v in props.get("photo", []):
+            if isinstance(v, str) and v:
+                out.append(urljoin(base_url, v))
+            elif isinstance(v, dict):
+                u = v.get("value") or v.get("url", "")
+                if not u:
+                    continue
+                u = urljoin(base_url, u)
+                alt = v.get("alt")
+                if isinstance(alt, str) and alt.strip():
+                    out.append({"value": u, "alt": alt.strip()})
+                else:
+                    out.append(u)
+        return out
+
+    photo_vals = _photo_vals()
+    if photo_vals:
+        entry["photo"] = photo_vals
+
+    for mf2_key in ("video", "audio", "syndication"):
         urls = _url_vals(mf2_key)
         if urls:
             entry[mf2_key] = urls
@@ -682,3 +745,37 @@ def fetch_and_parse_feed(url: str) -> tuple[list[dict], str | None, dict]:
         entries, feed_meta = _parse_rss_atom(raw, url)
 
     return _normalize_entries(entries), hub_url, feed_meta
+
+
+def _build_reply_context(url: str) -> dict | None:
+    """
+    Fetch a reply entry's parent URL and build a compact display summary
+    (author + snippet) for caching on the reply Entry, reusing
+    fetch_and_parse_feed's existing permalink/h-entry parsing rather than a
+    parallel mf2-parsing path -- a permalink page with a single h-entry (no
+    h-feed wrapper) is parsed via the same "bare h-entries" fallback used
+    for feed pages.
+
+    Raises RuntimeError (propagated from fetch_and_parse_feed) on
+    network/fetch failures, so callers can decide whether to retry. Returns
+    None when the fetch succeeded but no usable author/snippet was found --
+    not retryable, since retrying wouldn't produce a different result.
+    """
+    entries, _, feed_meta = fetch_and_parse_feed(url)
+
+    entry = entries[0] if entries else {}
+    author = entry.get("author") if isinstance(entry.get("author"), dict) else None
+    if not (author and author.get("url")) and isinstance(feed_meta.get("author"), dict):
+        author = feed_meta["author"]
+
+    snippet = ""
+    if entry:
+        snippet = extract_content_text(entry) or entry.get("summary", "") or entry.get("name", "")
+
+    context: dict = {"url": url}
+    if author and author.get("url"):
+        context["author"] = author
+    if snippet:
+        context["snippet"] = snippet.strip()[:280]
+
+    return context if len(context) > 1 else None

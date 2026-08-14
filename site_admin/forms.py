@@ -560,6 +560,7 @@ class SiteConfigurationForm(forms.ModelForm):
             "footer_menu",
             "default_feed_kinds",
             "microsub_unfollow_removes_entries",
+            "activity_units",
             "comments_enabled",
             "developer_tools_enabled",
             "bridgy_publish_bluesky",

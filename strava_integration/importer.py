@@ -14,6 +14,7 @@ from django.utils import timezone as dj_timezone
 from django.utils.dateparse import parse_datetime
 
 from blog.models import Post
+from core.models import SiteConfiguration
 from files.gpx import GpxAnonymizeError, GpxAnonymizeOptions, anonymize_gpx
 from files.models import Attachment, File
 
@@ -23,11 +24,106 @@ from .models import StravaActivity
 
 logger = logging.getLogger(__name__)
 
+METERS_PER_MILE = 1609.34
+FEET_PER_METER = 3.28084
+
+_ACTIVITY_VERBS = {
+    "Run": "Ran",
+    "TrailRun": "Ran",
+    "Ride": "Rode",
+    "GravelRide": "Rode",
+    "MountainBikeRide": "Rode",
+    "VirtualRide": "Rode",
+    "EBikeRide": "Rode",
+    "Walk": "Walked",
+    "Hike": "Hiked",
+    "Swim": "Swam",
+    "Rowing": "Rowed",
+    "Kayaking": "Kayaked",
+    "Ski": "Skied",
+    "AlpineSki": "Skied",
+    "BackcountrySki": "Skied",
+    "NordicSki": "Skied",
+    "Snowboard": "Snowboarded",
+}
+
 
 def _parse_start_date(activity: dict):
     raw = activity.get("start_date") or activity.get("start_date_local")
     parsed = parse_datetime(raw) if raw else None
     return parsed or dj_timezone.now()
+
+
+def _activity_verb(activity_type: str) -> str:
+    if not activity_type:
+        return "Did an activity"
+    return _ACTIVITY_VERBS.get(activity_type, f"Did a {activity_type}")
+
+
+def _format_duration(seconds) -> str:
+    seconds = int(seconds or 0)
+    hours, remainder = divmod(seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours}:{minutes:02d}:{secs:02d}"
+    return f"{minutes}:{secs:02d}"
+
+
+def _activity_summary(activity: dict, *, units: str) -> str:
+    """
+    Plain-text summary used as Post.content when Strava didn't supply a
+    description (the common case). Post.content is rendered through
+    markdown.Markdown(), so this must stay Markdown-safe plain text, not HTML.
+    """
+    metric = units == SiteConfiguration.ACTIVITY_UNITS_METRIC
+    distance_unit = "km" if metric else "mi"
+
+    verb = _activity_verb(activity.get("sport_type") or activity.get("type") or "")
+    distance_m = activity.get("distance") or 0
+    moving_time = activity.get("moving_time") or 0
+    elevation_m = activity.get("total_elevation_gain") or 0
+
+    clause = verb
+    distance_val = 0.0
+    if distance_m:
+        distance_val = (distance_m / 1000) if metric else (distance_m / METERS_PER_MILE)
+        clause += f" {distance_val:.1f} {distance_unit}"
+    if moving_time:
+        clause += f" in {_format_duration(moving_time)}"
+        if distance_val:
+            pace_seconds = moving_time / distance_val
+            clause += f" ({_format_duration(round(pace_seconds))}/{distance_unit} pace)"
+
+    clauses = [clause]
+    if elevation_m:
+        elevation_val = elevation_m if metric else (elevation_m * FEET_PER_METER)
+        elevation_unit = "m" if metric else "ft"
+        clauses.append(f"{elevation_val:.0f} {elevation_unit} elevation gain")
+
+    return ", ".join(clauses) + "."
+
+
+# Extra h-activity properties beyond core/name/track. Non-standard --
+# "activity" isn't a recognized post-type-discovery type -- so these are
+# additive/ignorable, x-prefixed per the mp-/x- vendor-extension convention,
+# and stay in Strava's native SI units (meters, m/s) regardless of the
+# site's activity_units display setting. See docs/microsub-extensions.md.
+_MF2_NUMERIC_FIELDS = (
+    ("distance", "x-distance"),
+    ("moving_time", "x-moving-time"),
+    ("elapsed_time", "x-elapsed-time"),
+    ("total_elevation_gain", "x-total-elevation-gain"),
+    ("average_speed", "x-average-speed"),
+    ("max_speed", "x-max-speed"),
+)
+_MF2_HEARTRATE_FIELDS = (
+    ("average_heartrate", "x-average-heartrate"),
+    ("max_heartrate", "x-max-heartrate"),
+)
+_MF2_LATLNG_FIELDS = (
+    ("start_latlng", "x-start-latlng"),
+    ("end_latlng", "x-end-latlng"),
+)
 
 
 def _build_mf2(activity: dict, track_url: str = "") -> dict:
@@ -40,6 +136,27 @@ def _build_mf2(activity: dict, track_url: str = "") -> dict:
         properties["name"] = [name]
     if track_url:
         properties["track"] = [track_url]
+
+    for source_key, mf2_key in _MF2_NUMERIC_FIELDS:
+        value = activity.get(source_key)
+        if value is not None:
+            properties[mf2_key] = [str(value)]
+
+    if activity.get("has_heartrate"):
+        for source_key, mf2_key in _MF2_HEARTRATE_FIELDS:
+            value = activity.get(source_key)
+            if value is not None:
+                properties[mf2_key] = [str(value)]
+
+    for source_key, mf2_key in _MF2_LATLNG_FIELDS:
+        value = activity.get(source_key)
+        if isinstance(value, list) and len(value) == 2:
+            properties[mf2_key] = [f"{value[0]},{value[1]}"]
+
+    kudos_count = activity.get("kudos_count")
+    if kudos_count is not None:
+        properties["x-kudos-count"] = [str(kudos_count)]
+
     if not properties:
         return {}
     return {"activity": [{"type": ["h-activity"], "properties": properties}]}
@@ -123,11 +240,15 @@ def import_activity(account, strava_activity_id, *, skip_if_private=False):
         return None
 
     start_date = _parse_start_date(activity)
+    description = activity.get("description") or ""
+    if not description:
+        units = SiteConfiguration.get_solo().activity_units
+        description = _activity_summary(activity, units=units)
 
     with transaction.atomic():
         post = Post(
             title=activity.get("name") or "",
-            content=activity.get("description") or "",
+            content=description,
             kind=Post.ACTIVITY,
             published_on=start_date,
         )

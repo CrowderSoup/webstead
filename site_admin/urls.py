@@ -197,6 +197,7 @@ urlpatterns = [
     path("microsub/channels/new/", views.microsub_channel_create, name="microsub_channel_create"),
     path("microsub/channels/reorder/", views.microsub_channel_reorder, name="microsub_channel_reorder"),
     path("microsub/channels/<slug:uid>/", views.microsub_channel_detail, name="microsub_channel_detail"),
+    path("microsub/channels/<slug:uid>/timeline/", views.microsub_channel_timeline, name="microsub_channel_timeline"),
     path("microsub/channels/<slug:uid>/edit/", views.microsub_channel_edit, name="microsub_channel_edit"),
     path("microsub/channels/<slug:uid>/delete/", views.microsub_channel_delete, name="microsub_channel_delete"),
     path("microsub/channels/<slug:uid>/mark-read/", views.microsub_channel_mark_read, name="microsub_channel_mark_read"),

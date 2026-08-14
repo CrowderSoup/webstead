@@ -25,7 +25,17 @@ from micropub.models import Webmention
 
 
 def _activity_from_mf2(post):
-    activity = {"name": "", "track_url": ""}
+    """
+    Extract h-activity data for template rendering.
+
+    `properties` generically surfaces every x-*-prefixed extension property
+    from strava_integration.importer._build_mf2 (distance, elevation, heart
+    rate, etc.) under a template-safe key (the "x-" prefix stripped and
+    hyphens replaced with underscores, e.g. "x-total-elevation-gain" ->
+    "total_elevation_gain") -- new properties added there show up here
+    automatically, without needing a matching change on this side.
+    """
+    activity = {"name": "", "activity_type": "", "track_url": "", "properties": {}}
     mf2_data = post.mf2 if isinstance(post.mf2, dict) else {}
     activity_items = mf2_data.get("activity") or []
     activity_item = activity_items[0] if isinstance(activity_items, list) and activity_items else activity_items
@@ -36,9 +46,16 @@ def _activity_from_mf2(post):
                 values = properties.get(key) or []
                 if values and not activity["name"]:
                     activity["name"] = str(values[0])
+            activity_type_values = properties.get("activity-type") or []
+            if activity_type_values:
+                activity["activity_type"] = str(activity_type_values[0])
             track_values = properties.get("track") or []
             if track_values:
                 activity["track_url"] = track_values[0]
+            for key, values in properties.items():
+                if key.startswith("x-") and values and isinstance(values[0], str):
+                    template_key = key[2:].replace("-", "_")
+                    activity["properties"][template_key] = values[0]
     if not activity["track_url"] and post.gpx_attachment:
         activity["track_url"] = post.gpx_attachment.asset.file.url
     return activity

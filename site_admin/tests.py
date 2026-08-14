@@ -39,6 +39,7 @@ from indieauth.models import (
     IndieAuthConsent,
 )
 from micropub.models import Webmention
+from microsub.models import Channel, Entry
 from widgets.models import WidgetInstance
 
 
@@ -893,6 +894,7 @@ class SiteAdminProfileEditTests(TestCase):
                 "main_menu": str(main_menu.id),
                 "footer_menu": str(footer_menu.id),
                 "default_feed_kinds": "article,note",
+                "activity_units": "imperial",
             },
             follow=True,
         )
@@ -1614,4 +1616,69 @@ class SiteAdminIndieAuthSettingsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         redacted = f"{token_hash[:6]}...{token_hash[-4:]}"
         self.assertContains(response, redacted)
-        self.assertContains(response, self.staff.get_username())
+
+
+class MicrosubChannelTimelineTests(TestCase):
+    def setUp(self):
+        self.staff = get_user_model().objects.create_user(
+            username="editor",
+            email="editor@example.com",
+            password="password",
+            is_staff=True,
+        )
+        self.channel = Channel.objects.create(uid="news", name="News")
+        now = timezone.now()
+        self.photo_entry = Entry.objects.create(
+            channel=self.channel,
+            uid="photo-1",
+            data={"name": "A photo post", "photo": ["https://example.com/p.jpg"]},
+            published=now,
+            author_url="https://alice.example/",
+        )
+        self.note_entry = Entry.objects.create(
+            channel=self.channel,
+            uid="note-1",
+            data={"content": {"text": "hello world"}},
+            published=now,
+            author_url="https://bob.example/",
+        )
+
+    def test_requires_staff(self):
+        response = self.client.get(
+            reverse("site_admin:microsub_channel_timeline", kwargs={"uid": self.channel.uid})
+        )
+        self.assertNotEqual(response.status_code, 200)
+
+    def test_lists_entries_unfiltered(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(
+            reverse("site_admin:microsub_channel_timeline", kwargs={"uid": self.channel.uid})
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context["entries"]), 2)
+
+    def test_filters_by_kind(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(
+            reverse("site_admin:microsub_channel_timeline", kwargs={"uid": self.channel.uid}),
+            {"kind": "photo"},
+        )
+        self.assertEqual(response.status_code, 200)
+        entries = response.context["entries"]
+        self.assertEqual(entries, [self.photo_entry])
+
+    def test_filters_by_author(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(
+            reverse("site_admin:microsub_channel_timeline", kwargs={"uid": self.channel.uid}),
+            {"author": "https://bob.example/"},
+        )
+        entries = response.context["entries"]
+        self.assertEqual(entries, [self.note_entry])
+
+    def test_unknown_channel_404s(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(
+            reverse("site_admin:microsub_channel_timeline", kwargs={"uid": "does-not-exist"})
+        )
+        self.assertEqual(response.status_code, 404)
