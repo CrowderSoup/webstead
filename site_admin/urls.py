@@ -207,4 +207,8 @@ urlpatterns = [
     path("mastodon/", views.mastodon_settings, name="mastodon_settings"),
     path("mastodon/disconnect/", views.mastodon_disconnect, name="mastodon_disconnect"),
     path("mastodon/sync/", views.mastodon_manual_sync, name="mastodon_manual_sync"),
+    # Strava
+    path("strava/", views.strava_settings, name="strava_settings"),
+    path("strava/disconnect/", views.strava_disconnect, name="strava_disconnect"),
+    path("strava/import/", views.strava_import, name="strava_import"),
 ]

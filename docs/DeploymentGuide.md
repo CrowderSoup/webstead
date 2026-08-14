@@ -77,6 +77,8 @@ AWS_S3_REGION_NAME=us-east-1
 AKISMET_API_KEY=
 TURNSTILE_SITE_KEY=
 TURNSTILE_SECRET_KEY=
+STRAVA_CLIENT_ID=
+STRAVA_CLIENT_SECRET=
 ```
 
 Notes:
@@ -211,6 +213,7 @@ Optional:
 - `AWS_S3_CUSTOM_DOMAIN`
 - `AKISMET_API_KEY`
 - `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`
+- `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` — register an app at [strava.com/settings/api](https://www.strava.com/settings/api). The webhook (used for auto-posting) requires the site to be publicly reachable over HTTPS.
 
 ---
 

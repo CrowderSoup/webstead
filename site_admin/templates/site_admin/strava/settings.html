@@ -1,0 +1,115 @@
+{% extends "site_admin/base.html" %}
+
+{% block title %}Strava{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-6">
+  {% include "site_admin/_section_subnav.html" with section="settings" %}
+
+  <section class="flex flex-wrap items-center justify-between gap-4">
+    <div>
+      <div class="text-xs font-semibold uppercase tracking-[0.24em] text-(--admin-muted)">Settings</div>
+      <h1 class="mt-2 text-2xl font-semibold">Strava</h1>
+      <p class="mt-1 text-sm text-(--admin-muted)">Connect Strava to import activities as blog posts, manually or automatically.</p>
+    </div>
+    {% if account %}
+      <a href="{% url 'site_admin:strava_import' %}"
+        class="rounded-xl bg-(--admin-accent) px-4 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)">
+        Import activities
+      </a>
+    {% endif %}
+  </section>
+
+  {# ── Connection ──────────────────────────────────────────────────────── #}
+  <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
+    <h2 class="text-base font-semibold">Connection</h2>
+
+    {% if account %}
+      <div class="mt-4 flex items-center gap-4">
+        {% if account.profile_photo_url %}
+          <img src="{{ account.profile_photo_url }}" alt="" class="h-12 w-12 rounded-full object-cover">
+        {% endif %}
+        <div>
+          <div class="font-semibold">{{ account.display_name }}</div>
+          {% if account.username %}<div class="text-sm text-(--admin-muted)">@{{ account.username }}</div>{% endif %}
+        </div>
+      </div>
+      <form method="post" action="{% url 'site_admin:strava_disconnect' %}" class="mt-4">
+        {% csrf_token %}
+        <button type="submit"
+          class="rounded-xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+          onclick="return confirm('Disconnect Strava account?')">
+          Disconnect
+        </button>
+      </form>
+    {% else %}
+      <p class="mt-3 text-sm text-(--admin-muted)">No Strava account connected.</p>
+      <form method="post" action="{% url 'strava_oauth_start' %}" class="mt-4">
+        {% csrf_token %}
+        <button type="submit"
+          class="rounded-xl bg-(--admin-accent) px-4 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)">
+          Connect Strava
+        </button>
+      </form>
+    {% endif %}
+  </section>
+
+  {# ── Auto-posting + webhook (only when connected) ─────────────────────── #}
+  {% if account %}
+  <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
+    <h2 class="text-base font-semibold">Automatic posting</h2>
+    <p class="mt-1 text-sm text-(--admin-muted)">
+      When enabled, new Strava activities are published as blog posts as soon as they're recorded.
+      Private activities are always skipped for automatic posting — import them manually instead.
+    </p>
+
+    <form method="post" action="{% url 'site_admin:strava_settings' %}" class="mt-4">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="save_settings">
+      <div class="flex items-center justify-between max-w-md">
+        <label for="auto_post_enabled" class="text-sm font-medium">Auto-post new activities</label>
+        <input
+          type="checkbox"
+          id="auto_post_enabled"
+          name="auto_post_enabled"
+          {% if account.auto_post_enabled %}checked{% endif %}
+          class="h-4 w-4 rounded border-(--admin-border) text-(--admin-accent)"
+        >
+      </div>
+      <button type="submit"
+        class="mt-4 rounded-xl bg-(--admin-accent) px-4 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)">
+        Save
+      </button>
+    </form>
+
+    <div class="mt-6 border-t border-(--admin-border) pt-6">
+      <h3 class="text-sm font-semibold">Webhook</h3>
+      {% if account.webhook_subscription_id %}
+        <p class="mt-1 text-sm text-(--admin-muted)">Enabled — subscription ID {{ account.webhook_subscription_id }}.</p>
+        <form method="post" action="{% url 'site_admin:strava_settings' %}" class="mt-3">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="disable_webhook">
+          <button type="submit"
+            class="rounded-xl border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)">
+            Disable webhook
+          </button>
+        </form>
+      {% else %}
+        <p class="mt-1 text-sm text-(--admin-muted)">
+          Not enabled. This site must be publicly reachable over HTTPS before enabling — Strava calls back
+          to this server to verify the subscription.
+        </p>
+        <form method="post" action="{% url 'site_admin:strava_settings' %}" class="mt-3">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="enable_webhook">
+          <button type="submit"
+            class="rounded-xl border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)">
+            Enable webhook
+          </button>
+        </form>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

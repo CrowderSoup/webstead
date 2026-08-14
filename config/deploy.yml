@@ -78,6 +78,7 @@ env:
     TURNSTILE_SITE_KEY: 0x4AAAAAACNSDZ_RlYavK12F
     MICROSUB_BASE_URL: https://crowdersoup.com
     CELERY_TASK_DEFAULT_QUEUE: crowdersoup
+    STRAVA_CLIENT_ID: "272008"  # not secret - visible in the OAuth authorize URL anyway
   secret:
     - SECRET_KEY
     - DB_PASS
@@ -88,3 +89,4 @@ env:
     - CACHE_URL          # redis://vtodo-redis:6379/3
     - CELERY_BROKER_URL  # redis://vtodo-redis:6379/2
     - CELERY_RESULT_BACKEND  # redis://vtodo-redis:6379/4
+    - STRAVA_CLIENT_SECRET

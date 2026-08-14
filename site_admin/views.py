@@ -35,6 +35,8 @@ from files.models import Attachment, File
 from files.gpx import GpxAnonymizeError, GpxAnonymizeOptions, anonymize_gpx
 from mastodon_integration.models import MastodonAccount, MastodonSyndicationDefault
 from mastodon_integration.tasks import poll_mastodon_timeline, poll_mastodon_notifications
+from strava_integration.models import StravaAccount, StravaActivity
+from strava_integration.tasks import import_activity_task
 
 from core.models import (
     HCard,
@@ -4532,3 +4534,175 @@ def mastodon_manual_sync(request):
     poll_mastodon_notifications.delay()
     messages.success(request, "Mastodon sync triggered.")
     return redirect("site_admin:mastodon_settings")
+
+
+def _parse_date_to_epoch(value: str):
+    if not value:
+        return None
+    try:
+        from datetime import datetime, timezone as dt_timezone
+        dt = datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=dt_timezone.utc)
+        return int(dt.timestamp())
+    except ValueError:
+        return None
+
+
+@require_http_methods(["GET", "POST"])
+def strava_settings(request):
+    """
+    Strava settings page. Shows connection status, the auto-post toggle, and
+    webhook enable/disable controls.
+    """
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    account = StravaAccount.get_active()
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+
+        if action == "save_settings" and account:
+            account.auto_post_enabled = request.POST.get("auto_post_enabled") == "on"
+            account.save(update_fields=["auto_post_enabled"])
+            messages.success(request, "Strava settings saved.")
+            return redirect("site_admin:strava_settings")
+
+        if action == "enable_webhook" and account:
+            import secrets
+
+            from strava_integration import client as strava_client
+
+            verify_token = secrets.token_urlsafe(24)
+            callback_url = request.build_absolute_uri(reverse("strava_webhook"))
+            try:
+                result = strava_client.create_push_subscription(callback_url, verify_token)
+                account.webhook_subscription_id = str(result.get("id", ""))
+                account.webhook_verify_token = verify_token
+                account.save(update_fields=["webhook_subscription_id", "webhook_verify_token"])
+                messages.success(request, "Strava webhook enabled.")
+            except Exception as exc:
+                logger.exception("strava_settings: failed to create webhook subscription")
+                messages.error(request, f"Could not enable webhook: {exc}")
+            return redirect("site_admin:strava_settings")
+
+        if action == "disable_webhook" and account and account.webhook_subscription_id:
+            from strava_integration import client as strava_client
+
+            try:
+                strava_client.delete_push_subscription(account.webhook_subscription_id)
+            except Exception:
+                logger.exception("strava_settings: failed to delete webhook subscription")
+            account.webhook_subscription_id = ""
+            account.webhook_verify_token = ""
+            account.save(update_fields=["webhook_subscription_id", "webhook_verify_token"])
+            messages.success(request, "Strava webhook disabled.")
+            return redirect("site_admin:strava_settings")
+
+    return render(
+        request,
+        "site_admin/strava/settings.html",
+        {"account": account},
+    )
+
+
+@require_POST
+def strava_disconnect(request):
+    """Revoke access token, delete the webhook subscription, and remove the active StravaAccount."""
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    from strava_integration import client as strava_client
+
+    account = StravaAccount.get_active()
+    if account:
+        if account.webhook_subscription_id:
+            try:
+                strava_client.delete_push_subscription(account.webhook_subscription_id)
+            except Exception:
+                pass  # Best-effort; always remove the local record
+        try:
+            strava_client.revoke_access(account)
+        except Exception:
+            pass
+        account.delete()
+        messages.success(request, "Strava account disconnected.")
+    else:
+        messages.info(request, "No active Strava account to disconnect.")
+
+    return redirect("site_admin:strava_settings")
+
+
+@require_http_methods(["GET", "POST"])
+def strava_import(request):
+    """
+    Historical import page: list/paginate the athlete's Strava activities and
+    queue an idempotent import task for each one the user selects.
+    """
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    account = StravaAccount.get_active()
+    if not account:
+        messages.error(request, "Connect a Strava account first.")
+        return redirect("site_admin:strava_settings")
+
+    if request.method == "POST":
+        selected_ids = request.POST.getlist("activity_id")
+        for activity_id in selected_ids:
+            import_activity_task.delay(activity_id, skip_if_private=False)
+        count = len(selected_ids)
+        messages.success(
+            request,
+            f"Import queued for {count} activit{'y' if count == 1 else 'ies'}.",
+        )
+        return redirect("site_admin:strava_import")
+
+    from strava_integration import client as strava_client
+
+    try:
+        page = int(request.GET.get("page", 1) or 1)
+    except ValueError:
+        page = 1
+    after_raw = request.GET.get("after", "")
+    before_raw = request.GET.get("before", "")
+
+    kwargs = {"page": page, "per_page": 30}
+    after_ts = _parse_date_to_epoch(after_raw)
+    before_ts = _parse_date_to_epoch(before_raw)
+    if after_ts:
+        kwargs["after"] = after_ts
+    if before_ts:
+        kwargs["before"] = before_ts
+
+    try:
+        activities = strava_client.list_activities(account, **kwargs)
+    except Exception as exc:
+        logger.exception("strava_import: failed to list activities")
+        messages.error(request, f"Could not fetch activities from Strava: {exc}")
+        activities = []
+
+    imported_ids = set(
+        StravaActivity.objects.filter(
+            strava_activity_id__in=[str(a.get("id")) for a in activities]
+        ).values_list("strava_activity_id", flat=True)
+    )
+    for activity in activities:
+        activity["imported"] = str(activity.get("id")) in imported_ids
+        distance_m = activity.get("distance") or 0
+        activity["distance_km"] = round(distance_m / 1000, 2)
+
+    return render(
+        request,
+        "site_admin/strava/import.html",
+        {
+            "account": account,
+            "activities": activities,
+            "page": page,
+            "after": after_raw,
+            "before": before_raw,
+            "has_next_page": len(activities) == 30,
+        },
+    )
