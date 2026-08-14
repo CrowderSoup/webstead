@@ -1,4 +1,4 @@
-{#
+{% comment %}
   Wraps the visible (client-JS-computed, from the GPX track) stats AND a
   machine-readable h-activity embedded object (server-rendered, from the
   Strava-sourced x-* properties in post.mf2 -- see blog/views.py:_activity_from_mf2
@@ -11,7 +11,7 @@
   their only job is to survive being fetched and re-parsed by a Microsub
   client (including our own poller) as documented in docs/microsub-extensions.md.
   JS never touches them, so they're unaffected by the client-side stat fill-in.
-#}
+{% endcomment %}
 <div class="p-activity h-activity">
   <section class="activity-elevation" data-activity-elevation>
     <header class="activity-elevation__header">
