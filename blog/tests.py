@@ -679,6 +679,122 @@ class PostListingPhotoTests(TestCase):
                 self.assertContains(response, 'class="u-photo"')
 
 
+class PostMapSliderTests(TestCase):
+    def _make_checkin_post(self, *, slug, with_location, with_photo=True):
+        post = Post.objects.create(
+            title="Sugar House",
+            slug=slug,
+            content="text",
+            kind=Post.CHECKIN,
+            published_on=timezone.now(),
+            mf2=(
+                {"checkin": {"latitude": 40.7241, "longitude": -111.8563}}
+                if with_location
+                else {}
+            ),
+        )
+        if with_photo:
+            upload = SimpleUploadedFile("photo.jpg", b"fake-image-data", content_type="image/jpeg")
+            asset = File.objects.create(kind=File.IMAGE, file=upload)
+            Attachment.objects.create(content_object=post, asset=asset, role="photo")
+        return post
+
+    def _make_activity_post(self, *, slug, with_track, with_photo=True):
+        post = Post.objects.create(
+            title="Morning Run",
+            slug=slug,
+            content="text",
+            kind=Post.ACTIVITY,
+            published_on=timezone.now(),
+        )
+        if with_track:
+            gpx_upload = SimpleUploadedFile("track.gpx", b"<gpx></gpx>", content_type="application/gpx+xml")
+            gpx_asset = File.objects.create(kind=File.DOC, file=gpx_upload)
+            Attachment.objects.create(content_object=post, asset=gpx_asset, role="gpx")
+        if with_photo:
+            upload = SimpleUploadedFile("photo.jpg", b"fake-image-data", content_type="image/jpeg")
+            asset = File.objects.create(kind=File.IMAGE, file=upload)
+            Attachment.objects.create(content_object=post, asset=asset, role="photo")
+        return post
+
+    def test_checkin_map_is_first_slide_on_listing_page(self):
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                self._make_checkin_post(slug="sugar-house-map-listing", with_location=True)
+
+                response = self.client.get(reverse("posts"), {"kind": "checkin"})
+                content = response.content.decode()
+
+                self.assertContains(response, 'slide--map')
+                self.assertContains(response, "data-checkin-map")
+                self.assertContains(response, 'data-map-static="true"')
+                self.assertLess(content.index("slide--map"), content.index('class="u-photo"'))
+
+    def test_checkin_map_is_first_slide_on_detail_page(self):
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                post = self._make_checkin_post(slug="sugar-house-map-detail", with_location=True)
+
+                response = self.client.get(reverse("post", kwargs={"slug": post.slug}))
+                content = response.content.decode()
+
+                self.assertContains(response, 'slide--map')
+                self.assertLess(content.index("slide--map"), content.index('class="u-photo"'))
+
+    def test_checkin_without_location_has_no_map_slide(self):
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                self._make_checkin_post(slug="sugar-house-no-location", with_location=False)
+
+                response = self.client.get(reverse("posts"), {"kind": "checkin"})
+
+                self.assertNotContains(response, "slide--map")
+                self.assertContains(response, 'class="u-photo"')
+
+    def test_activity_map_and_stats_precede_photos_on_listing_page(self):
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                self._make_activity_post(slug="morning-run-listing", with_track=True)
+
+                response = self.client.get(reverse("posts"), {"kind": "activity"})
+                content = response.content.decode()
+
+                self.assertContains(response, "data-gpx-url")
+                self.assertContains(response, 'data-map-static="true"')
+                self.assertContains(response, "data-activity-stats")
+                map_index = content.index("slide--map")
+                stats_index = content.index("slide--stats")
+                photo_index = content.index('class="u-photo"')
+                self.assertLess(map_index, stats_index)
+                self.assertLess(stats_index, photo_index)
+
+    def test_activity_map_and_stats_precede_photos_on_detail_page(self):
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                post = self._make_activity_post(slug="morning-run-detail", with_track=True)
+
+                response = self.client.get(reverse("post", kwargs={"slug": post.slug}))
+                content = response.content.decode()
+
+                map_index = content.index("slide--map")
+                stats_index = content.index("slide--stats")
+                photo_index = content.index('class="u-photo"')
+                self.assertLess(map_index, stats_index)
+                self.assertLess(stats_index, photo_index)
+
+    def test_activity_without_track_has_no_map_or_stats_slide(self):
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                self._make_activity_post(slug="morning-run-no-track", with_track=False)
+
+                response = self.client.get(reverse("posts"), {"kind": "activity"})
+
+                self.assertNotContains(response, "slide--map")
+                self.assertNotContains(response, "slide--stats")
+                self.assertNotContains(response, "GPX track coming soon")
+                self.assertContains(response, 'class="u-photo"')
+
+
 class CommentSubmissionTests(TestCase):
     def setUp(self):
         self.post = Post.objects.create(

@@ -33,21 +33,9 @@
     {% endif %}
   </p>
 
-  {% if checkin_data.latitude != None and checkin_data.longitude != None %}
-  <div
-    class="checkin-map"
-    data-checkin-map
-    data-lat="{{ checkin_data.latitude }}"
-    data-lng="{{ checkin_data.longitude }}"
-  ></div>
-  <p class="checkin-map-caption">
-    <span class="checkin-map-caption__place">{{ post.title }}</span>
-    <span class="checkin-map-caption__coords">{{ checkin_data.latitude }}, {{ checkin_data.longitude }}</span>
-  </p>
-  {% endif %}
   {% endif %}
 
-  {% include 'blog/_photo_gallery.html' with photos=checkin_photos %}
+  {% include 'blog/_photo_gallery.html' with photos=checkin_photos checkin_data=checkin_data %}
 
   <div class="e-content">
     {{ post.html }}
