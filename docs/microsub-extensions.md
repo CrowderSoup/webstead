@@ -6,9 +6,6 @@ ignorable extensions. Any spec-compliant client that doesn't know about these
 simply won't send the extra params and gets standard spec behavior back — nothing
 here is required to use the server.
 
-For the design rationale behind these extensions, see
-`docs/microsub-extensions-plan.md`.
-
 ## Discovering supported extensions
 
 `action=channels` responses include a `_webstead` block listing what's supported,
