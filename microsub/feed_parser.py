@@ -271,7 +271,29 @@ def _hentry_to_jf2(item: dict, base_url: str) -> dict:
                     out.append(urljoin(base_url, u))
         return out
 
-    for mf2_key in ("photo", "video", "audio", "syndication"):
+    def _photo_vals() -> list:
+        """Like _url_vals, but keeps {"value": url, "alt": ...} when alt text is present."""
+        out: list = []
+        for v in props.get("photo", []):
+            if isinstance(v, str) and v:
+                out.append(urljoin(base_url, v))
+            elif isinstance(v, dict):
+                u = v.get("value") or v.get("url", "")
+                if not u:
+                    continue
+                u = urljoin(base_url, u)
+                alt = v.get("alt")
+                if isinstance(alt, str) and alt.strip():
+                    out.append({"value": u, "alt": alt.strip()})
+                else:
+                    out.append(u)
+        return out
+
+    photo_vals = _photo_vals()
+    if photo_vals:
+        entry["photo"] = photo_vals
+
+    for mf2_key in ("video", "audio", "syndication"):
         urls = _url_vals(mf2_key)
         if urls:
             entry[mf2_key] = urls

@@ -24,12 +24,13 @@ from core.models import SiteConfiguration
 from .feed_parser import fetch_and_parse_feed
 from .models import BlockedUser, Channel, Entry, MutedUser, Subscription
 from .utils import (
-    KIND_FIELD_MAP,
+    apply_timeline_filters,
     normalize_category,
     normalize_profile_url,
     normalize_repeated_values,
     normalize_url,
     profile_prefix_q,
+    tokenize_text,
     url_matches_profile_prefix,
 )
 
@@ -41,6 +42,15 @@ CHANNEL_NOTIFICATIONS = "notifications"
 CHANNEL_HOME = "home"
 CHANNEL_GLOBAL = "global"
 RESERVED_CHANNEL_UIDS = {CHANNEL_NOTIFICATIONS, CHANNEL_GLOBAL}
+
+# Non-spec extensions this server supports, advertised on `action=channels` so
+# clients/scripts can discover them without reading source. See
+# docs/microsub-extensions.md. Additive/ignorable per mp-/x- vendor-extension
+# convention -- any spec-compliant client that doesn't recognize `_webstead`
+# simply ignores it.
+WEBSTEAD_CAPABILITIES = {
+    "timeline_filters": ["kind", "category", "author", "source"],
+}
 
 
 def _json_error(error: str, *, status: int, description: str = "", scope: str = "") -> JsonResponse:
@@ -444,15 +454,17 @@ def _apply_channel_order(channel_ids: list[str]) -> None:
 def _content_search_qs(request, channel):
     data = request.POST if request.method == "POST" else request.GET
     query = data.get("query", "").strip()
-    authors = [normalize_profile_url(value) for value in (data.getlist("author") or [])]
-    authors = [value for value in authors if value]
-    categories = [normalize_category(value) for value in (data.getlist("category") or [])]
-    categories = [value for value in categories if value]
-    kinds = normalize_repeated_values(data.getlist("kind"))
-    sources = [normalize_url(value) for value in (data.getlist("source") or [])]
-    sources = [value for value in sources if value]
+    authors_raw = data.getlist("author") or []
+    categories_raw = data.getlist("category") or []
+    kinds_raw = data.getlist("kind") or []
+    sources_raw = data.getlist("source") or []
 
-    if not any([query, authors, categories, kinds, sources]):
+    has_authors = any(normalize_profile_url(value) for value in authors_raw)
+    has_categories = any(normalize_category(value) for value in categories_raw)
+    has_kinds = bool(normalize_repeated_values(kinds_raw))
+    has_sources = any(normalize_url(value) for value in sources_raw)
+
+    if not any([query, has_authors, has_categories, has_kinds, has_sources]):
         return _json_error(
             "invalid_request",
             status=400,
@@ -464,27 +476,16 @@ def _content_search_qs(request, channel):
         qs = qs.filter(channel=channel)
 
     if query:
-        from .utils import tokenize_text
-
         for token in tokenize_text(query):
             qs = qs.filter(search_tokens__token=token)
 
-    if authors:
-        qs = qs.filter(author_url__in=authors)
-    if categories:
-        qs = qs.filter(search_categories__value__in=categories)
-    if kinds:
-        kind_query = Q()
-        for kind in kinds:
-            field_name = KIND_FIELD_MAP.get(kind)
-            if field_name:
-                kind_query |= Q(**{field_name: True})
-        if kind_query:
-            qs = qs.filter(kind_query)
-        else:
-            qs = qs.none()
-    if sources:
-        qs = qs.filter(source_url__in=sources)
+    qs = apply_timeline_filters(
+        qs,
+        source=sources_raw,
+        author=authors_raw,
+        categories=categories_raw,
+        kinds=kinds_raw,
+    )
 
     qs = qs.distinct()
     qs = _apply_paging(
@@ -582,7 +583,12 @@ class MicrosubView(View):
         if not _require_scope(request.microsub_scopes, "read"):
             return _json_error("insufficient_scope", status=403, scope="read")
         channels = _channel_order_response(_ordered_channels())
-        return JsonResponse({"channels": [_channel_json(channel) for channel in channels]})
+        return JsonResponse(
+            {
+                "channels": [_channel_json(channel) for channel in channels],
+                "_webstead": WEBSTEAD_CAPABILITIES,
+            }
+        )
 
     def _get_follow(self, request):
         if not _require_scope(request.microsub_scopes, "read"):
@@ -611,27 +617,13 @@ class MicrosubView(View):
         elif is_read_param == "true":
             qs = qs.filter(is_read=True)
 
-        source_url = normalize_url(request.GET.get("source", ""))
-        if source_url:
-            qs = qs.filter(source_url=source_url)
-
-        author_url = normalize_profile_url(request.GET.get("author", ""))
-        if author_url:
-            qs = qs.filter(author_url=author_url)
-
-        categories = normalize_repeated_values(request.GET.getlist("category"))
-        if categories:
-            qs = qs.filter(search_categories__value__in=categories).distinct()
-
-        kinds = normalize_repeated_values(request.GET.getlist("kind"))
-        if kinds:
-            kind_query = Q()
-            for kind in kinds:
-                field_name = KIND_FIELD_MAP.get(kind)
-                if field_name:
-                    kind_query |= Q(**{field_name: True})
-            if kind_query:
-                qs = qs.filter(kind_query)
+        qs = apply_timeline_filters(
+            qs,
+            source=request.GET.getlist("source"),
+            author=request.GET.getlist("author"),
+            categories=request.GET.getlist("category"),
+            kinds=request.GET.getlist("kind"),
+        )
 
         qs = _apply_paging(
             qs,

@@ -84,6 +84,17 @@ class GetChannelsTests(TestCase):
         self.assertIn("name", ch)
         self.assertIn("unread", ch)
 
+    @authorized
+    def test_advertises_webstead_capabilities(self, _auth):
+        response = self.client.get(
+            MICROSUB_URL, {"action": "channels"}, HTTP_AUTHORIZATION="Bearer token"
+        )
+        data = response.json()
+        self.assertIn("_webstead", data)
+        filters = data["_webstead"]["timeline_filters"]
+        for expected in ("kind", "category", "author", "source"):
+            self.assertIn(expected, filters)
+
 
 class GetFollowTests(TestCase):
     def setUp(self):

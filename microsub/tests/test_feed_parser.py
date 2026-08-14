@@ -233,10 +233,29 @@ class HentryToJf2Tests(SimpleTestCase):
         result = _hentry_to_jf2(item, "https://example.com/")
         self.assertEqual(len(result["photo"]), 2)
 
-    def test_photo_dict_value(self):
+    def test_photo_dict_value_without_alt_collapses_to_string(self):
         item = self._make_hentry({"photo": [{"value": "https://example.com/photo.jpg"}]})
         result = _hentry_to_jf2(item, "https://example.com/")
         self.assertEqual(result["photo"], ["https://example.com/photo.jpg"])
+
+    def test_photo_dict_value_with_alt_is_preserved(self):
+        item = self._make_hentry({"photo": [{"value": "https://example.com/photo.jpg", "alt": "A sunset"}]})
+        result = _hentry_to_jf2(item, "https://example.com/")
+        self.assertEqual(result["photo"], [{"value": "https://example.com/photo.jpg", "alt": "A sunset"}])
+
+    def test_photo_mixed_alt_and_plain_urls(self):
+        item = self._make_hentry({"photo": [
+            {"value": "https://example.com/1.jpg", "alt": "One"},
+            "https://example.com/2.jpg",
+        ]})
+        result = _hentry_to_jf2(item, "https://example.com/")
+        self.assertEqual(
+            result["photo"],
+            [
+                {"value": "https://example.com/1.jpg", "alt": "One"},
+                "https://example.com/2.jpg",
+            ],
+        )
 
     def test_video_included(self):
         item = self._make_hentry({"video": ["https://example.com/video.mp4"]})

@@ -4187,6 +4187,59 @@ def microsub_channel_detail(request, uid):
     )
 
 
+@require_http_methods(["GET"])
+def microsub_channel_timeline(request, uid):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    from microsub.models import Channel
+    from microsub.utils import KIND_FIELD_MAP, apply_timeline_filters, extract_content_text
+    from microsub.views import _visible_entries_qs
+
+    channel = get_object_or_404(Channel, uid=uid)
+
+    kinds = request.GET.getlist("kind")
+    category = request.GET.get("category", "").strip()
+    author = request.GET.get("author", "").strip()
+    is_read_param = request.GET.get("is_read", "")
+
+    qs = _visible_entries_qs(channel, base_qs=channel.entries.all())
+    if is_read_param == "false":
+        qs = qs.filter(is_read=False)
+    elif is_read_param == "true":
+        qs = qs.filter(is_read=True)
+
+    qs = apply_timeline_filters(
+        qs,
+        author=author,
+        categories=[category] if category else [],
+        kinds=kinds,
+    )
+
+    limit = min(int(request.GET.get("limit", 50) or 50), 200)
+    entries = list(qs.select_related("subscription").order_by("-published", "-id")[:limit])
+    for entry in entries:
+        name = entry.data.get("name") if isinstance(entry.data, dict) else ""
+        title = name if isinstance(name, str) and name.strip() else extract_content_text(entry.data)
+        entry.debug_title = title.strip() if title else "(untitled)"
+        entry.debug_url = entry.data.get("url", "") if isinstance(entry.data, dict) else ""
+
+    return render(
+        request,
+        "site_admin/microsub/channel_timeline.html",
+        {
+            "channel": channel,
+            "entries": entries,
+            "available_kinds": sorted(KIND_FIELD_MAP.keys()),
+            "selected_kinds": kinds,
+            "category": category,
+            "author": author,
+            "is_read_param": is_read_param,
+        },
+    )
+
+
 @require_http_methods(["GET", "POST"])
 def microsub_channel_edit(request, uid):
     guard = _staff_guard(request)
