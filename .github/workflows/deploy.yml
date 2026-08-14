@@ -38,6 +38,7 @@ jobs:
           CACHE_URL=$CACHE_URL
           CELERY_BROKER_URL=$CELERY_BROKER_URL
           CELERY_RESULT_BACKEND=$CELERY_RESULT_BACKEND
+          STRAVA_CLIENT_SECRET=$STRAVA_CLIENT_SECRET
           EOF
 
       - name: Deploy
@@ -53,3 +54,4 @@ jobs:
           CACHE_URL: ${{ secrets.CACHE_URL }}
           CELERY_BROKER_URL: ${{ secrets.CELERY_BROKER_URL }}
           CELERY_RESULT_BACKEND: ${{ secrets.CELERY_RESULT_BACKEND }}
+          STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
