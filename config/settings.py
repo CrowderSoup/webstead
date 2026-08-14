@@ -88,7 +88,14 @@ if not DEBUG:
     SESSION_COOKIE_SAMESITE = "Lax"
     CSRF_COOKIE_SAMESITE = "Lax"
     SECURE_CONTENT_TYPE_NOSNIFF = True
-    SECURE_REFERRER_POLICY = "same-origin"
+    # "same-origin" strips the Referer header on cross-origin requests
+    # entirely, including the browser's tile fetches to
+    # tile.openstreetmap.org (see core/static/js/activity_map.js). OSM's
+    # tile usage policy requires a Referer, so that setting broke map
+    # rendering with a 403 "Referer is required" response. This policy
+    # still omits the path/query cross-origin (just sends the origin),
+    # which keeps most of the privacy benefit while satisfying OSM.
+    SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
     SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=60 * 60 * 24 * 365)
     SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", default=True)
     SECURE_HSTS_PRELOAD = env.bool("SECURE_HSTS_PRELOAD", default=True)
