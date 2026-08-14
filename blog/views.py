@@ -355,12 +355,14 @@ def build_posts_listing_context(request, *, include_og=True):
         if post.kind == Post.ACTIVITY:
             has_activity = True
             post.activity = _activity_from_mf2(post)
+            post.activity_photos = list(post.photo_attachments)
         elif post.kind == Post.EVENT:
             mf2_data = post.mf2 if isinstance(post.mf2, dict) else {}
             post.event_data = mf2_data.get("event")
         elif post.kind == Post.CHECKIN:
             mf2_data = post.mf2 if isinstance(post.mf2, dict) else {}
             post.checkin_data = mf2_data.get("checkin")
+            post.checkin_photos = list(post.photo_attachments)
         elif post.kind in (Post.LIKE, Post.REPLY, Post.REPOST, Post.BOOKMARK):
             post.interaction = _interaction_payload(post, request=request)
 

@@ -21,6 +21,9 @@ from .mf2 import (
     parse_target_from_html,
 )
 from .comments import AkismetError, AkismetResult
+from files.models import Attachment, File
+from django.core.files.uploadedfile import SimpleUploadedFile
+import tempfile
 
 
 class TagModelTests(TestCase):
@@ -623,6 +626,57 @@ class PostFilterTests(TestCase):
 
         self.assertEqual(response.status_code, 301)
         self.assertEqual(response["Location"], "/?tag=arcane")
+
+
+class PostListingPhotoTests(TestCase):
+    def _make_photo_post(self, *, kind, title, slug):
+        post = Post.objects.create(
+            title=title,
+            slug=slug,
+            content="text",
+            kind=kind,
+            published_on=timezone.now(),
+        )
+        upload = SimpleUploadedFile("photo.jpg", b"fake-image-data", content_type="image/jpeg")
+        asset = File.objects.create(kind=File.IMAGE, file=upload)
+        Attachment.objects.create(content_object=post, asset=asset, role="photo")
+        return post
+
+    def test_checkin_photo_renders_on_listing_page(self):
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                self._make_photo_post(
+                    kind=Post.CHECKIN, title="Sugar House", slug="sugar-house-checkin"
+                )
+
+                response = self.client.get(reverse("posts"), {"kind": "checkin"})
+
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, 'class="u-photo"')
+
+    def test_activity_photo_renders_on_listing_page(self):
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                self._make_photo_post(
+                    kind=Post.ACTIVITY, title="Morning Run", slug="morning-run-activity"
+                )
+
+                response = self.client.get(reverse("posts"), {"kind": "activity"})
+
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, 'class="u-photo"')
+
+    def test_checkin_photo_renders_on_index_page(self):
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                self._make_photo_post(
+                    kind=Post.CHECKIN, title="Sugar House", slug="sugar-house-checkin-index"
+                )
+
+                response = self.client.get(reverse("index"))
+
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, 'class="u-photo"')
 
 
 class CommentSubmissionTests(TestCase):

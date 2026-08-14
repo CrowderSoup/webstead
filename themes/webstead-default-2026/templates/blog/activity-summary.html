@@ -73,6 +73,8 @@
   <p class="activity-track activity-track--missing">GPX track coming soon.</p>
   {% endif %}
 
+  {% include 'blog/_photo_gallery.html' with photos=post.activity_photos %}
+
   <div class="e-content">{{ post.html }}</div>
   {% include 'blog/tags.html' %}
   <div class="entry-meta">
