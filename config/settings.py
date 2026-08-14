@@ -68,6 +68,11 @@ AKISMET_API_KEY = env("AKISMET_API_KEY", default="")
 TURNSTILE_SITE_KEY = env("TURNSTILE_SITE_KEY", default="")
 TURNSTILE_SECRET_KEY = env("TURNSTILE_SECRET_KEY", default="")
 
+# Strava integration — single global OAuth app, registered once at
+# https://www.strava.com/settings/api (per-athlete tokens live in the DB).
+STRAVA_CLIENT_ID = env("STRAVA_CLIENT_ID", default="")
+STRAVA_CLIENT_SECRET = env("STRAVA_CLIENT_SECRET", default="")
+
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
 
@@ -116,6 +121,7 @@ INSTALLED_APPS = [
     "widgets.apps.WidgetsConfig",
     "microsub.apps.MicrosubConfig",
     "mastodon_integration.apps.MastodonIntegrationConfig",
+    "strava_integration.apps.StravaIntegrationConfig",
 
     # Third-party plugins from config/installed_plugins.py
     *INSTALLED_PLUGIN_APPS,
@@ -323,6 +329,10 @@ CELERY_BEAT_SCHEDULE = {
     "poll-mastodon-notifications": {
         "task": "mastodon_integration.tasks.poll_mastodon_notifications",
         "schedule": 900,  # every 15 min
+    },
+    "reconcile-strava-activities": {
+        "task": "strava_integration.tasks.reconcile_strava_activities",
+        "schedule": 3600,  # hourly safety net; the webhook does the real-time work
     },
 }
 

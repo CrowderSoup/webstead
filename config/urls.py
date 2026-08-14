@@ -11,6 +11,7 @@ urlpatterns = [
     path('', include('microsub.urls')),
     path("analytics/", include("analytics.urls")),
     path("", include("mastodon_integration.urls")),
+    path("", include("strava_integration.urls")),
 ]
 
 handler500 = "core.views.server_error"
