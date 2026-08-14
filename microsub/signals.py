@@ -53,3 +53,15 @@ def webmention_to_notifications(sender, instance, created, **kwargs):
         )
     except Exception:
         logger.exception("Failed to create notifications entry for webmention %s", instance.pk)
+
+
+@receiver(post_save, sender="microsub.Entry")
+def entry_created_fetch_reply_context(sender, instance, created, **kwargs):
+    if not created or not instance.kind_reply:
+        return
+
+    from django.db import transaction
+
+    from .tasks import fetch_reply_context
+
+    transaction.on_commit(lambda: fetch_reply_context.delay(instance.pk))

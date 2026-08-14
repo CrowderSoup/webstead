@@ -8,6 +8,7 @@ from microsub.feed_parser import (
     _HubLinkParser,
     _apply_feed_author_fallback,
     _author_from_mf2,
+    _build_reply_context,
     _hentry_to_jf2,
     _mf2_embedded_to_jf2,
     _parse_hfeed,
@@ -726,3 +727,68 @@ class FetchAndParseFeedTests(SimpleTestCase):
         fetch_and_parse_feed("https://example.com/feed")
         req = mock_urlopen.call_args[0][0]
         self.assertEqual(req.get_header("User-agent"), "Webstead Microsub/1.0")
+
+
+class BuildReplyContextTests(SimpleTestCase):
+    def _mock_urlopen(self, content_type, body):
+        mock_resp = MagicMock()
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        mock_resp.headers.get.side_effect = lambda k, d=None: {
+            "Content-Type": content_type,
+            "Link": None,
+        }.get(k, d)
+        mock_resp.read.return_value = body
+        return mock_resp
+
+    @patch("microsub.feed_parser.urlopen")
+    def test_extracts_author_and_snippet_from_permalink_hentry(self, mock_urlopen):
+        html = b"""
+        <html><body>
+        <div class="h-entry">
+          <a class="u-url" href="https://alice.example/post/1">permalink</a>
+          <a class="p-author h-card" href="https://alice.example/">Alice</a>
+          <div class="e-content">Hello, this is my post.</div>
+        </div>
+        </body></html>
+        """
+        mock_urlopen.return_value = self._mock_urlopen("text/html", html)
+
+        context = _build_reply_context("https://alice.example/post/1")
+
+        self.assertEqual(context["url"], "https://alice.example/post/1")
+        self.assertEqual(context["author"]["url"], "https://alice.example/")
+        self.assertEqual(context["author"]["name"], "Alice")
+        self.assertIn("Hello, this is my post.", context["snippet"])
+
+    @patch("microsub.feed_parser.urlopen")
+    def test_network_error_propagates_as_runtime_error(self, mock_urlopen):
+        from urllib.error import URLError
+
+        mock_urlopen.side_effect = URLError("no route")
+        with self.assertRaises(RuntimeError):
+            _build_reply_context("https://alice.example/post/1")
+
+    @patch("microsub.feed_parser.urlopen")
+    def test_non_mf2_page_returns_none(self, mock_urlopen):
+        html = b"<html><body><p>Just a plain page, no h-entry here.</p></body></html>"
+        mock_urlopen.return_value = self._mock_urlopen("text/html", html)
+
+        self.assertIsNone(_build_reply_context("https://example.com/not-a-post"))
+
+    @patch("microsub.feed_parser.urlopen")
+    def test_snippet_truncated_to_280_chars(self, mock_urlopen):
+        long_text = "x" * 500
+        html = f"""
+        <html><body>
+        <div class="h-entry">
+          <a class="u-url" href="https://example.com/post/1">permalink</a>
+          <div class="e-content">{long_text}</div>
+        </div>
+        </body></html>
+        """.encode()
+        mock_urlopen.return_value = self._mock_urlopen("text/html", html)
+
+        context = _build_reply_context("https://example.com/post/1")
+
+        self.assertEqual(len(context["snippet"]), 280)

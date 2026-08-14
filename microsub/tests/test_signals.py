@@ -1,5 +1,8 @@
-"""Tests for microsub/signals.py — webmention_to_notifications."""
+"""Tests for microsub/signals.py — webmention_to_notifications, reply-context queuing."""
+from unittest.mock import patch
+
 from django.test import TestCase
+from django.utils import timezone
 
 from micropub.models import Webmention
 from microsub.models import Channel, Entry
@@ -111,3 +114,44 @@ class WebmentionToNotificationsTests(TestCase):
         _make_webmention()
         entry = Entry.objects.get(channel=self.notifications)
         self.assertIsNone(entry.subscription)
+
+
+class EntryCreatedFetchReplyContextTests(TestCase):
+    def setUp(self):
+        self.channel = Channel.objects.create(uid="ch", name="Channel")
+
+    @patch("microsub.tasks.fetch_reply_context.delay")
+    def test_reply_entry_queues_task(self, mock_delay):
+        with self.captureOnCommitCallbacks(execute=True):
+            entry = Entry.objects.create(
+                channel=self.channel,
+                uid="reply-1",
+                data={"in-reply-to": ["https://parent.example/post"]},
+                published=timezone.now(),
+            )
+        mock_delay.assert_called_once_with(entry.pk)
+
+    @patch("microsub.tasks.fetch_reply_context.delay")
+    def test_non_reply_entry_does_not_queue_task(self, mock_delay):
+        with self.captureOnCommitCallbacks(execute=True):
+            Entry.objects.create(
+                channel=self.channel,
+                uid="note-1",
+                data={"content": {"text": "hello"}},
+                published=timezone.now(),
+            )
+        mock_delay.assert_not_called()
+
+    @patch("microsub.tasks.fetch_reply_context.delay")
+    def test_resave_does_not_requeue_task(self, mock_delay):
+        with self.captureOnCommitCallbacks(execute=True):
+            entry = Entry.objects.create(
+                channel=self.channel,
+                uid="reply-2",
+                data={"in-reply-to": ["https://parent.example/post"]},
+                published=timezone.now(),
+            )
+        mock_delay.reset_mock()
+        with self.captureOnCommitCallbacks(execute=True):
+            entry.save()
+        mock_delay.assert_not_called()

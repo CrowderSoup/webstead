@@ -6,7 +6,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
-from .utils import normalize_entry_data, normalize_url
+from .utils import extract_content_text, normalize_entry_data, normalize_url
 
 logger = logging.getLogger(__name__)
 
@@ -704,3 +704,37 @@ def fetch_and_parse_feed(url: str) -> tuple[list[dict], str | None, dict]:
         entries, feed_meta = _parse_rss_atom(raw, url)
 
     return _normalize_entries(entries), hub_url, feed_meta
+
+
+def _build_reply_context(url: str) -> dict | None:
+    """
+    Fetch a reply entry's parent URL and build a compact display summary
+    (author + snippet) for caching on the reply Entry, reusing
+    fetch_and_parse_feed's existing permalink/h-entry parsing rather than a
+    parallel mf2-parsing path -- a permalink page with a single h-entry (no
+    h-feed wrapper) is parsed via the same "bare h-entries" fallback used
+    for feed pages.
+
+    Raises RuntimeError (propagated from fetch_and_parse_feed) on
+    network/fetch failures, so callers can decide whether to retry. Returns
+    None when the fetch succeeded but no usable author/snippet was found --
+    not retryable, since retrying wouldn't produce a different result.
+    """
+    entries, _, feed_meta = fetch_and_parse_feed(url)
+
+    entry = entries[0] if entries else {}
+    author = entry.get("author") if isinstance(entry.get("author"), dict) else None
+    if not (author and author.get("url")) and isinstance(feed_meta.get("author"), dict):
+        author = feed_meta["author"]
+
+    snippet = ""
+    if entry:
+        snippet = extract_content_text(entry) or entry.get("summary", "") or entry.get("name", "")
+
+    context: dict = {"url": url}
+    if author and author.get("url"):
+        context["author"] = author
+    if snippet:
+        context["snippet"] = snippet.strip()[:280]
+
+    return context if len(context) > 1 else None

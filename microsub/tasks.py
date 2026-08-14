@@ -1,4 +1,8 @@
+import logging
+
 from celery import shared_task
+
+logger = logging.getLogger(__name__)
 
 
 def _apply_feed_meta(sub, feed_meta: dict, hub_url: str | None) -> list[str]:
@@ -97,6 +101,46 @@ def poll_subscription(self, sub_id: int, *, force: bool = False, doctor: bool = 
     close_old_connections()
 
     return {"new": new_count, "updated": updated_count, "url": sub.url}
+
+
+@shared_task(bind=True, max_retries=2, default_retry_delay=60)
+def fetch_reply_context(self, entry_id: int) -> None:
+    """
+    Best-effort: fetch a reply Entry's in-reply-to parent and cache a
+    compact display summary (author + snippet) on entry.data["_reply_context"].
+
+    Fired from microsub.signals.entry_created_fetch_reply_context on
+    Entry creation for kind_reply entries, via transaction.on_commit so it
+    never races an uncommitted row.
+    """
+    from django.db import close_old_connections
+    from microsub.feed_parser import _build_reply_context
+    from microsub.models import Entry
+
+    close_old_connections()
+    try:
+        entry = Entry.objects.get(id=entry_id)
+    except Entry.DoesNotExist:
+        return
+
+    in_reply_to = entry.data.get("in-reply-to") if isinstance(entry.data, dict) else None
+    parent_url = in_reply_to[0] if isinstance(in_reply_to, list) and in_reply_to else ""
+    if not parent_url:
+        return
+
+    try:
+        context = _build_reply_context(parent_url)
+    except RuntimeError as exc:
+        raise self.retry(exc=exc)
+    except Exception:
+        logger.exception("fetch_reply_context: failed to build reply context for entry %s", entry_id)
+        return
+
+    if context:
+        entry.data["_reply_context"] = context
+        entry.save(update_fields=["data"])
+
+    close_old_connections()
 
 
 @shared_task(ignore_result=True)
