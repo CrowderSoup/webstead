@@ -9,7 +9,7 @@ from core.models import SiteConfiguration
 from mastodon_integration.client import status_to_jf2
 from mastodon_integration.models import MastodonAccount, MastodonApp
 from mastodon_integration.subscriptions import ensure_managed_subscription, sync_managed_subscriptions
-from mastodon_integration.tasks import _build_canonical_url, poll_mastodon_timeline
+from mastodon_integration.tasks import _build_canonical_url, poll_mastodon_notifications, poll_mastodon_timeline
 from microsub.models import Channel, Entry
 from microsub.views import _entry_json
 
@@ -188,6 +188,144 @@ class PollMastodonTimelineReplyFilterTests(TestCase):
         self.assertEqual(payload["_source"]["name"], "Mastodon home timeline")
         self.assertTrue(payload["_source"]["_is_managed"])
         self.assertEqual(payload["_source"]["_provider"], "mastodon")
+
+
+class PollMastodonNotificationsGroupingTests(TestCase):
+    def setUp(self):
+        self.notifications_channel, _ = Channel.objects.get_or_create(
+            uid="notifications", defaults={"name": "Notifications"}
+        )
+        self.app = MastodonApp.objects.create(
+            instance_url="https://social.example",
+            client_id="client-id",
+            client_secret="client-secret",
+        )
+        self.account = MastodonAccount.objects.create(
+            app=self.app,
+            access_token="access-token",
+            account_id="10",
+            username="alice@social.example",
+            notifications_channel=self.notifications_channel,
+        )
+
+    def _favourite(self, notif_id: str, *, status_url: str, status_id: str = "500", actor: str = "bob"):
+        return {
+            "id": notif_id,
+            "type": "favourite",
+            "created_at": timezone.now(),
+            "account": {
+                "id": "20",
+                "display_name": actor.title(),
+                "username": actor,
+                "url": f"https://social.example/@{actor}",
+                "avatar": "",
+            },
+            "status": {"id": status_id, "url": status_url, "uri": status_url},
+        }
+
+    def _reblog(self, notif_id: str, *, status_url: str, status_id: str = "500", actor: str = "bob"):
+        notif = self._favourite(notif_id, status_url=status_url, status_id=status_id, actor=actor)
+        notif["type"] = "reblog"
+        return notif
+
+    @patch("mastodon_integration.client.get_client")
+    def test_repeated_favourites_on_same_status_are_grouped(self, mock_get_client):
+        mock_client = MagicMock()
+        mock_client.notifications.return_value = [
+            self._favourite("1", status_url="https://social.example/@carol/1", actor="alice_fan"),
+            self._favourite("2", status_url="https://social.example/@carol/1", actor="bob_fan"),
+        ]
+        mock_get_client.return_value = mock_client
+
+        poll_mastodon_notifications()
+
+        entries = Entry.objects.filter(channel=self.notifications_channel)
+        self.assertEqual(entries.count(), 1)
+        self.assertEqual(entries.first().data["_count"], 2)
+
+    @patch("mastodon_integration.client.get_client")
+    def test_favourites_on_different_statuses_are_not_grouped(self, mock_get_client):
+        mock_client = MagicMock()
+        mock_client.notifications.return_value = [
+            self._favourite("1", status_url="https://social.example/@carol/1"),
+            self._favourite("2", status_url="https://social.example/@carol/2"),
+        ]
+        mock_get_client.return_value = mock_client
+
+        poll_mastodon_notifications()
+
+        self.assertEqual(Entry.objects.filter(channel=self.notifications_channel).count(), 2)
+
+    @patch("mastodon_integration.client.get_client")
+    def test_favourite_and_reblog_on_same_status_are_not_grouped_together(self, mock_get_client):
+        mock_client = MagicMock()
+        mock_client.notifications.return_value = [
+            self._favourite("1", status_url="https://social.example/@carol/1"),
+            self._reblog("2", status_url="https://social.example/@carol/1"),
+        ]
+        mock_get_client.return_value = mock_client
+
+        poll_mastodon_notifications()
+
+        self.assertEqual(Entry.objects.filter(channel=self.notifications_channel).count(), 2)
+
+    @patch("mastodon_integration.client.get_client")
+    def test_favourite_outside_grouping_window_creates_new_entry(self, mock_get_client):
+        status_url = "https://social.example/@carol/1"
+        stale = Entry.objects.create(
+            channel=self.notifications_channel,
+            uid="mastodon:notification:old",
+            data={"type": "entry", "like-of": [status_url], "_count": 1},
+            published=timezone.now() - timedelta(hours=48),
+        )
+        mock_client = MagicMock()
+        mock_client.notifications.return_value = [
+            self._favourite("2", status_url=status_url),
+        ]
+        mock_get_client.return_value = mock_client
+
+        poll_mastodon_notifications()
+
+        self.assertEqual(Entry.objects.filter(channel=self.notifications_channel).count(), 2)
+        stale.refresh_from_db()
+        self.assertEqual(stale.data["_count"], 1)
+
+    @patch("mastodon_integration.client.get_client")
+    def test_mentions_are_never_grouped(self, mock_get_client):
+        mention = {
+            "id": "1",
+            "type": "mention",
+            "created_at": timezone.now(),
+            "account": {
+                "id": "20", "display_name": "Bob", "username": "bob",
+                "url": "https://social.example/@bob", "avatar": "",
+            },
+            "status": {
+                "id": "500", "url": "https://social.example/@bob/1", "uri": "https://social.example/@bob/1",
+                "content": "<p>hi</p>",
+            },
+        }
+        mock_client = MagicMock()
+        mock_client.notifications.return_value = [mention, dict(mention, id="2")]
+        mock_get_client.return_value = mock_client
+
+        poll_mastodon_notifications()
+
+        self.assertEqual(Entry.objects.filter(channel=self.notifications_channel).count(), 2)
+
+    @patch("mastodon_integration.client.get_client")
+    def test_last_notification_id_advances_past_grouped_notifications(self, mock_get_client):
+        mock_client = MagicMock()
+        mock_client.notifications.return_value = [
+            self._favourite("1", status_url="https://social.example/@carol/1"),
+            self._favourite("2", status_url="https://social.example/@carol/1"),
+        ]
+        mock_get_client.return_value = mock_client
+
+        poll_mastodon_notifications()
+
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.last_notification_id, "2")
 
 
 class ManagedSubscriptionTests(TestCase):

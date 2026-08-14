@@ -8,10 +8,12 @@ poll_mastodon_notifications()       — scheduled every 15 min
 
 import logging
 import re
+from datetime import timedelta
 
 from celery import shared_task
 from django.conf import settings
 from django.db import IntegrityError
+from django.utils import timezone
 from mastodon import MastodonNetworkError, MastodonRatelimitError, MastodonServerError
 
 from ._utils import _get
@@ -315,6 +317,34 @@ def poll_mastodon_timeline():
     close_old_connections()
 
 
+def _find_groupable_entry(channel, target_key: str, status_url: str, *, window_hours: int = 24):
+    """
+    Return the most recent notifications-channel Entry whose `data[target_key]`
+    matches `status_url` and was published within the last `window_hours`, or
+    None. Lets repeated favourites/reblogs on the same status fold into one
+    entry (data["_count"]) instead of flooding the channel with one row per
+    notification.
+    """
+    from microsub.models import Entry
+
+    # JSONField's `contains` lookup only works on PostgreSQL/MariaDB, not
+    # SQLite -- and notification volume in a 24h window is small, so filter
+    # candidates in Python rather than depending on a DB-specific lookup.
+    # like-of/repost-of are normalized to single-item lists by
+    # microsub.utils.normalize_entry_data (both are ARRAY_PROPERTIES).
+    cutoff = timezone.now() - timedelta(hours=window_hours)
+    candidates = Entry.objects.filter(channel=channel, published__gte=cutoff).order_by("-published")
+    for entry in candidates:
+        if isinstance(entry.data, dict) and entry.data.get(target_key) == [status_url]:
+            return entry
+    return None
+
+
+def _increment_notification_count(entry) -> None:
+    entry.data["_count"] = int(entry.data.get("_count", 1)) + 1
+    entry.save(update_fields=["data"])
+
+
 @shared_task(ignore_result=True)
 def poll_mastodon_notifications():
     """
@@ -360,6 +390,7 @@ def poll_mastodon_notifications():
     subscription = ensure_managed_subscription(account, "notifications") if notifications_channel else None
     webmention_count = 0
     entry_count = 0
+    grouped_count = 0
     latest_id = account.last_notification_id
 
     for notif in reversed(notifications):  # oldest-first
@@ -431,6 +462,19 @@ def poll_mastodon_notifications():
 
         # --- Microsub entries for all notification types ---
         if notifications_channel and subscription:
+            if notif_type in ("favourite", "reblog") and notif_status:
+                status_url = str(_get(notif_status, "url") or _get(notif_status, "uri") or "")
+                target_key = "like-of" if notif_type == "favourite" else "repost-of"
+                grouped = (
+                    _find_groupable_entry(notifications_channel, target_key, status_url)
+                    if status_url
+                    else None
+                )
+                if grouped is not None:
+                    _increment_notification_count(grouped)
+                    grouped_count += 1
+                    continue
+
             uid = f"mastodon:notification:{notif_id}"
             jf2 = _notification_to_jf2(
                 notif_type=notif_type,
@@ -466,8 +510,8 @@ def poll_mastodon_notifications():
         account.save(update_fields=["last_notification_id"])
 
     logger.info(
-        "poll_mastodon_notifications: %d webmentions, %d microsub entries",
-        webmention_count, entry_count,
+        "poll_mastodon_notifications: %d webmentions, %d microsub entries, %d grouped into existing entries",
+        webmention_count, entry_count, grouped_count,
     )
     close_old_connections()
 
