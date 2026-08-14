@@ -79,8 +79,62 @@ channel=home&query=strava&kind=checkin
 
 Returns the same `{"items": [...], "paging": {...}}` shape as `timeline`.
 
+## Rich activity entries
+
+Entries whose source h-entry embeds an `h-activity` object (the shape
+`strava_integration/importer.py`'s `_build_mf2` produces, and that this site's
+own activity posts render — see `themes/webstead-default-2026/templates/blog/_activity_stats.html`)
+carry an additive `activity` key in the entry's JF2 `data`, alongside the
+regular h-entry properties:
+
+```json
+{
+  "type": "entry",
+  "name": "Morning Run",
+  "activity": {
+    "type": "activity",
+    "activity-type": "Run",
+    "name": "Morning Run",
+    "track": "https://example.com/media/strava-1.gpx",
+    "x-distance": "8368.6",
+    "x-moving-time": "2531",
+    "x-elapsed-time": "2600",
+    "x-total-elevation-gain": "95.1",
+    "x-average-speed": "3.3",
+    "x-max-speed": "4.1",
+    "x-average-heartrate": "152.3",
+    "x-max-heartrate": "178",
+    "x-start-latlng": "45.0,-122.0",
+    "x-end-latlng": "45.01,-122.01",
+    "x-kudos-count": "7"
+  }
+}
+```
+
+Notes for consuming clients:
+
+- `activity` is entirely optional — only present on entries that had an
+  `h-activity` embedded object to parse. Absence doesn't mean "not an
+  activity post"; it means no structured activity data was found.
+- Every `x-`-prefixed key is additive and ignorable — a client that doesn't
+  recognize a given stat should just skip it, the same as any unknown JF2
+  property. New stats may be added to this set over time without a version
+  bump; don't assume the key list above is exhaustive or fixed.
+- All numeric values are strings, in the source's native SI units (meters,
+  meters/second, seconds) regardless of the publishing site's display-unit
+  preference — convert on the client side if you need imperial units.
+- `x-start-latlng`/`x-end-latlng` are `"lat,lng"` strings, not nested objects.
+- `activity-type`/`name`/`track` are un-prefixed (not `x-`) since they're the
+  three fields this shape has always had, predating the `x-*` extension
+  properties — treat them the same as any other JF2 property.
+
 ## Implementation note
 
 Both `timeline` and the content-search path share one filter implementation —
 `apply_timeline_filters` in `microsub/utils.py` — so the two can't drift apart on
 what a given filter param means.
+
+The `activity` embedded object is parsed by `_mf2_activity_to_jf2` in
+`microsub/feed_parser.py`, which passes through any `x-`-prefixed property
+generically rather than requiring a matching allowlist entry here for every
+stat `_build_mf2` produces — see that function's docstring for why.

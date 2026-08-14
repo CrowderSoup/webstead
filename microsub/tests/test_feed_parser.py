@@ -1,8 +1,11 @@
 """Tests for microsub/feed_parser.py."""
 import json
+import tempfile
 from unittest.mock import MagicMock, patch
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase, override_settings
+from django.urls import reverse
+from django.utils import timezone
 
 from microsub.feed_parser import (
     _HubLinkParser,
@@ -10,6 +13,7 @@ from microsub.feed_parser import (
     _author_from_mf2,
     _build_reply_context,
     _hentry_to_jf2,
+    _mf2_activity_to_jf2,
     _mf2_embedded_to_jf2,
     _parse_hfeed,
     _parse_json_feed,
@@ -128,6 +132,62 @@ class AuthorFromMf2Tests(SimpleTestCase):
         self.assertIsNone(result)
 
 
+class Mf2ActivityToJf2Tests(SimpleTestCase):
+    """
+    _mf2_activity_to_jf2 is the counterpart to _mf2_embedded_to_jf2 for the
+    Strava-style h-activity embedded object -- generic x-* passthrough
+    instead of a fixed field allowlist, mirroring ensure_photo_list's
+    "preserve additive extension data" approach for photos.
+    """
+
+    def _h_activity(self, properties):
+        return {"type": ["h-activity"], "properties": properties}
+
+    def test_core_fields_included(self):
+        val = self._h_activity({
+            "activity-type": ["Run"],
+            "name": ["Morning Run"],
+            "track": ["/media/strava-1.gpx"],
+        })
+        result = _mf2_activity_to_jf2(val, "https://example.com/")
+        self.assertEqual(result["activity-type"], "Run")
+        self.assertEqual(result["name"], "Morning Run")
+        self.assertEqual(result["track"], "https://example.com/media/strava-1.gpx")
+
+    def test_x_prefixed_properties_pass_through_generically(self):
+        val = self._h_activity({
+            "activity-type": ["Run"],
+            "x-distance": ["8368.6"],
+            "x-total-elevation-gain": ["95.1"],
+            "x-average-heartrate": ["152.3"],
+            "x-start-latlng": ["45.0,-122.0"],
+            "x-kudos-count": ["7"],
+        })
+        result = _mf2_activity_to_jf2(val, "https://example.com/")
+        self.assertEqual(result["x-distance"], "8368.6")
+        self.assertEqual(result["x-total-elevation-gain"], "95.1")
+        self.assertEqual(result["x-average-heartrate"], "152.3")
+        self.assertEqual(result["x-start-latlng"], "45.0,-122.0")
+        self.assertEqual(result["x-kudos-count"], "7")
+
+    def test_unknown_x_prefixed_property_still_passes_through(self):
+        """A future x-* stat with no matching allowlist entry anywhere should still round-trip."""
+        val = self._h_activity({"x-cadence": ["178"]})
+        result = _mf2_activity_to_jf2(val, "https://example.com/")
+        self.assertEqual(result["x-cadence"], "178")
+
+    def test_non_x_prefixed_unknown_property_is_ignored(self):
+        val = self._h_activity({"activity-type": ["Run"], "some-other-field": ["ignored"]})
+        result = _mf2_activity_to_jf2(val, "https://example.com/")
+        self.assertNotIn("some-other-field", result)
+
+    def test_empty_properties_returns_none(self):
+        self.assertIsNone(_mf2_activity_to_jf2(self._h_activity({}), "https://example.com/"))
+
+    def test_non_dict_returns_none(self):
+        self.assertIsNone(_mf2_activity_to_jf2("not a dict", "https://example.com/"))
+
+
 class HentryToJf2Tests(SimpleTestCase):
     def _make_hentry(self, props):
         return {"type": ["h-entry"], "properties": props}
@@ -199,6 +259,38 @@ class HentryToJf2Tests(SimpleTestCase):
         self.assertEqual(result["checkin"]["name"], "Coffee Shop")
         self.assertEqual(result["checkin"]["latitude"], "37.7749")
         self.assertEqual(result["checkin"]["longitude"], "-122.4194")
+
+    def test_activity_embedded_object(self):
+        item = self._make_hentry({
+            "activity": [{
+                "type": ["h-activity"],
+                "properties": {
+                    "activity-type": ["Run"],
+                    "name": ["Morning Run"],
+                    "track": ["/media/strava-1.gpx"],
+                    "x-distance": ["8368.6"],
+                    "x-moving-time": ["2531"],
+                    "x-total-elevation-gain": ["95.1"],
+                    "x-average-heartrate": ["152.3"],
+                    "x-kudos-count": ["7"],
+                },
+            }]
+        })
+        result = _hentry_to_jf2(item, "https://example.com/")
+        self.assertIn("activity", result)
+        self.assertEqual(result["activity"]["activity-type"], "Run")
+        self.assertEqual(result["activity"]["name"], "Morning Run")
+        self.assertEqual(result["activity"]["track"], "https://example.com/media/strava-1.gpx")
+        self.assertEqual(result["activity"]["x-distance"], "8368.6")
+        self.assertEqual(result["activity"]["x-moving-time"], "2531")
+        self.assertEqual(result["activity"]["x-total-elevation-gain"], "95.1")
+        self.assertEqual(result["activity"]["x-average-heartrate"], "152.3")
+        self.assertEqual(result["activity"]["x-kudos-count"], "7")
+
+    def test_no_activity_property_omits_key(self):
+        item = self._make_hentry({"name": ["Just a note"]})
+        result = _hentry_to_jf2(item, "https://example.com/")
+        self.assertNotIn("activity", result)
 
     def test_checkin_string_url(self):
         item = self._make_hentry({"checkin": ["https://venue.example.com/"]})
@@ -792,3 +884,70 @@ class BuildReplyContextTests(SimpleTestCase):
         context = _build_reply_context("https://example.com/post/1")
 
         self.assertEqual(len(context["snippet"]), 280)
+
+
+class ActivityRoundTripTests(TestCase):
+    """
+    End-to-end: render a real Post(kind=ACTIVITY) detail page through the
+    actual theme templates, then parse the resulting HTML the same way
+    fetch_and_parse_feed would (mf2py -> _hentry_to_jf2). This is the
+    real-world check that the parser fix actually closes the loop -- not
+    just that _hentry_to_jf2/_mf2_activity_to_jf2 handle synthetic
+    h-activity markup in isolation, but that a post published via
+    strava_integration.importer._build_mf2's exact output shape survives
+    being served as HTML and re-ingested by a Microsub subscriber.
+    """
+
+    def test_activity_x_properties_round_trip_through_rendered_html(self):
+        import mf2py
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from blog.models import Post
+        from files.models import Attachment, File
+
+        post = Post.objects.create(
+            title="Morning Run",
+            slug="morning-run-roundtrip",
+            content="Felt good.",
+            kind=Post.ACTIVITY,
+            published_on=timezone.now(),
+            mf2={
+                "activity": [
+                    {
+                        "type": ["h-activity"],
+                        "properties": {
+                            "activity-type": ["Run"],
+                            "name": ["Morning Run"],
+                            "x-distance": ["8368.6"],
+                            "x-moving-time": ["2531"],
+                            "x-total-elevation-gain": ["95.1"],
+                            "x-average-heartrate": ["152.3"],
+                            "x-kudos-count": ["7"],
+                        },
+                    }
+                ]
+            },
+        )
+        gpx_upload = SimpleUploadedFile("track.gpx", b"<gpx></gpx>", content_type="application/gpx+xml")
+        gpx_asset = File.objects.create(kind=File.DOC, file=gpx_upload)
+        Attachment.objects.create(content_object=post, asset=gpx_asset, role="gpx")
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                url = reverse("post", kwargs={"slug": post.slug})
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+
+                parsed = mf2py.parse(doc=response.content.decode(), url="https://example.com" + url)
+                entries = [item for item in parsed["items"] if "h-entry" in item.get("type", [])]
+                self.assertTrue(entries, "no h-entry found in rendered activity page")
+
+                jf2 = _hentry_to_jf2(entries[0], "https://example.com/")
+
+        self.assertIn("activity", jf2)
+        self.assertEqual(jf2["activity"]["activity-type"], "Run")
+        self.assertEqual(jf2["activity"]["x-distance"], "8368.6")
+        self.assertEqual(jf2["activity"]["x-moving-time"], "2531")
+        self.assertEqual(jf2["activity"]["x-total-elevation-gain"], "95.1")
+        self.assertEqual(jf2["activity"]["x-average-heartrate"], "152.3")
+        self.assertEqual(jf2["activity"]["x-kudos-count"], "7")

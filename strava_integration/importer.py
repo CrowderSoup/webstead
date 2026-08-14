@@ -107,7 +107,7 @@ def _activity_summary(activity: dict, *, units: str) -> str:
 # "activity" isn't a recognized post-type-discovery type -- so these are
 # additive/ignorable, x-prefixed per the mp-/x- vendor-extension convention,
 # and stay in Strava's native SI units (meters, m/s) regardless of the
-# site's activity_units display setting. See docs/microsub-extensions-plan.md.
+# site's activity_units display setting. See docs/microsub-extensions.md.
 _MF2_NUMERIC_FIELDS = (
     ("distance", "x-distance"),
     ("moving_time", "x-moving-time"),

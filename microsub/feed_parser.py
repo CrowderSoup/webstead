@@ -194,6 +194,39 @@ def _author_from_mf2(author_val, base_url: str) -> dict | None:
     return _mf2_embedded_to_jf2(author_val, base_url)
 
 
+def _mf2_activity_to_jf2(val, base_url: str) -> dict | None:
+    """
+    Convert an embedded mf2 h-activity object to a JF2 dict.
+
+    Unlike _mf2_embedded_to_jf2 (a fixed allowlist for h-card/h-adr fields),
+    this generically passes through every x-*-prefixed property verbatim
+    instead of requiring an allowlist entry per stat -- new extension
+    properties added to strava_integration.importer._build_mf2 round-trip
+    automatically. See docs/microsub-extensions.md.
+    """
+    if not isinstance(val, dict):
+        return None
+    props = val.get("properties", {})
+    if not isinstance(props, dict):
+        return None
+    out: dict = {"type": "activity"}
+
+    for key in ("activity-type", "name"):
+        vals = props.get(key, [])
+        if vals and isinstance(vals[0], str):
+            out[key] = vals[0]
+
+    track_vals = props.get("track", [])
+    if track_vals and isinstance(track_vals[0], str):
+        out["track"] = urljoin(base_url, track_vals[0])
+
+    for key, vals in props.items():
+        if key.startswith("x-") and vals and isinstance(vals[0], str):
+            out[key] = vals[0]
+
+    return out if len(out) > 1 else None
+
+
 def _hentry_to_jf2(item: dict, base_url: str) -> dict:
     props = item.get("properties", {})
 
@@ -258,6 +291,14 @@ def _hentry_to_jf2(item: dict, base_url: str) -> dict:
             card = _mf2_embedded_to_jf2(vals[0], base_url)
             if card:
                 entry[jf2_key] = card
+
+    # Embedded activity object (Strava-style h-activity with x-*-prefixed
+    # extension properties) — non-spec, additive. See docs/microsub-extensions.md.
+    activity_vals = props.get("activity", [])
+    if activity_vals:
+        activity = _mf2_activity_to_jf2(activity_vals[0], base_url)
+        if activity:
+            entry["activity"] = activity
 
     # Multi-value URL arrays
     def _url_vals(key: str) -> list[str]:

@@ -1,45 +1,77 @@
-<section class="activity-elevation" data-activity-elevation>
-  <header class="activity-elevation__header">
-    <p>Elevation profile</p>
-    <p class="activity-elevation__totals">
-      Gain <strong data-stat="elevation-gain">--</strong>
-      Loss <strong data-stat="elevation-loss">--</strong>
-    </p>
-  </header>
-  <svg class="activity-elevation__chart" role="img" aria-label="Elevation over time"></svg>
-  <p class="activity-elevation__empty" hidden>Elevation data unavailable.</p>
-</section>
-<dl class="activity-stats" data-activity-stats>
-  <div>
-    <dt>Distance</dt>
-    <dd data-stat="distance">--</dd>
+{#
+  Wraps the visible (client-JS-computed, from the GPX track) stats AND a
+  machine-readable h-activity embedded object (server-rendered, from the
+  Strava-sourced x-* properties in post.mf2 -- see blog/views.py:_activity_from_mf2
+  and strava_integration/importer.py:_build_mf2). The two can differ slightly
+  (GPX is trimmed/anonymized; the x-* values are Strava's own numbers), which
+  is why each <data> carries its own value rather than reusing the visible text --
+  the same pattern checkin.html uses for p-latitude/p-longitude.
+
+  The <data> elements are hidden and hold no visible duplicate text, since
+  their only job is to survive being fetched and re-parsed by a Microsub
+  client (including our own poller) as documented in docs/microsub-extensions.md.
+  JS never touches them, so they're unaffected by the client-side stat fill-in.
+#}
+<div class="p-activity h-activity">
+  <section class="activity-elevation" data-activity-elevation>
+    <header class="activity-elevation__header">
+      <p>Elevation profile</p>
+      <p class="activity-elevation__totals">
+        Gain <strong data-stat="elevation-gain">--</strong>
+        Loss <strong data-stat="elevation-loss">--</strong>
+      </p>
+    </header>
+    <svg class="activity-elevation__chart" role="img" aria-label="Elevation over time"></svg>
+    <p class="activity-elevation__empty" hidden>Elevation data unavailable.</p>
+  </section>
+  <dl class="activity-stats" data-activity-stats>
+    <div>
+      <dt>Distance</dt>
+      <dd data-stat="distance">--</dd>
+      {% if activity.properties.distance %}<data class="p-x-distance" value="{{ activity.properties.distance }}" hidden></data>{% endif %}
+    </div>
+    <div>
+      <dt>Moving time</dt>
+      <dd data-stat="moving-time">--</dd>
+      {% if activity.properties.moving_time %}<data class="p-x-moving-time" value="{{ activity.properties.moving_time }}" hidden></data>{% endif %}
+    </div>
+    <div>
+      <dt>Stopped time</dt>
+      <dd data-stat="stopped-time">--</dd>
+    </div>
+    <div>
+      <dt>Total time</dt>
+      <dd data-stat="total-time">--</dd>
+      {% if activity.properties.elapsed_time %}<data class="p-x-elapsed-time" value="{{ activity.properties.elapsed_time }}" hidden></data>{% endif %}
+    </div>
+    <div>
+      <dt>Avg moving speed</dt>
+      <dd data-stat="avg-moving-speed">--</dd>
+      {% if activity.properties.average_speed %}<data class="p-x-average-speed" value="{{ activity.properties.average_speed }}" hidden></data>{% endif %}
+    </div>
+    <div>
+      <dt>Max speed</dt>
+      <dd data-stat="max-speed">--</dd>
+      {% if activity.properties.max_speed %}<data class="p-x-max-speed" value="{{ activity.properties.max_speed }}" hidden></data>{% endif %}
+    </div>
+    <div>
+      <dt>Elevation gain</dt>
+      <dd data-stat="elevation-gain">--</dd>
+      {% if activity.properties.total_elevation_gain %}<data class="p-x-total-elevation-gain" value="{{ activity.properties.total_elevation_gain }}" hidden></data>{% endif %}
+    </div>
+    <div>
+      <dt>Elevation loss</dt>
+      <dd data-stat="elevation-loss">--</dd>
+    </div>
+  </dl>
+  {% if activity.activity_type or activity.properties.average_heartrate or activity.properties.max_heartrate or activity.properties.kudos_count or activity.properties.start_latlng or activity.properties.end_latlng %}
+  <div class="activity-extra-stats" hidden>
+    {% if activity.activity_type %}<data class="p-activity-type" value="{{ activity.activity_type }}"></data>{% endif %}
+    {% if activity.properties.average_heartrate %}<data class="p-x-average-heartrate" value="{{ activity.properties.average_heartrate }}"></data>{% endif %}
+    {% if activity.properties.max_heartrate %}<data class="p-x-max-heartrate" value="{{ activity.properties.max_heartrate }}"></data>{% endif %}
+    {% if activity.properties.kudos_count %}<data class="p-x-kudos-count" value="{{ activity.properties.kudos_count }}"></data>{% endif %}
+    {% if activity.properties.start_latlng %}<data class="p-x-start-latlng" value="{{ activity.properties.start_latlng }}"></data>{% endif %}
+    {% if activity.properties.end_latlng %}<data class="p-x-end-latlng" value="{{ activity.properties.end_latlng }}"></data>{% endif %}
   </div>
-  <div>
-    <dt>Moving time</dt>
-    <dd data-stat="moving-time">--</dd>
-  </div>
-  <div>
-    <dt>Stopped time</dt>
-    <dd data-stat="stopped-time">--</dd>
-  </div>
-  <div>
-    <dt>Total time</dt>
-    <dd data-stat="total-time">--</dd>
-  </div>
-  <div>
-    <dt>Avg moving speed</dt>
-    <dd data-stat="avg-moving-speed">--</dd>
-  </div>
-  <div>
-    <dt>Max speed</dt>
-    <dd data-stat="max-speed">--</dd>
-  </div>
-  <div>
-    <dt>Elevation gain</dt>
-    <dd data-stat="elevation-gain">--</dd>
-  </div>
-  <div>
-    <dt>Elevation loss</dt>
-    <dd data-stat="elevation-loss">--</dd>
-  </div>
-</dl>
+  {% endif %}
+</div>
