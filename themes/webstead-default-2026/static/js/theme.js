@@ -195,7 +195,17 @@
         return;
       }
 
-      const map = L.map(el, { scrollWheelZoom: false }).setView([lat, lng], 14);
+      const isStatic = el.dataset.mapStatic === "true";
+      const map = L.map(el, {
+        scrollWheelZoom: false,
+        dragging: !isStatic,
+        touchZoom: !isStatic,
+        doubleClickZoom: !isStatic,
+        boxZoom: !isStatic,
+        keyboard: !isStatic,
+        zoomControl: !isStatic,
+        tap: !isStatic,
+      }).setView([lat, lng], 14);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution:
           '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',

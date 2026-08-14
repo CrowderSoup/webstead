@@ -1,7 +1,32 @@
-{% if photos %}
+{% if photos or checkin_data.latitude != None or activity.track_url %}
   <section class="photo-slider" aria-labelledby="gallery-title" role="region">
     <h2 id="gallery-title" class="sr-only">Photo gallery</h2>
     <ol class="slides" tabindex="0">
+      {% if checkin_data.latitude != None and checkin_data.longitude != None %}
+      <li class="slide slide--map" id="checkin-map-{{ post.slug }}">
+        <div
+          class="checkin-map"
+          data-checkin-map
+          data-map-static="true"
+          data-lat="{{ checkin_data.latitude }}"
+          data-lng="{{ checkin_data.longitude }}"
+          aria-label="Checkin map"
+        ></div>
+      </li>
+      {% endif %}
+      {% if activity.track_url %}
+      <li class="slide slide--map" id="activity-map-{{ post.slug }}">
+        <div
+          class="activity-map"
+          data-gpx-url="{{ activity.track_url }}"
+          data-map-static="true"
+          aria-label="Activity map"
+        ></div>
+      </li>
+      <li class="slide slide--stats" id="activity-stats-{{ post.slug }}">
+        {% include 'blog/_activity_stats.html' %}
+      </li>
+      {% endif %}
       {% for photo in photos %}
       <li class="slide">
         <figure id="photo-{{ photo.asset.id }}">
@@ -20,9 +45,22 @@
       </li>
       {% endfor %}
     </ol>
-    {% if photos|length > 1 %}
+    {% if photos|length > 1 or checkin_data.latitude != None or activity.track_url %}
     <nav class="slider-nav" aria-label="Slide navigation">
       <ol>
+        {% if checkin_data.latitude != None and checkin_data.longitude != None %}
+        <li>
+          <a href="#checkin-map-{{ post.slug }}" aria-label="Go to map">●</a>
+        </li>
+        {% endif %}
+        {% if activity.track_url %}
+        <li>
+          <a href="#activity-map-{{ post.slug }}" aria-label="Go to map">●</a>
+        </li>
+        <li>
+          <a href="#activity-stats-{{ post.slug }}" aria-label="Go to elevation stats">●</a>
+        </li>
+        {% endif %}
         {% for photo in photos %}
         <li>
           <a

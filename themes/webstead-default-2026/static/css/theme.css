@@ -734,6 +734,26 @@ html[data-motion="full"] .photo-slider.is-enhanced .slides {
   scroll-snap-align: start;
 }
 
+.slide--map,
+.slide--stats {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.slide--map .checkin-map,
+.slide--map .activity-map {
+  margin: 0;
+}
+
+.slide--stats .activity-elevation {
+  margin: 0 0 1rem;
+}
+
+.slide--stats .activity-stats {
+  margin: 0;
+}
+
 .photo-frame,
 .photo-container {
   position: relative;
@@ -1141,17 +1161,6 @@ html[data-motion="full"] .photo-slider.is-enhanced .slides {
   margin: 0.5rem 0 0;
   font-size: 0.85rem;
   color: var(--muted);
-}
-
-.activity-track {
-  margin: 0 0 1rem;
-  font-size: 0.95rem;
-  color: var(--muted);
-}
-
-.activity-track--missing {
-  opacity: 0.8;
-  font-style: italic;
 }
 
 .staff-controls {
@@ -1692,27 +1701,6 @@ html.js-enabled .interaction-form-panel.is-hidden {
   border: 1px solid var(--line);
   margin: 0.5rem 0 0;
   overflow: hidden;
-}
-
-.checkin-map-caption {
-  margin: 0;
-  padding: 0.65rem 0 1.3rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: baseline;
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
-.checkin-map-caption__place {
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.checkin-map-caption__coords {
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
