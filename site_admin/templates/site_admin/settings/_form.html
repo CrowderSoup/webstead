@@ -152,6 +152,19 @@
         {% endif %}
         {{ form.microsub_unfollow_removes_entries.errors }}
       </div>
+      <div>
+        <label
+          for="{{ form.activity_units.id_for_label }}"
+          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
+        >
+          Activity units
+        </label>
+        {{ form.activity_units }}
+        {% if form.activity_units.help_text %}
+          <p class="mt-1 text-xs text-(--admin-muted)">{{ form.activity_units.help_text }}</p>
+        {% endif %}
+        {{ form.activity_units.errors }}
+      </div>
     </div>
     <div class="space-y-5">
       <div>

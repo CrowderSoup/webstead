@@ -257,6 +257,19 @@ class SiteConfiguration(SingletonModel):
         default=False,
         help_text="If enabled, unfollowing a feed removes its previously fetched entries from the channel instead of leaving them visible.",
     )
+    ACTIVITY_UNITS_IMPERIAL = "imperial"
+    ACTIVITY_UNITS_METRIC = "metric"
+    ACTIVITY_UNITS_CHOICES = [
+        (ACTIVITY_UNITS_IMPERIAL, "Imperial (mi, ft)"),
+        (ACTIVITY_UNITS_METRIC, "Metric (km, m)"),
+    ]
+    activity_units = models.CharField(
+        "Activity units",
+        max_length=8,
+        choices=ACTIVITY_UNITS_CHOICES,
+        default=ACTIVITY_UNITS_IMPERIAL,
+        help_text="Units used when generating activity post content summaries (e.g. from Strava imports). Structured mf2 properties always stay in the source's native units.",
+    )
 
     def __str__(self):
         return "Site Configuration"

@@ -894,6 +894,7 @@ class SiteAdminProfileEditTests(TestCase):
                 "main_menu": str(main_menu.id),
                 "footer_menu": str(footer_menu.id),
                 "default_feed_kinds": "article,note",
+                "activity_units": "imperial",
             },
             follow=True,
         )

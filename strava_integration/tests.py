@@ -7,9 +7,10 @@ from django.urls import reverse
 from django.utils import timezone
 
 from blog.models import Post
+from core.models import SiteConfiguration
 from files.gpx import anonymize_gpx, GpxAnonymizeOptions
 from strava_integration.gpx import streams_to_gpx
-from strava_integration.importer import import_activity
+from strava_integration.importer import _activity_summary, _build_mf2, import_activity
 from strava_integration.models import StravaAccount, StravaActivity
 from strava_integration.tasks import handle_strava_webhook_event
 
@@ -60,6 +61,95 @@ class StreamsToGpxTests(TestCase):
             streams_to_gpx([], None, None, timezone.now())
 
 
+class ActivitySummaryTests(TestCase):
+    def test_imperial_summary_formats_distance_duration_pace_elevation(self):
+        activity = _activity_payload(
+            sport_type="Run",
+            distance=8368.6,  # ~5.2 mi
+            moving_time=2531,  # 42:11
+            total_elevation_gain=95.1,  # ~312 ft
+        )
+        summary = _activity_summary(activity, units=SiteConfiguration.ACTIVITY_UNITS_IMPERIAL)
+        self.assertEqual(summary, "Ran 5.2 mi in 42:11 (8:07/mi pace), 312 ft elevation gain.")
+
+    def test_metric_summary_formats_distance_duration_pace_elevation(self):
+        activity = _activity_payload(
+            sport_type="Ride",
+            distance=20000,  # 20 km
+            moving_time=3600,  # 1:00:00
+            total_elevation_gain=150,
+        )
+        summary = _activity_summary(activity, units=SiteConfiguration.ACTIVITY_UNITS_METRIC)
+        self.assertEqual(summary, "Rode 20.0 km in 1:00:00 (3:00/km pace), 150 m elevation gain.")
+
+    def test_no_distance_or_elevation_falls_back_to_verb_only(self):
+        activity = _activity_payload(sport_type="Workout", distance=0, moving_time=0, total_elevation_gain=0)
+        summary = _activity_summary(activity, units=SiteConfiguration.ACTIVITY_UNITS_IMPERIAL)
+        self.assertEqual(summary, "Did a Workout.")
+
+    def test_unknown_sport_type_still_produces_a_sentence(self):
+        activity = _activity_payload(sport_type="Velomobile", distance=0, moving_time=0, total_elevation_gain=0)
+        summary = _activity_summary(activity, units=SiteConfiguration.ACTIVITY_UNITS_IMPERIAL)
+        self.assertEqual(summary, "Did a Velomobile.")
+
+
+class BuildMf2Tests(TestCase):
+    def test_includes_extended_properties(self):
+        activity = _activity_payload(
+            distance=8368.6,
+            moving_time=2531,
+            elapsed_time=2600,
+            total_elevation_gain=95.1,
+            average_speed=3.3,
+            max_speed=4.1,
+            has_heartrate=True,
+            average_heartrate=152.3,
+            max_heartrate=178,
+            start_latlng=[45.0, -122.0],
+            end_latlng=[45.01, -122.01],
+            kudos_count=7,
+        )
+        mf2 = _build_mf2(activity, track_url="")
+        properties = mf2["activity"][0]["properties"]
+
+        self.assertEqual(properties["x-distance"], ["8368.6"])
+        self.assertEqual(properties["x-moving-time"], ["2531"])
+        self.assertEqual(properties["x-elapsed-time"], ["2600"])
+        self.assertEqual(properties["x-total-elevation-gain"], ["95.1"])
+        self.assertEqual(properties["x-average-speed"], ["3.3"])
+        self.assertEqual(properties["x-max-speed"], ["4.1"])
+        self.assertEqual(properties["x-average-heartrate"], ["152.3"])
+        self.assertEqual(properties["x-max-heartrate"], ["178"])
+        self.assertEqual(properties["x-start-latlng"], ["45.0,-122.0"])
+        self.assertEqual(properties["x-end-latlng"], ["45.01,-122.01"])
+        self.assertEqual(properties["x-kudos-count"], ["7"])
+
+    def test_omits_heartrate_when_has_heartrate_false(self):
+        activity = _activity_payload(
+            distance=1000,
+            has_heartrate=False,
+            average_heartrate=150,
+            max_heartrate=170,
+        )
+        mf2 = _build_mf2(activity, track_url="")
+        properties = mf2["activity"][0]["properties"]
+
+        self.assertNotIn("x-average-heartrate", properties)
+        self.assertNotIn("x-max-heartrate", properties)
+
+    def test_omits_fields_absent_from_activity(self):
+        activity = _activity_payload()  # no distance/elevation/etc.
+        mf2 = _build_mf2(activity, track_url="")
+        properties = mf2["activity"][0]["properties"]
+
+        for key in (
+            "x-distance", "x-moving-time", "x-elapsed-time", "x-total-elevation-gain",
+            "x-average-speed", "x-max-speed", "x-average-heartrate", "x-max-heartrate",
+            "x-start-latlng", "x-end-latlng", "x-kudos-count",
+        ):
+            self.assertNotIn(key, properties)
+
+
 class ImportActivityTests(TestCase):
     def setUp(self):
         self.account = _make_account()
@@ -77,7 +167,48 @@ class ImportActivityTests(TestCase):
         self.assertIsNotNone(post)
         self.assertEqual(post.kind, Post.ACTIVITY)
         self.assertEqual(post.title, "Morning Run")
+        self.assertEqual(post.content, "Felt good.")
         self.assertTrue(StravaActivity.objects.filter(strava_activity_id="1001").exists())
+
+    @patch("strava_integration.importer.client.list_activity_photos")
+    @patch("strava_integration.importer.client.get_activity_streams")
+    @patch("strava_integration.importer.client.get_activity")
+    def test_generates_content_summary_when_description_missing(self, mock_get_activity, mock_streams, mock_photos):
+        mock_get_activity.return_value = _activity_payload(
+            description="",
+            sport_type="Run",
+            distance=8368.6,
+            moving_time=2531,
+            total_elevation_gain=95.1,
+        )
+        mock_streams.return_value = {}
+        mock_photos.return_value = []
+
+        post = import_activity(self.account, 1001)
+
+        self.assertEqual(post.content, "Ran 5.2 mi in 42:11 (8:07/mi pace), 312 ft elevation gain.")
+
+    @patch("strava_integration.importer.client.list_activity_photos")
+    @patch("strava_integration.importer.client.get_activity_streams")
+    @patch("strava_integration.importer.client.get_activity")
+    def test_content_summary_respects_metric_site_setting(self, mock_get_activity, mock_streams, mock_photos):
+        config = SiteConfiguration.get_solo()
+        config.activity_units = SiteConfiguration.ACTIVITY_UNITS_METRIC
+        config.save(update_fields=["activity_units"])
+
+        mock_get_activity.return_value = _activity_payload(
+            description="",
+            sport_type="Ride",
+            distance=20000,
+            moving_time=3600,
+            total_elevation_gain=150,
+        )
+        mock_streams.return_value = {}
+        mock_photos.return_value = []
+
+        post = import_activity(self.account, 1001)
+
+        self.assertEqual(post.content, "Rode 20.0 km in 1:00:00 (3:00/km pace), 150 m elevation gain.")
 
     @patch("strava_integration.importer.client.list_activity_photos")
     @patch("strava_integration.importer.client.get_activity_streams")
