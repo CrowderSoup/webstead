@@ -38,6 +38,8 @@ _NAV_SECTIONS = {
         "site_settings",
         "theme_settings", "theme_git_refs", "theme_file_edit", "theme_install_detail",
         "menu_list", "menu_create", "menu_edit", "menu_item_delete",
+    },
+    "advanced": {
         "plugin_list", "plugin_install", "plugin_restart_status", "plugin_update", "plugin_remove",
         "widget_list", "widget_add", "widget_reorder", "widget_edit", "widget_delete",
         "indieauth_settings", "indieauth_client_create", "indieauth_client_detail", "indieauth_client_edit",
@@ -49,6 +51,25 @@ _NAV_SECTIONS = {
         "task_log_list", "task_log_detail",
         "micropub_error_list", "micropub_error_detail",
         "indieauth_error_list", "indieauth_error_detail",
+    },
+    "plugins": {
+        "plugin_list", "plugin_install", "plugin_restart_status", "plugin_update",
+        "plugin_remove", "widget_list", "widget_add", "widget_reorder",
+        "widget_edit", "widget_delete", "microsub_channel_list",
+        "microsub_channel_create", "microsub_channel_reorder",
+        "microsub_channel_detail", "microsub_channel_edit",
+        "microsub_channel_delete", "microsub_channel_mark_read",
+        "microsub_feed_add", "microsub_feed_remove", "microsub_import_opml",
+        "mastodon_settings", "mastodon_disconnect", "mastodon_manual_sync",
+    },
+    "diagnostics": {
+        "error_log_list", "error_log_detail", "task_log_list", "task_log_detail",
+        "micropub_error_list", "micropub_error_detail", "indieauth_error_list",
+        "indieauth_error_detail",
+    },
+    "indieauth": {
+        "indieauth_settings", "indieauth_client_create", "indieauth_client_detail",
+        "indieauth_client_edit",
     },
     "profile": {
         "profile_edit", "profile_url_delete", "profile_email_delete",
@@ -68,4 +89,13 @@ def nav_active(context, section):
     current = context.get("current", "")
     if current and current in _NAV_SECTIONS.get(section, set()):
         return "site-admin-side-link--active"
+    return ""
+
+
+@register.simple_tag(takes_context=True)
+def nav_open(context, section):
+    """Open a collapsible navigation section when one of its routes is active."""
+    current = context.get("current", "")
+    if current and current in _NAV_SECTIONS.get(section, set()):
+        return "open"
     return ""

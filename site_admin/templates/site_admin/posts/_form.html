@@ -11,6 +11,7 @@
   data-nearby-places-url="{{ nearby_places_url }}"
 >
   {% csrf_token %}
+  {{ form.publishing_action }}
   {% include "site_admin/posts/_form_messages.html" %}
   <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
     <div class="space-y-6">
@@ -333,12 +334,9 @@
           {{ form.published_on }}
           {{ form.published_on.errors }}
         </div>
-        <div class="mt-4 flex items-center gap-2">
-          <label class="flex items-center gap-2 text-sm font-semibold text-(--admin-muted)">
-            {{ form.save_as_draft }}
-            <span>Save as draft</span>
-          </label>
-        </div>
+        <p class="mt-2 text-xs text-(--admin-muted)">
+          Set a future time, then use Schedule below. Leave it alone to publish immediately.
+        </p>
         {% if mastodon_connected %}
         <div class="mt-4">
           <label
@@ -353,7 +351,7 @@
         {% endif %}
       </div>
 
-      <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs">
+      <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs" data-kind-section="like repost reply rsvp bookmark">
         <div class="text-xs font-semibold uppercase tracking-[0.2em] text-(--admin-muted)">Post targets</div>
         <p class="mt-1 text-xs text-(--admin-muted)">Only required for interaction-style posts.</p>
         <div class="mt-4 space-y-4">
@@ -404,40 +402,57 @@
         </div>
       </div>
 
-      <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs">
-        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-(--admin-muted)">Advanced</div>
+      <details class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs">
+        <summary class="cursor-pointer text-sm font-semibold text-(--admin-ink)">Advanced options</summary>
+        <p class="mt-1 text-xs text-(--admin-muted)">Change the URL or remove this post from the public site.</p>
         <div class="mt-4">
-          <label
-            for="{{ form.slug.id_for_label }}"
-            class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
-          >
-            Slug
-          </label>
+          <label for="{{ form.slug.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Slug</label>
           {{ form.slug }}
-          <p class="mt-1 text-xs text-(--admin-muted)">Leave blank to auto-generate.</p>
+          <p class="mt-1 text-xs text-(--admin-muted)">Leave blank to generate this automatically.</p>
           {{ form.slug.errors }}
         </div>
         <div class="mt-4 flex items-center gap-2">
           <label class="flex items-center gap-2 text-sm font-semibold text-(--admin-warn)">
             {{ form.deleted }}
-            <span>Mark as deleted</span>
+            <span>Remove from the public site</span>
           </label>
         </div>
-      </div>
+      </details>
     </div>
   </div>
-  <div class="sticky bottom-4 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-(--admin-border) bg-(--admin-surface) px-4 py-3 shadow-xs">
-    <button
-      type="submit"
-      class="rounded-xl bg-(--admin-accent) px-5 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)"
-    >
-      Save post
-    </button>
-    {% if post %}
-      <span class="text-xs text-(--admin-muted)">
-        {% if post.published_on %}Published{% else %}Draft{% endif %}
-      </span>
-    {% endif %}
+  <div class="sticky bottom-4 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-(--admin-border) bg-(--admin-surface) px-4 py-3 shadow-xs">
+    <div>
+      <div class="text-sm font-semibold text-(--admin-ink)">
+        {% if post and post.is_published %}Published post{% elif post and post.published_on %}Scheduled post{% else %}Draft post{% endif %}
+      </div>
+      <div class="text-xs text-(--admin-muted)">Choose exactly what should happen when you save.</div>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <button
+        type="submit"
+        name="publishing_action"
+        value="draft"
+        class="rounded-xl border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
+      >
+        {% if post and post.published_on %}Move to draft{% else %}Save draft{% endif %}
+      </button>
+      <button
+        type="submit"
+        name="publishing_action"
+        value="schedule"
+        class="rounded-xl border border-(--admin-accent) px-4 py-2 text-sm font-semibold text-(--admin-accent) transition hover:bg-(--admin-bg)"
+      >
+        Schedule
+      </button>
+      <button
+        type="submit"
+        name="publishing_action"
+        value="{% if post and post.published_on %}save{% else %}publish{% endif %}"
+        class="rounded-xl bg-(--admin-accent) px-5 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)"
+      >
+        {% if post and post.published_on %}Save changes{% else %}Publish now{% endif %}
+      </button>
+    </div>
   </div>
 </form>
 

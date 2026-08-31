@@ -507,40 +507,24 @@ def dashboard(request):
     if guard:
         return guard
 
-    recent_posts = Post.objects.order_by("-published_on", "-id")[:5]
-    summary_days = 7
-    end_date = timezone.localdate()
-    start_date = end_date - timedelta(days=summary_days - 1)
-    analytics_qs = (
-        Visit.objects.filter(
-            started_at__date__gte=start_date, started_at__date__lte=end_date
-        )
-        .exclude(path__startswith="/admin")
-        .exclude(path__startswith="/analytics")
-    )
-    analytics_stats = analytics_qs.aggregate(
-        total_page_views=Count("id"),
-        unique_sessions=Count("session_key", distinct=True),
-        unique_users=Count("user", distinct=True),
-        avg_duration=Avg("duration_seconds"),
-    )
-    analytics_labels, analytics_counts = _build_daily_counts(
-        analytics_qs, start_date, end_date
-    )
-    top_paths = (
-        analytics_qs.values("path")
-        .annotate(count=Count("id"))
-        .order_by("-count")[:5]
-    )
+    now = timezone.now()
+    visible_posts = Post.objects.filter(deleted=False)
+    drafts = visible_posts.filter(published_on__isnull=True).order_by("-id")[:5]
+    scheduled_posts = visible_posts.filter(published_on__gt=now).order_by(
+        "published_on"
+    )[:5]
+    recent_posts = visible_posts.filter(published_on__lte=now).order_by(
+        "-published_on", "-id"
+    )[:5]
     return render(
         request,
         "site_admin/dashboard.html",
         {
             "recent_posts": recent_posts,
-            "analytics_stats": analytics_stats,
-            "analytics_labels": analytics_labels,
-            "analytics_counts": analytics_counts,
-            "analytics_top_paths": top_paths,
+            "drafts": drafts,
+            "draft_count": visible_posts.filter(published_on__isnull=True).count(),
+            "scheduled_posts": scheduled_posts,
+            "scheduled_count": visible_posts.filter(published_on__gt=now).count(),
         },
     )
 
@@ -1493,8 +1477,10 @@ def _filtered_posts(request):
             posts = posts.filter(kind=kind)
         if status == "draft":
             posts = posts.filter(published_on__isnull=True, deleted=False)
+        elif status == "scheduled":
+            posts = posts.filter(published_on__gt=timezone.now(), deleted=False)
         elif status == "published":
-            posts = posts.filter(published_on__isnull=False, deleted=False)
+            posts = posts.filter(published_on__lte=timezone.now(), deleted=False)
         elif status == "deleted":
             posts = posts.filter(deleted=True)
     return form, posts
@@ -2679,11 +2665,19 @@ def post_edit(request, slug=None):
             saved_post = form.save(commit=False)
             if not saved_post.author_id:
                 saved_post.author = request.user
-            if (
+            publishing_action = form.cleaned_data.get("publishing_action")
+            if publishing_action == "draft":
+                saved_post.published_on = None
+            elif publishing_action == "publish":
+                saved_post.published_on = timezone.now()
+            elif (
                 is_new
+                and not publishing_action
                 and not saved_post.published_on
                 and not form.cleaned_data.get("save_as_draft")
             ):
+                # Preserve the historical default for clients and older forms
+                # that do not submit an explicit publishing action.
                 saved_post.published_on = timezone.now()
             if not content_value:
                 if selected_kind == Post.LIKE:

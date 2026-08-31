@@ -37,6 +37,7 @@ class PostFilterForm(forms.Form):
         choices=[
             ("", "Any status"),
             ("draft", "Draft"),
+            ("scheduled", "Scheduled"),
             ("published", "Published"),
             ("deleted", "Deleted"),
         ],
@@ -53,6 +54,16 @@ class PostFilterForm(forms.Form):
 
 
 class PostForm(forms.ModelForm):
+    publishing_action = forms.ChoiceField(
+        required=False,
+        choices=[
+            ("save", "Save changes"),
+            ("draft", "Save as draft"),
+            ("publish", "Publish now"),
+            ("schedule", "Schedule"),
+        ],
+        widget=forms.HiddenInput(),
+    )
     tags_text = forms.CharField(
         required=False,
         label="Tags",
@@ -108,6 +119,7 @@ class PostForm(forms.ModelForm):
         "checkin_latitude",
         "checkin_longitude",
         "tags_text",
+        "publishing_action",
         "save_as_draft",
         "published_on",
         "deleted",
@@ -160,6 +172,9 @@ class PostForm(forms.ModelForm):
         self.fields["content"].required = False
         self.fields["activity_type"].required = False
         self.fields["save_as_draft"].initial = not bool(self.instance.published_on)
+        self.fields["publishing_action"].initial = (
+            "save" if self.instance.published_on else "draft"
+        )
         for name, field in self.fields.items():
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.setdefault(
@@ -239,6 +254,22 @@ class PostForm(forms.ModelForm):
         if value and timezone.is_naive(value):
             return timezone.make_aware(value)
         return value
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if (
+            cleaned_data.get("publishing_action") == "schedule"
+            and not cleaned_data.get("published_on")
+        ):
+            self.add_error(
+                "published_on", "Choose a date and time to schedule this post."
+            )
+        elif (
+            cleaned_data.get("publishing_action") == "schedule"
+            and cleaned_data.get("published_on") <= timezone.now()
+        ):
+            self.add_error("published_on", "Choose a future date and time.")
+        return cleaned_data
 
     def clean_tags_text(self):
         tags_text = self.cleaned_data.get("tags_text", "")

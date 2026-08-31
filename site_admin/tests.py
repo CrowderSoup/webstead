@@ -127,6 +127,64 @@ class SiteAdminAccessTests(TestCase):
             html=False,
         )
 
+    def test_dashboard_prioritizes_drafts_scheduled_and_recent_posts(self):
+        self.client.force_login(self.staff)
+        draft = Post.objects.create(
+            title="Unfinished thought", slug="unfinished", kind=Post.NOTE, content="Draft"
+        )
+        scheduled = Post.objects.create(
+            title="Tomorrow's post",
+            slug="tomorrow",
+            kind=Post.ARTICLE,
+            content="Later",
+            published_on=timezone.now() + timedelta(days=1),
+        )
+        published = Post.objects.create(
+            title="Already live",
+            slug="already-live",
+            kind=Post.ARTICLE,
+            content="Live",
+            published_on=timezone.now() - timedelta(days=1),
+        )
+
+        response = self.client.get(reverse("site_admin:dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(draft, response.context["drafts"])
+        self.assertIn(scheduled, response.context["scheduled_posts"])
+        self.assertIn(published, response.context["recent_posts"])
+        self.assertContains(response, "What would you like to publish?")
+        self.assertNotContains(response, "Control Center")
+
+    def test_post_status_filters_separate_scheduled_from_published(self):
+        self.client.force_login(self.staff)
+        scheduled = Post.objects.create(
+            title="Future post",
+            slug="future-post",
+            kind=Post.ARTICLE,
+            content="Later",
+            published_on=timezone.now() + timedelta(days=1),
+        )
+        published = Post.objects.create(
+            title="Live post",
+            slug="live-post",
+            kind=Post.ARTICLE,
+            content="Now",
+            published_on=timezone.now() - timedelta(days=1),
+        )
+
+        scheduled_response = self.client.get(
+            reverse("site_admin:post_list"), {"status": "scheduled"}
+        )
+        published_response = self.client.get(
+            reverse("site_admin:post_list"), {"status": "published"}
+        )
+
+        self.assertContains(scheduled_response, scheduled.title)
+        self.assertNotContains(scheduled_response, published.title)
+        self.assertContains(published_response, published.title)
+        self.assertNotContains(published_response, scheduled.title)
+
 
 class SiteAdminPageTests(TestCase):
     def setUp(self):
@@ -737,6 +795,69 @@ class SiteAdminPostTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'name="in_reply_to"', count=1)
+
+    def test_post_composer_offers_explicit_publishing_actions(self):
+        self.client.force_login(self.staff)
+
+        response = self.client.get(reverse("site_admin:post_create"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Save draft")
+        self.assertContains(response, "Schedule")
+        self.assertContains(response, "Publish now")
+        self.assertNotContains(response, "Permanently delete")
+
+    def test_post_create_can_explicitly_save_a_draft(self):
+        self.client.force_login(self.staff)
+
+        response = self.client.post(
+            reverse("site_admin:post_create"),
+            {
+                "kind": Post.NOTE,
+                "content": "Still working on this",
+                "title": "",
+                "slug": "",
+                "publishing_action": "draft",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIsNone(Post.objects.get().published_on)
+
+    def test_post_create_can_explicitly_publish_now(self):
+        self.client.force_login(self.staff)
+
+        response = self.client.post(
+            reverse("site_admin:post_create"),
+            {
+                "kind": Post.NOTE,
+                "content": "Ready to go",
+                "title": "",
+                "slug": "",
+                "publishing_action": "publish",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIsNotNone(Post.objects.get().published_on)
+
+    def test_scheduling_requires_a_publish_time(self):
+        self.client.force_login(self.staff)
+
+        response = self.client.post(
+            reverse("site_admin:post_create"),
+            {
+                "kind": Post.NOTE,
+                "content": "For later",
+                "title": "",
+                "slug": "",
+                "publishing_action": "schedule",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Choose a date and time to schedule this post.")
+        self.assertEqual(Post.objects.count(), 0)
 
     def test_rsvp_post_uses_in_reply_to_as_event_url(self):
         self.client.force_login(self.staff)

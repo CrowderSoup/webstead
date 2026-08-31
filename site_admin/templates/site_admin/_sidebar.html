@@ -2,7 +2,7 @@
   <aside class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-4 shadow-xs">
     <div class="space-y-1">
       <div class="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-(--admin-muted)">
-        Quick Create
+        Write
       </div>
       <div class="grid grid-cols-2 gap-2">
         <a
@@ -20,10 +20,13 @@
       </div>
     </div>
 
-    <nav class="mt-5 space-y-4" aria-label="Site admin navigation">
+    <nav class="mt-5 space-y-5" aria-label="Site admin navigation">
       <div class="space-y-1">
-        <div class="px-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-(--admin-muted)">Main</div>
-        <a href="{% url 'site_admin:dashboard' %}" class="site-admin-side-link {% nav_active 'dashboard' %}">Dashboard</a>
+        <a href="{% url 'site_admin:dashboard' %}" class="site-admin-side-link {% nav_active 'dashboard' %}">Home</a>
+      </div>
+
+      <div class="space-y-1">
+        <div class="px-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-(--admin-muted)">Content</div>
         <a href="{% url 'site_admin:post_list' %}" class="site-admin-side-link {% nav_active 'posts' %}">Posts</a>
         <a href="{% url 'site_admin:page_list' %}" class="site-admin-side-link {% nav_active 'pages' %}">Pages</a>
         <a href="{% url 'site_admin:file_list' %}" class="site-admin-side-link {% nav_active 'files' %}">Files</a>
@@ -40,11 +43,24 @@
       </div>
 
       <div class="space-y-1">
-        <div class="px-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-(--admin-muted)">Operations</div>
+        <div class="px-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-(--admin-muted)">Insights</div>
         <a href="{% url 'site_admin:analytics_dashboard' %}" class="site-admin-side-link {% nav_active 'analytics' %}">Analytics</a>
+      </div>
+
+      <div class="space-y-1">
+        <div class="px-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-(--admin-muted)">Settings</div>
         <a href="{% url 'site_admin:site_settings' %}" class="site-admin-side-link {% nav_active 'settings' %}">Site Settings</a>
         <a href="{% url 'site_admin:profile_edit' %}" class="site-admin-side-link {% nav_active 'profile' %}">Profile</a>
       </div>
+
+      <details class="border-t border-(--admin-border) pt-3" {% nav_open 'advanced' %}>
+        <summary class="cursor-pointer px-3 py-2 text-xs font-semibold text-(--admin-muted)">Advanced tools</summary>
+        <div class="mt-1 space-y-1">
+          <a href="{% url 'site_admin:plugin_list' %}" class="site-admin-side-link {% nav_active 'plugins' %}">Plugins & integrations</a>
+          <a href="{% url 'site_admin:error_log_list' %}" class="site-admin-side-link {% nav_active 'diagnostics' %}">Diagnostics</a>
+          <a href="{% url 'site_admin:indieauth_settings' %}" class="site-admin-side-link {% nav_active 'indieauth' %}">IndieAuth</a>
+        </div>
+      </details>
     </nav>
   </aside>
 {% endwith %}
