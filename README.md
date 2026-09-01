@@ -84,6 +84,29 @@ The Micropub endpoint supports creating the following post types based on the Mi
 
 Webmentions are stored with their source and target URLs, along with an optional `wm-property` to mark likes, reposts, and replies. When you publish a post, outgoing Webmentions are automatically discovered and sent to any linked URLs (including `like-of`, `repost-of`, and `in-reply-to` targets).
 
+## Admin UX roadmap
+
+The first admin UX foundation is complete on the `admin-ux-foundation` branch. It covers the publishing workflow and post composer, posts workspace, moderation inbox, pages, media library, site settings, navigation editor, and profile editor. This work should be reviewed and merged into `dev` before starting the next layer. The `main` branch deploys Azure's blog, while `dev` deploys the more experimental installation, so do not target `main` directly with bleeding-edge admin work.
+
+### Immediate handoff
+
+1. Open a pull request from `admin-ux-foundation` into `dev`.
+2. Include screenshots of the major admin workflows and note that no migrations are required.
+3. Run the complete Django test suite and manually smoke-test the PR build at desktop and mobile widths.
+4. Merge the PR, update local `dev`, and create a fresh branch for the next layer.
+
+### Next layer
+
+Work through these in order, keeping each step reviewable:
+
+1. **Shared interaction patterns:** Extract repeated page headers, action bars, empty states, confirmation flows, and unsaved-change handling into reusable templates and JavaScript instead of maintaining page-specific copies.
+2. **Accessibility and keyboard pass:** Verify landmarks, heading order, labels, focus states, disclosure controls, dialogs, status announcements, color contrast, and complete keyboard operation across every redesigned screen.
+3. **Responsive and content-stress pass:** Test narrow phones, tablets, long titles and URLs, large record sets, validation errors, empty states, loading states, and failed requests. Fix overflow and action-priority problems consistently.
+4. **Cross-workflow polish:** Make success/error feedback, destructive actions, filtering, pagination, bulk actions, and save/navigation behavior consistent between posts, pages, media, moderation, settings, navigation, and profile.
+5. **Dashboard and onboarding:** Revisit the dashboard after the underlying workflows are stable. Surface useful publishing status and clear next actions, then add lightweight first-run guidance without duplicating navigation.
+
+For each checkpoint, add focused Django tests, run `uv run manage.py test site_admin.tests`, rebuild the admin stylesheet when template classes change, and browser-test the affected workflows in Chromium at desktop and mobile widths. Commit coherent checkpoints rather than combining the entire layer into one review.
+
 ## License
 
 MIT. See `LICENSE`.
