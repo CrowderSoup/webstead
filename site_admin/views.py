@@ -3798,6 +3798,10 @@ def _build_post_form_context(
         "gpx_blur_enabled": gpx_defaults["gpx_blur_enabled"],
         "gpx_remove_timestamps": gpx_defaults["gpx_remove_timestamps"],
         "mastodon_connected": MastodonAccount.get_active() is not None,
+        "show_schedule": (
+            request.POST.get("publishing_action") == "schedule"
+            or bool(post and post.published_on and post.published_on > timezone.now())
+        ),
     }
 
 

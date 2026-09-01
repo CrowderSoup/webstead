@@ -49,7 +49,7 @@
         <div class="mt-4 divide-y divide-(--admin-border)">
           {% for post in drafts %}
             <a href="{% url 'site_admin:post_edit' slug=post.slug %}" class="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
-              <div class="min-w-0"><div class="truncate font-semibold">{{ post.title }}</div><div class="mt-1 text-xs text-(--admin-muted)">{{ post.get_kind_display }}</div></div>
+              <div class="min-w-0"><div class="truncate font-semibold">{{ post|admin_post_title }}</div><div class="mt-1 text-xs text-(--admin-muted)">{{ post.get_kind_display }}</div></div>
               <span class="shrink-0 text-sm font-semibold text-(--admin-accent)">Continue</span>
             </a>
           {% empty %}
@@ -66,7 +66,7 @@
         <div class="mt-4 divide-y divide-(--admin-border)">
           {% for post in scheduled_posts %}
             <a href="{% url 'site_admin:post_edit' slug=post.slug %}" class="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
-              <div class="min-w-0"><div class="truncate font-semibold">{{ post.title }}</div><div class="mt-1 text-xs text-(--admin-muted)">{{ post.get_kind_display }}</div></div>
+              <div class="min-w-0"><div class="truncate font-semibold">{{ post|admin_post_title }}</div><div class="mt-1 text-xs text-(--admin-muted)">{{ post.get_kind_display }}</div></div>
               <time class="shrink-0 text-sm text-(--admin-muted)" datetime="{{ post.published_on|date:'c' }}">{{ post.published_on|date:"M j, g:i A" }}</time>
             </a>
           {% empty %}
@@ -84,7 +84,7 @@
       <div class="mt-4 divide-y divide-(--admin-border)">
         {% for post in recent_posts %}
           <div class="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
-            <div class="min-w-0"><a href="{% url 'site_admin:post_edit' slug=post.slug %}" class="font-semibold text-(--admin-ink)">{{ post.title }}</a><div class="mt-1 text-xs text-(--admin-muted)">{{ post.get_kind_display }} · {{ post.published_on|date:"M j, Y" }}</div></div>
+            <div class="min-w-0"><a href="{% url 'site_admin:post_edit' slug=post.slug %}" class="font-semibold text-(--admin-ink)">{{ post|admin_post_title }}</a><div class="mt-1 text-xs text-(--admin-muted)">{{ post.get_kind_display }} · {{ post.published_on|date:"M j, Y" }}</div></div>
             <a href="{{ post.get_absolute_url }}" class="text-sm font-semibold text-(--admin-accent)">View live</a>
           </div>
         {% empty %}

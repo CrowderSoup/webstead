@@ -22,8 +22,8 @@
         >
           Post type
         </label>
-        <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {% for kind, label in form.fields.kind.choices %}
+        <div class="mt-3 grid grid-cols-3 gap-2">
+          {% for kind, label in form.primary_kind_choices %}
             <button
               type="button"
               class="kind-pill flex items-center justify-center rounded-full border border-(--admin-border) px-3 py-2 text-sm font-semibold text-(--admin-ink) transition hover:border-(--admin-accent) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-(--admin-accent)"
@@ -34,6 +34,28 @@
             </button>
           {% endfor %}
         </div>
+        <details class="mt-3" data-more-kinds>
+          <summary class="cursor-pointer text-sm font-semibold text-(--admin-accent)">More post types</summary>
+          <div class="mt-3 space-y-4 rounded-2xl border border-(--admin-border) bg-(--admin-bg) p-4">
+            {% for group_label, choices in form.more_kind_groups %}
+              <div>
+                <div class="text-[11px] font-semibold uppercase tracking-wide text-(--admin-muted)">{{ group_label }}</div>
+                <div class="mt-2 flex flex-wrap gap-2">
+                  {% for kind, label in choices %}
+                    <button
+                      type="button"
+                      class="kind-pill rounded-full border border-(--admin-border) px-3 py-2 text-sm font-semibold text-(--admin-ink) transition hover:border-(--admin-accent) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-(--admin-accent)"
+                      data-kind-value="{{ kind }}"
+                      aria-pressed="false"
+                    >
+                      {{ label }}
+                    </button>
+                  {% endfor %}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </details>
         <p id="kind-hint" class="mt-3 text-xs text-(--admin-muted)">
           Choose the right flavor for this post.
         </p>
@@ -324,7 +346,10 @@
     <div class="space-y-5">
       <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs">
         <div class="text-xs font-semibold uppercase tracking-[0.2em] text-(--admin-muted)">Publishing</div>
-        <div class="mt-4">
+        <p class="mt-2 text-sm text-(--admin-muted)">
+          Save a draft or publish immediately below. Scheduling opens only when you need it.
+        </p>
+        <div class="mt-4 {% if not show_schedule %}hidden {% endif %}rounded-2xl border border-(--admin-border) bg-(--admin-bg) p-4" data-schedule-panel>
           <label
             for="{{ form.published_on.id_for_label }}"
             class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
@@ -333,10 +358,11 @@
           </label>
           {{ form.published_on }}
           {{ form.published_on.errors }}
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            <button type="submit" name="publishing_action" value="schedule" class="rounded-xl bg-(--admin-accent) px-4 py-2 text-sm font-semibold text-white">Confirm schedule</button>
+            <button type="button" class="px-3 py-2 text-sm font-semibold text-(--admin-muted)" data-schedule-cancel>Cancel</button>
+          </div>
         </div>
-        <p class="mt-2 text-xs text-(--admin-muted)">
-          Set a future time, then use Schedule below. Leave it alone to publish immediately.
-        </p>
         {% if mastodon_connected %}
         <div class="mt-4">
           <label
@@ -423,7 +449,7 @@
   <div class="sticky bottom-4 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-(--admin-border) bg-(--admin-surface) px-4 py-3 shadow-xs">
     <div>
       <div class="text-sm font-semibold text-(--admin-ink)">
-        {% if post and post.is_published %}Published post{% elif post and post.published_on %}Scheduled post{% else %}Draft post{% endif %}
+        {% with status=post|admin_post_status %}{% if status == "published" %}Published post{% elif status == "scheduled" %}Scheduled post{% else %}Draft post{% endif %}{% endwith %}
       </div>
       <div class="text-xs text-(--admin-muted)">Choose exactly what should happen when you save.</div>
     </div>
@@ -437,9 +463,8 @@
         {% if post and post.published_on %}Move to draft{% else %}Save draft{% endif %}
       </button>
       <button
-        type="submit"
-        name="publishing_action"
-        value="schedule"
+        type="button"
+        data-schedule-toggle
         class="rounded-xl border border-(--admin-accent) px-4 py-2 text-sm font-semibold text-(--admin-accent) transition hover:bg-(--admin-bg)"
       >
         Schedule
@@ -468,7 +493,12 @@
   const kindPills = Array.from(form.querySelectorAll("[data-kind-value]"));
   const kindHint = document.getElementById("kind-hint");
   const contentHelper = document.getElementById("content-helper");
+  const moreKinds = form.querySelector("[data-more-kinds]");
   const kindSections = Array.from(form.querySelectorAll("[data-kind-section]"));
+  const schedulePanel = form.querySelector("[data-schedule-panel]");
+  const scheduleToggle = form.querySelector("[data-schedule-toggle]");
+  const scheduleCancel = form.querySelector("[data-schedule-cancel]");
+  const publishTimeInput = form.querySelector("input[name='published_on']");
   const fileInput = form.querySelector("#photo-uploader");
   const dropzone = form.querySelector("[data-photo-dropzone]");
   const photoGrid = form.querySelector("#photo-grid");
@@ -548,6 +578,10 @@
     kindHint.textContent = hints[kind] || hints.note;
     contentHelper.textContent = contentHints[kind] || contentHints.note;
     setActivePill(kind);
+    if (moreKinds) {
+      const isPrimary = ["note", "article", "photo"].includes(kind);
+      moreKinds.open = !isPrimary;
+    }
     kindSections.forEach((section) => {
       const show = shouldShowSection(section, kind);
       section.classList.toggle("hidden", !show);
@@ -562,6 +596,27 @@
     kindSelect.addEventListener("change", () => setKindState(kindSelect.value));
     setKindState(kindSelect.value);
   }
+
+  function showSchedule() {
+    if (!schedulePanel) return;
+    schedulePanel.classList.remove("hidden");
+    scheduleToggle?.setAttribute("aria-expanded", "true");
+    publishTimeInput?.focus();
+  }
+
+  function hideSchedule() {
+    if (!schedulePanel) return;
+    schedulePanel.classList.add("hidden");
+    scheduleToggle?.setAttribute("aria-expanded", "false");
+    scheduleToggle?.focus();
+  }
+
+  scheduleToggle?.addEventListener("click", showSchedule);
+  scheduleCancel?.addEventListener("click", hideSchedule);
+  scheduleToggle?.setAttribute(
+    "aria-expanded",
+    String(Boolean(schedulePanel && !schedulePanel.classList.contains("hidden")))
+  );
 
   try {
     if (existingDataEl && existingDataEl.textContent.trim()) {
@@ -837,8 +892,49 @@
     removedExisting.forEach((id) => makeHidden("existing_remove_ids", id));
   }
 
-  form.addEventListener("submit", syncMetadataFields);
+  let formIsDirty = false;
+  let formIsSubmitting = false;
+
+  form.addEventListener("input", () => {
+    formIsDirty = true;
+  });
+  form.addEventListener("change", () => {
+    formIsDirty = true;
+  });
+  kindPills.forEach((pill) => {
+    pill.addEventListener("click", () => {
+      formIsDirty = true;
+    });
+  });
+
+  window.addEventListener("beforeunload", (event) => {
+    if (!formIsDirty || formIsSubmitting) return;
+    event.preventDefault();
+    event.returnValue = "";
+  });
+
+  form.addEventListener("submit", () => {
+    formIsSubmitting = true;
+    syncMetadataFields();
+  });
   form.addEventListener("htmx:beforeRequest", syncMetadataFields);
+  form.addEventListener("htmx:afterRequest", (event) => {
+    formIsSubmitting = event.detail.xhr.status === 204;
+  });
+  form.addEventListener("htmx:afterSwap", (event) => {
+    if (event.target.querySelector?.("[data-post-saved]")) {
+      formIsDirty = false;
+    }
+    const firstError = event.target.querySelector?.("[data-error-field]");
+    if (!firstError) return;
+    formIsDirty = true;
+    const fieldName = firstError.dataset.errorField;
+    const field = form.querySelector(`[name="${CSS.escape(fieldName)}"]`);
+    if (!field) return;
+    if (fieldName === "published_on") showSchedule();
+    field.scrollIntoView({ behavior: "smooth", block: "center" });
+    field.focus({ preventScroll: true });
+  });
 
   renderPhotos();
 

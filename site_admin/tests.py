@@ -807,6 +807,41 @@ class SiteAdminPostTests(TestCase):
         self.assertContains(response, "Publish now")
         self.assertNotContains(response, "Permanently delete")
 
+    def test_new_post_composer_defaults_to_note_and_groups_more_types(self):
+        self.client.force_login(self.staff)
+
+        response = self.client.get(reverse("site_admin:post_create"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["form"].initial["kind"], Post.NOTE)
+        self.assertContains(response, "More post types")
+        self.assertContains(response, "Respond")
+        self.assertContains(response, "Places &amp; events")
+
+    def test_admin_lists_replace_generated_title_with_content_excerpt(self):
+        self.client.force_login(self.staff)
+        Post.objects.create(
+            title="Note: 123456",
+            slug="generated-note",
+            kind=Post.NOTE,
+            content="A useful preview of this untitled note",
+        )
+
+        response = self.client.get(reverse("site_admin:post_list"))
+
+        self.assertContains(response, "A useful preview of this untitled note")
+        self.assertNotContains(response, "Note: 123456")
+
+    def test_composer_includes_progressive_scheduling_and_dirty_guard(self):
+        self.client.force_login(self.staff)
+
+        response = self.client.get(reverse("site_admin:post_create"))
+
+        self.assertContains(response, "data-schedule-toggle")
+        self.assertContains(response, "data-schedule-panel")
+        self.assertContains(response, 'window.addEventListener("beforeunload"')
+        self.assertContains(response, "data-error-field")
+
     def test_post_create_can_explicitly_save_a_draft(self):
         self.client.force_login(self.staff)
 

@@ -54,6 +54,31 @@ class PostFilterForm(forms.Form):
 
 
 class PostForm(forms.ModelForm):
+    PRIMARY_KIND_CHOICES = [
+        (Post.NOTE, "Note"),
+        (Post.ARTICLE, "Article"),
+        (Post.PHOTO, "Photo"),
+    ]
+    MORE_KIND_GROUPS = [
+        (
+            "Respond",
+            [
+                (Post.REPLY, "Reply"),
+                (Post.LIKE, "Like"),
+                (Post.REPOST, "Repost"),
+                (Post.RSVP, "RSVP"),
+            ],
+        ),
+        (
+            "Places & events",
+            [
+                (Post.CHECKIN, "Check-in"),
+                (Post.ACTIVITY, "Activity"),
+                (Post.EVENT, "Event"),
+            ],
+        ),
+        ("Save", [(Post.BOOKMARK, "Bookmark")]),
+    ]
     publishing_action = forms.ChoiceField(
         required=False,
         choices=[
@@ -167,6 +192,10 @@ class PostForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.primary_kind_choices = self.PRIMARY_KIND_CHOICES
+        self.more_kind_groups = self.MORE_KIND_GROUPS
+        if not self.instance.pk and not self.is_bound:
+            self.initial["kind"] = Post.NOTE
         self.fields["title"].required = False
         self.fields["slug"].required = False
         self.fields["content"].required = False
@@ -232,11 +261,6 @@ class PostForm(forms.ModelForm):
         if self.instance.pk and self.instance.published_on:
             local_time = timezone.localtime(self.instance.published_on)
             self.fields["published_on"].initial = local_time.strftime("%Y-%m-%dT%H:%M")
-        elif not self.instance.pk:
-            # New posts: mark the field so client-side JS fills in the
-            # browser's local time (server TIME_ZONE is UTC which is
-            # unlikely to match the author).
-            self.fields["published_on"].widget.attrs["data-default-now"] = "true"
 
     def clean_mastodon_syndicate(self):
         """Convert the Select string value back to True / False / None."""

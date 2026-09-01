@@ -1,6 +1,36 @@
+import re
+
 from django import template
+from django.utils import timezone
+from django.utils.text import Truncator
 
 register = template.Library()
+
+
+@register.filter
+def admin_post_title(post):
+    """Replace timestamp-generated titles with a useful admin-only excerpt."""
+    title = (getattr(post, "title", "") or "").strip()
+    kind_label = post.get_kind_display()
+    if re.fullmatch(rf"{re.escape(kind_label)}: \d+", title):
+        content = (getattr(post, "content", "") or "").strip()
+        if content:
+            return Truncator(content.replace("\n", " ")).chars(72)
+        return f"Untitled {kind_label.lower()}"
+    return title
+
+
+@register.filter
+def admin_post_status(post):
+    if post is None:
+        return "draft"
+    if post.deleted:
+        return "deleted"
+    if not post.published_on:
+        return "draft"
+    if post.published_on > timezone.now():
+        return "scheduled"
+    return "published"
 
 _NAV_SECTIONS = {
     "dashboard": {
