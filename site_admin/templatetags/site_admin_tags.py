@@ -21,6 +21,16 @@ def admin_post_title(post):
 
 
 @register.filter
+def admin_post_excerpt(post):
+    title = (getattr(post, "title", "") or "").strip()
+    kind_label = post.get_kind_display()
+    if re.fullmatch(rf"{re.escape(kind_label)}: \d+", title):
+        return ""
+    content = (getattr(post, "content", "") or "").strip().replace("\n", " ")
+    return Truncator(content).chars(110) if content else ""
+
+
+@register.filter
 def admin_post_status(post):
     if post is None:
         return "draft"
@@ -39,7 +49,7 @@ _NAV_SECTIONS = {
     "posts": {
         "post_list", "post_create", "post_edit", "post_delete",
         "post_permanent_delete", "post_upload_photo", "post_delete_photo",
-        "nearby_checkin_places",
+        "nearby_checkin_places", "post_bulk_action",
     },
     "pages": {
         "page_list", "page_create", "page_edit", "page_delete",

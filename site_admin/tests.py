@@ -185,6 +185,74 @@ class SiteAdminAccessTests(TestCase):
         self.assertContains(published_response, published.title)
         self.assertNotContains(published_response, scheduled.title)
 
+    def test_post_list_all_excludes_removed_posts(self):
+        self.client.force_login(self.staff)
+        Post.objects.create(
+            title="Visible post", slug="visible", content="Visible", kind=Post.NOTE
+        )
+        Post.objects.create(
+            title="Removed post",
+            slug="removed",
+            content="Removed",
+            kind=Post.NOTE,
+            deleted=True,
+        )
+
+        response = self.client.get(reverse("site_admin:post_list"))
+
+        self.assertContains(response, "Visible post")
+        self.assertNotContains(response, 'href="/admin/posts/removed/')
+
+    def test_post_bulk_actions_move_remove_and_restore(self):
+        self.client.force_login(self.staff)
+        post = Post.objects.create(
+            title="Bulk post",
+            slug="bulk-post",
+            content="Bulk",
+            kind=Post.NOTE,
+            published_on=timezone.now(),
+        )
+        bulk_url = reverse("site_admin:post_bulk_action")
+
+        response = self.client.post(
+            bulk_url,
+            {"post_ids": [post.id], "action": "draft", "next": "/admin/posts/?status=published"},
+        )
+        post.refresh_from_db()
+        self.assertIsNone(post.published_on)
+        self.assertEqual(response.url, "/admin/posts/?status=published")
+
+        self.client.post(bulk_url, {"post_ids": [post.id], "action": "remove"})
+        post.refresh_from_db()
+        self.assertTrue(post.deleted)
+
+        self.client.post(bulk_url, {"post_ids": [post.id], "action": "restore"})
+        post.refresh_from_db()
+        self.assertFalse(post.deleted)
+
+    def test_post_bulk_action_requires_selection(self):
+        self.client.force_login(self.staff)
+
+        response = self.client.post(
+            reverse("site_admin:post_bulk_action"), {"action": "remove"}, follow=True
+        )
+
+        self.assertContains(response, "Select at least one post.")
+
+    def test_post_edit_back_link_preserves_list_filters(self):
+        self.client.force_login(self.staff)
+        post = Post.objects.create(
+            title="Filtered post", slug="filtered-post", content="Body", kind=Post.NOTE
+        )
+        return_url = "/admin/posts/?status=draft&amp;kind=note"
+
+        response = self.client.get(
+            reverse("site_admin:post_edit", kwargs={"slug": post.slug}),
+            {"next": "/admin/posts/?status=draft&kind=note"},
+        )
+
+        self.assertContains(response, f'href="{return_url}"', html=False)
+
 
 class SiteAdminPageTests(TestCase):
     def setUp(self):

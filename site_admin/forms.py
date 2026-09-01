@@ -46,6 +46,9 @@ class PostFilterForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["q"].widget.attrs.setdefault(
+            "placeholder", "Search titles, content, or slugs"
+        )
         for field in self.fields.values():
             field.widget.attrs.setdefault(
                 "class",

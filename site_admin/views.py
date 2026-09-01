@@ -1465,14 +1465,18 @@ def page_delete(request, slug):
 
 
 def _filtered_posts(request):
-    form = PostFilterForm(request.GET or None)
+    form = PostFilterForm(request.GET)
     posts = Post.objects.order_by("-published_on", "-id")
     if form.is_valid():
         query = form.cleaned_data.get("q")
         kind = form.cleaned_data.get("kind")
         status = form.cleaned_data.get("status")
         if query:
-            posts = posts.filter(Q(title__icontains=query) | Q(slug__icontains=query))
+            posts = posts.filter(
+                Q(title__icontains=query)
+                | Q(slug__icontains=query)
+                | Q(content__icontains=query)
+            )
         if kind:
             posts = posts.filter(kind=kind)
         if status == "draft":
@@ -1483,6 +1487,8 @@ def _filtered_posts(request):
             posts = posts.filter(published_on__lte=timezone.now(), deleted=False)
         elif status == "deleted":
             posts = posts.filter(deleted=True)
+        else:
+            posts = posts.filter(deleted=False)
     return form, posts
 
 
@@ -1507,12 +1513,61 @@ def post_list(request):
         "page_obj": page_obj,
         "paginator": paginator,
         "base_query": _strip_page_query(request),
+        "current_status": request.GET.get("status", ""),
+        "status_counts": {
+            "all": Post.objects.filter(deleted=False).count(),
+            "draft": Post.objects.filter(deleted=False, published_on__isnull=True).count(),
+            "scheduled": Post.objects.filter(
+                deleted=False, published_on__gt=timezone.now()
+            ).count(),
+            "published": Post.objects.filter(
+                deleted=False, published_on__lte=timezone.now()
+            ).count(),
+            "deleted": Post.objects.filter(deleted=True).count(),
+        },
     }
 
     if request.headers.get("HX-Request"):
         return render(request, "site_admin/posts/_list.html", context)
 
     return render(request, "site_admin/posts/index.html", context)
+
+
+@require_POST
+def post_bulk_action(request):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    try:
+        post_ids = {int(value) for value in request.POST.getlist("post_ids")}
+    except (TypeError, ValueError):
+        post_ids = set()
+    action = request.POST.get("action", "")
+    posts = Post.objects.filter(id__in=post_ids)
+
+    if not post_ids:
+        messages.warning(request, "Select at least one post.")
+    elif action == "draft":
+        count = posts.filter(deleted=False).update(published_on=None)
+        messages.success(request, f"Moved {count} post(s) to drafts.")
+    elif action == "remove":
+        count = posts.filter(deleted=False).update(deleted=True)
+        messages.success(request, f"Removed {count} post(s) from the site.")
+    elif action == "restore":
+        count = posts.filter(deleted=True).update(deleted=False)
+        messages.success(request, f"Restored {count} post(s).")
+    else:
+        messages.error(request, "Choose a valid bulk action.")
+
+    return_url = request.POST.get("next", "")
+    if not url_has_allowed_host_and_scheme(
+        return_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ) or not return_url.startswith(reverse("site_admin:post_list")):
+        return_url = reverse("site_admin:post_list")
+    return redirect(return_url)
 
 
 def _filtered_webmentions(request, data=None):
@@ -3736,6 +3791,13 @@ def _build_post_form_context(
     existing_remove_ids = existing_remove_ids or set()
     uploaded_meta = uploaded_meta or {}
     gpx_defaults = _gpx_form_defaults(request)
+    post_list_url = request.GET.get("next", "")
+    if not url_has_allowed_host_and_scheme(
+        post_list_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ) or not post_list_url.startswith(reverse("site_admin:post_list")):
+        post_list_url = reverse("site_admin:post_list")
 
     photo_items = []
     activity_gpx = None
@@ -3798,6 +3860,7 @@ def _build_post_form_context(
         "gpx_blur_enabled": gpx_defaults["gpx_blur_enabled"],
         "gpx_remove_timestamps": gpx_defaults["gpx_remove_timestamps"],
         "mastodon_connected": MastodonAccount.get_active() is not None,
+        "post_list_url": post_list_url,
         "show_schedule": (
             request.POST.get("publishing_action") == "schedule"
             or bool(post and post.published_on and post.published_on > timezone.now())
