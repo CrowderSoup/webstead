@@ -10,6 +10,7 @@ from typing import Optional
 from django.contrib import messages
 from django.contrib.auth.views import LoginView, LogoutView
 from django.core.files.base import ContentFile
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.utils import timezone
@@ -20,6 +21,7 @@ from django.db.models.functions import TruncDate
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.forms import inlineformset_factory
+from django.forms.models import BaseInlineFormSet
 from django.views.decorators.http import require_http_methods, require_GET, require_POST
 
 from blog.models import Comment, Post
@@ -152,13 +154,29 @@ def _parse_gpx_anonymize_options(request):
     return options, errors
 
 
+class MenuItemInlineFormSet(BaseInlineFormSet):
+    def clean(self):
+        super().clean()
+        if any(self.errors):
+            return
+        urls = set()
+        for form in self.forms:
+            if not form.cleaned_data or form.cleaned_data.get("DELETE"):
+                continue
+            url = (form.cleaned_data.get("url") or "").strip()
+            if url in urls:
+                raise ValidationError("Each menu destination can appear only once.")
+            urls.add(url)
+
+
 MenuItemFormSet = inlineformset_factory(
     Menu,
     MenuItem,
     form=MenuItemForm,
+    formset=MenuItemInlineFormSet,
     fields=["text", "url", "weight"],
     extra=0,
-    can_delete=False,
+    can_delete=True,
 )
 HCardUrlFormSet = inlineformset_factory(
     HCard,
@@ -1321,6 +1339,20 @@ def menu_edit(request, menu_id=None):
         form = MenuForm(instance=menu)
         formset = MenuItemFormSet(instance=menu, prefix="items")
 
+    settings_obj = SiteConfiguration.get_solo()
+    path_suggestions = [
+        {"url": reverse("page", kwargs={"slug": page.slug}), "label": f"Page: {page.title}"}
+        for page in Page.objects.order_by("title")
+    ]
+    path_suggestions.extend(
+        {
+            "url": post.get_absolute_url(),
+            "label": f"Post: {post.title or post.slug}",
+        }
+        for post in Post.objects.filter(deleted=False, published_on__lte=timezone.now())
+        .order_by("-published_on")[:50]
+    )
+
     return render(
         request,
         "site_admin/menus/edit.html",
@@ -1328,6 +1360,9 @@ def menu_edit(request, menu_id=None):
             "form": form,
             "formset": formset,
             "menu": menu,
+            "is_main_menu": bool(menu and settings_obj.main_menu_id == menu.id),
+            "is_footer_menu": bool(menu and settings_obj.footer_menu_id == menu.id),
+            "path_suggestions": path_suggestions,
         },
     )
 
@@ -1341,6 +1376,30 @@ def menu_item_delete(request, item_id):
     item = get_object_or_404(MenuItem, pk=item_id)
     item.delete()
     return HttpResponse("")
+
+
+@require_POST
+def menu_delete(request, menu_id):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    menu = get_object_or_404(Menu, pk=menu_id)
+    settings_obj = SiteConfiguration.get_solo()
+    uses = []
+    if settings_obj.main_menu_id == menu.id:
+        uses.append("main navigation")
+    if settings_obj.footer_menu_id == menu.id:
+        uses.append("footer navigation")
+    if uses:
+        messages.error(
+            request,
+            f"This menu is still assigned to {' and '.join(uses)}. Choose another menu in General settings first.",
+        )
+        return redirect("site_admin:menu_edit", menu_id=menu.id)
+    menu.delete()
+    messages.success(request, "Menu deleted.")
+    return redirect("site_admin:menu_list")
 
 
 @require_http_methods(["GET"])

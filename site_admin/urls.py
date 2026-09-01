@@ -100,6 +100,7 @@ urlpatterns = [
     path("settings/menus/", views.menu_list, name="menu_list"),
     path("settings/menus/new/", views.menu_edit, name="menu_create"),
     path("settings/menus/<int:menu_id>/", views.menu_edit, name="menu_edit"),
+    path("settings/menus/<int:menu_id>/delete/", views.menu_delete, name="menu_delete"),
     path(
         "settings/menus/items/<int:item_id>/delete/",
         views.menu_item_delete,

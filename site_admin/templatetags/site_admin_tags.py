@@ -77,7 +77,7 @@ _NAV_SECTIONS = {
     "settings": {
         "site_settings",
         "theme_settings", "theme_git_refs", "theme_file_edit", "theme_install_detail",
-        "menu_list", "menu_create", "menu_edit", "menu_item_delete",
+        "menu_list", "menu_create", "menu_edit", "menu_item_delete", "menu_delete",
     },
     "advanced": {
         "plugin_list", "plugin_install", "plugin_restart_status", "plugin_update", "plugin_remove",

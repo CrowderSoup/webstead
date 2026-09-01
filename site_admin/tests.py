@@ -24,6 +24,7 @@ from core.models import (
     HCard,
     HCardPhoto,
     Menu,
+    MenuItem,
     Page,
     RequestErrorLog,
     SiteConfiguration,
@@ -1483,6 +1484,119 @@ class SiteAdminFileDeleteTests(TestCase):
                     Attachment.objects.filter(asset=asset).count(),
                     1,
                 )
+
+
+class SiteAdminMenuBuilderTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.staff = get_user_model().objects.create_user(
+            username="menu-editor",
+            password="password",
+            is_staff=True,
+        )
+        self.client.force_login(self.staff)
+
+    def _menu_data(self, menu, items):
+        data = {
+            "title": menu.title,
+            "items-TOTAL_FORMS": str(len(items)),
+            "items-INITIAL_FORMS": str(menu.menuitem_set.count()),
+            "items-MIN_NUM_FORMS": "0",
+            "items-MAX_NUM_FORMS": "1000",
+        }
+        for index, item in enumerate(items):
+            data[f"items-{index}-id"] = str(item.get("id", ""))
+            data[f"items-{index}-text"] = item["text"]
+            data[f"items-{index}-url"] = item["url"]
+            data[f"items-{index}-weight"] = str(item["weight"])
+            if item.get("delete"):
+                data[f"items-{index}-DELETE"] = "on"
+        return data
+
+    def test_menu_editor_has_suggestions_usage_and_visual_ordering(self):
+        menu = Menu.objects.create(title="Primary")
+        MenuItem.objects.create(menu=menu, text="About", url="/about/", weight=0)
+        Page.objects.create(
+            title="Contact",
+            slug="contact",
+            content="Contact",
+            published_on=timezone.now(),
+            author=self.staff,
+        )
+        settings_obj = SiteConfiguration.get_solo()
+        settings_obj.main_menu = menu
+        settings_obj.save()
+
+        response = self.client.get(
+            reverse("site_admin:menu_edit", kwargs={"menu_id": menu.id})
+        )
+
+        self.assertContains(response, "Main navigation")
+        self.assertContains(response, "Move up")
+        self.assertContains(response, "Drag items")
+        self.assertContains(response, "/contact/")
+        self.assertNotContains(response, ">Order<")
+
+    def test_menu_save_reorders_and_removes_items(self):
+        menu = Menu.objects.create(title="Primary")
+        first = MenuItem.objects.create(menu=menu, text="First", url="/first/", weight=0)
+        second = MenuItem.objects.create(menu=menu, text="Second", url="/second/", weight=10)
+        data = self._menu_data(
+            menu,
+            [
+                {"id": first.id, "text": "First", "url": "/first/", "weight": 10, "delete": True},
+                {"id": second.id, "text": "Second", "url": "/second/", "weight": 0},
+            ],
+        )
+
+        response = self.client.post(
+            reverse("site_admin:menu_edit", kwargs={"menu_id": menu.id}), data
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(MenuItem.objects.filter(id=first.id).exists())
+        second.refresh_from_db()
+        self.assertEqual(second.weight, 0)
+
+    def test_menu_rejects_duplicate_destinations(self):
+        menu = Menu.objects.create(title="Primary")
+        data = self._menu_data(
+            menu,
+            [
+                {"text": "One", "url": "/same/", "weight": 0},
+                {"text": "Two", "url": "/same/", "weight": 10},
+            ],
+        )
+
+        response = self.client.post(
+            reverse("site_admin:menu_edit", kwargs={"menu_id": menu.id}), data
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Each menu destination can appear only once.")
+
+    def test_assigned_menu_cannot_be_deleted(self):
+        menu = Menu.objects.create(title="Primary")
+        settings_obj = SiteConfiguration.get_solo()
+        settings_obj.main_menu = menu
+        settings_obj.save()
+
+        response = self.client.post(
+            reverse("site_admin:menu_delete", kwargs={"menu_id": menu.id})
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(Menu.objects.filter(id=menu.id).exists())
+
+    def test_unassigned_menu_can_be_deleted(self):
+        menu = Menu.objects.create(title="Unused")
+
+        response = self.client.post(
+            reverse("site_admin:menu_delete", kwargs={"menu_id": menu.id})
+        )
+
+        self.assertRedirects(response, reverse("site_admin:menu_list"))
+        self.assertFalse(Menu.objects.filter(id=menu.id).exists())
 
 
 class SiteAdminThemeFileTests(TestCase):
