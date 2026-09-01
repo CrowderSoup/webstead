@@ -184,7 +184,7 @@ HCardUrlFormSet = inlineformset_factory(
     form=HCardUrlForm,
     fields=["value", "kind"],
     extra=0,
-    can_delete=False,
+    can_delete=True,
 )
 HCardEmailFormSet = inlineformset_factory(
     HCard,
@@ -192,7 +192,7 @@ HCardEmailFormSet = inlineformset_factory(
     form=HCardEmailForm,
     fields=["value"],
     extra=0,
-    can_delete=False,
+    can_delete=True,
 )
 
 ALLOWED_SUFFIXES = (".html", ".htm", ".txt", ".xml", ".md", ".css", ".js", ".json")

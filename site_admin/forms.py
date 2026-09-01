@@ -1126,6 +1126,9 @@ class HCardForm(forms.ModelForm):
                 "class",
                 "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
             )
+        self.fields["uid"].help_text = (
+            "Your permanent public identity URL, usually the homepage of this site."
+        )
 
 
 class HCardUrlForm(forms.ModelForm):

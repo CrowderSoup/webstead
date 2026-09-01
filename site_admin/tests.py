@@ -22,7 +22,9 @@ from analytics.models import (
 from blog.models import Comment, Post
 from core.models import (
     HCard,
+    HCardEmail,
     HCardPhoto,
+    HCardUrl,
     Menu,
     MenuItem,
     Page,
@@ -1132,6 +1134,58 @@ class SiteAdminProfileEditTests(TestCase):
             f"{prefix}-MIN_NUM_FORMS": "0",
             f"{prefix}-MAX_NUM_FORMS": "1000",
         }
+
+    def test_profile_edit_prioritizes_public_identity_and_privacy(self):
+        self.client.force_login(self.staff)
+
+        response = self.client.get(reverse("site_admin:profile_edit"))
+
+        self.assertContains(response, "Public identity")
+        self.assertContains(response, "Public preview")
+        self.assertContains(response, "More identity details")
+        self.assertContains(response, "Canonical profile URL")
+        self.assertContains(response, "Unsaved changes")
+        self.assertContains(response, "may be published publicly")
+        for field_name in response.context["form"].fields:
+            self.assertContains(response, f'name="{field_name}"', html=False)
+
+    def test_profile_edit_defers_existing_contact_deletions_until_save(self):
+        self.client.force_login(self.staff)
+        hcard = HCard.objects.create(
+            user=self.staff,
+            name="Editor",
+            uid="https://example.com/",
+        )
+        profile_url = HCardUrl.objects.create(
+            hcard=hcard,
+            value="https://social.example.com/editor",
+            kind=HCardUrl.OTHER,
+        )
+        email = HCardEmail.objects.create(hcard=hcard, value="public@example.com")
+
+        get_response = self.client.get(reverse("site_admin:profile_edit"))
+        self.assertContains(get_response, 'name="urls-0-DELETE"', html=False)
+        self.assertContains(get_response, 'name="emails-0-DELETE"', html=False)
+        self.assertNotContains(get_response, "hx-post")
+
+        data = {
+            "name": "Editor",
+            "uid": "https://example.com/",
+            **self._formset_management_data("urls", total=1, initial=1),
+            "urls-0-id": str(profile_url.id),
+            "urls-0-value": profile_url.value,
+            "urls-0-kind": profile_url.kind,
+            "urls-0-DELETE": "on",
+            **self._formset_management_data("emails", total=1, initial=1),
+            "emails-0-id": str(email.id),
+            "emails-0-value": email.value,
+            "emails-0-DELETE": "on",
+        }
+        response = self.client.post(reverse("site_admin:profile_edit"), data)
+
+        self.assertRedirects(response, reverse("site_admin:profile_edit"))
+        self.assertFalse(HCardUrl.objects.filter(pk=profile_url.pk).exists())
+        self.assertFalse(HCardEmail.objects.filter(pk=email.pk).exists())
 
     def test_profile_edit_saves_photos(self):
         self.client.force_login(self.staff)
