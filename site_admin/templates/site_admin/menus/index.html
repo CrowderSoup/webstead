@@ -47,6 +47,7 @@
                       </span>
                     {% endif %}
                   </div>
+                  {% if menu.menuitem_set.all %}<ol class="mt-3 space-y-1 text-sm text-(--admin-muted)">{% for item in menu.menuitem_set.all|slice:":3" %}<li><span class="font-medium text-(--admin-ink)">{{ item.text }}</span> → {{ item.url|truncatechars:42 }}</li>{% endfor %}{% if menu.menuitem_set.count > 3 %}<li>+ {{ menu.menuitem_set.count|add:"-3" }} more</li>{% endif %}</ol>{% endif %}
                 </div>
                 <a
                   href="{% url 'site_admin:menu_edit' menu_id=menu.id %}"

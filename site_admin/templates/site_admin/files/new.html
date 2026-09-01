@@ -12,7 +12,7 @@
       </div>
       <div class="flex flex-wrap items-center gap-3">
         <a
-          href="{% url 'site_admin:file_list' %}"
+          href="{{ file_list_url }}"
           class="rounded-full border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
         >
           Back to files
@@ -28,6 +28,7 @@
       {% endif %}
       <form method="post" enctype="multipart/form-data" class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         {% csrf_token %}
+        <input type="hidden" name="next" value="{{ file_list_url }}">
         <div class="space-y-5">
           <div class="rounded-2xl border border-(--admin-border) bg-white p-5">
             <div class="text-xs font-semibold uppercase tracking-[0.2em] text-(--admin-muted)">Basics</div>
@@ -49,6 +50,7 @@
                 File
               </label>
               {{ form.file }}
+              <p class="mt-2 text-xs text-(--admin-muted)">Choose a file or drop it onto the preview area.</p>
               {{ form.file.errors }}
             </div>
           </div>
@@ -62,6 +64,7 @@
                 Alt text
               </label>
               {{ form.alt_text }}
+              <p class="mt-1 text-xs text-(--admin-muted)">For images, describe what the image communicates. Leave blank when it is purely decorative.</p>
               {{ form.alt_text.errors }}
             </div>
             <div class="mt-4">
@@ -94,10 +97,13 @@
             </button>
           </div>
         </div>
-        <div class="rounded-2xl border border-dashed border-(--admin-border) bg-white p-6 text-sm text-(--admin-muted)">
-          Upload a file to preview it here.
+        <div data-upload-dropzone class="flex min-h-72 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-(--admin-border) bg-white p-6 text-center text-sm text-(--admin-muted) transition">
+          <img data-upload-preview class="mb-4 hidden max-h-64 w-full rounded-xl object-contain" alt="Selected upload preview">
+          <strong data-upload-name class="text-(--admin-ink)">Drop a file here</strong>
+          <span class="mt-1 text-xs">or use the file picker</span>
         </div>
       </form>
     </section>
   </div>
 {% endblock %}
+{% block body_end %}<script>(()=>{const input=document.querySelector("[data-file-input]");const zone=document.querySelector("[data-upload-dropzone]");const preview=document.querySelector("[data-upload-preview]");const name=document.querySelector("[data-upload-name]");if(!input||!zone)return;const show=(file)=>{if(!file)return;name.textContent=file.name;if(file.type.startsWith("image/")){preview.src=URL.createObjectURL(file);preview.classList.remove("hidden");}else{preview.classList.add("hidden");}};input.addEventListener("change",()=>show(input.files[0]));zone.addEventListener("dragover",(event)=>{event.preventDefault();zone.classList.add("border-(--admin-accent)");});zone.addEventListener("dragleave",()=>zone.classList.remove("border-(--admin-accent)"));zone.addEventListener("drop",(event)=>{event.preventDefault();zone.classList.remove("border-(--admin-accent)");if(!event.dataTransfer.files.length)return;const transfer=new DataTransfer();transfer.items.add(event.dataTransfer.files[0]);input.files=transfer.files;show(input.files[0]);});})();</script>{% endblock %}

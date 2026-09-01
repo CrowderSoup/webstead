@@ -1,275 +1,43 @@
 <form id="menu-form" method="post" class="flex flex-col gap-6" data-menu-form>
   {% csrf_token %}
-  {% if form.non_field_errors %}
-    <div class="rounded-2xl border border-(--admin-border) bg-(--admin-bg) px-4 py-3 text-sm text-(--admin-warn)">
-      {{ form.non_field_errors }}
-    </div>
-  {% endif %}
-  <div>
-    <label
-      for="{{ form.title.id_for_label }}"
-      class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
-    >
-      Menu name
-    </label>
-    {{ form.title }}
-    {{ form.title.errors }}
-  </div>
-
-  <div class="flex flex-wrap items-center justify-between gap-3">
-    <div>
-      <div class="text-sm font-semibold">Menu items</div>
-      <p class="mt-1 text-xs text-(--admin-muted)">Add links and adjust ordering. Lower numbers appear first.</p>
-    </div>
-    <button
-      type="button"
-      class="rounded-full border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
-      data-add-menu-item
-    >
-      Add item
-    </button>
-  </div>
-
-  {{ formset.management_form }}
-  {% if formset.non_form_errors %}
-    <div class="rounded-2xl border border-(--admin-border) bg-(--admin-bg) px-4 py-3 text-sm text-(--admin-warn)">
-      {{ formset.non_form_errors }}
-    </div>
-  {% endif %}
-
-  <div class="grid gap-4" data-menu-items>
-    {% for item_form in formset %}
-      <div class="rounded-2xl border border-(--admin-border) bg-white p-4" data-menu-item>
-        {{ item_form.id }}
-        <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_140px]">
-          <div>
-            <label
-              for="{{ item_form.text.id_for_label }}"
-              class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
-            >
-              Label
-            </label>
-            {{ item_form.text }}
-            {{ item_form.text.errors }}
-          </div>
-          <div>
-            <label
-              for="{{ item_form.url.id_for_label }}"
-              class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
-            >
-              URL
-            </label>
-            {{ item_form.url }}
-            {{ item_form.url.errors }}
-          </div>
-          <div>
-            <label
-              for="{{ item_form.weight.id_for_label }}"
-              class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
-            >
-              Order
-            </label>
-            {{ item_form.weight }}
-            {{ item_form.weight.errors }}
-          </div>
+  {% if form.errors or formset.non_form_errors %}<div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"><p class="font-semibold">The menu needs attention.</p>{{ form.non_field_errors }}{{ formset.non_form_errors }}</div>{% endif %}
+  <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+    <div class="space-y-5">
+      <section class="rounded-2xl border border-(--admin-border) bg-white p-5">
+        <label for="{{ form.title.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Menu name</label>{{ form.title }}{{ form.title.errors }}
+      </section>
+      <section class="rounded-2xl border border-(--admin-border) bg-white p-5">
+        <div class="flex flex-wrap items-start justify-between gap-3"><div><h2 class="text-lg font-semibold">Navigation items</h2><p class="mt-1 text-sm text-(--admin-muted)">Drag items or use Move up and Move down. The visible order is saved automatically.</p></div><button type="button" data-add-menu-item class="rounded-xl border border-(--admin-border) px-4 py-2 text-sm font-semibold hover:bg-(--admin-bg)">Add link</button></div>
+        {{ formset.management_form }}
+        <div class="mt-5 space-y-3" data-menu-items>
+          {% for item_form in formset %}
+            <article draggable="true" class="rounded-2xl border border-(--admin-border) bg-(--admin-surface) p-4" data-menu-item>
+              {{ item_form.id }}<div class="hidden">{{ item_form.DELETE }}</div>
+              <div class="flex items-center justify-between gap-3"><div class="flex items-center gap-2"><span class="cursor-grab text-(--admin-muted)" title="Drag to reorder" aria-hidden="true">⋮⋮</span><span class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)" data-position-label>Item {{ forloop.counter }}</span></div><span data-link-kind class="text-xs font-semibold text-(--admin-muted)"></span></div>
+              <div class="mt-3 grid gap-3 md:grid-cols-2"><div><label for="{{ item_form.text.id_for_label }}" class="text-xs font-semibold text-(--admin-muted)">Label</label>{{ item_form.text }}{{ item_form.text.errors }}</div><div><label for="{{ item_form.url.id_for_label }}" class="text-xs font-semibold text-(--admin-muted)">Destination</label>{{ item_form.url }}{{ item_form.url.errors }}</div></div>
+              <div class="mt-3 flex flex-wrap items-center justify-between gap-2"><div class="flex gap-2"><button type="button" data-move-up class="rounded-lg border border-(--admin-border) px-2.5 py-1 text-xs font-semibold">Move up</button><button type="button" data-move-down class="rounded-lg border border-(--admin-border) px-2.5 py-1 text-xs font-semibold">Move down</button></div><button type="button" data-remove-menu-item class="text-xs font-semibold text-(--admin-warn)">Remove</button></div>
+              <div class="hidden">{{ item_form.weight }}</div>
+            </article>
+          {% endfor %}
         </div>
-        <div class="mt-3 flex items-center justify-between gap-2">
-          <button
-            type="button"
-            class="inline-flex items-center gap-2 rounded-full border border-(--admin-border) px-3 py-1 text-xs font-semibold text-(--admin-warn) transition hover:bg-(--admin-bg)"
-            {% if item_form.instance.pk %}
-              hx-post="{% url 'site_admin:menu_item_delete' item_id=item_form.instance.pk %}"
-              hx-target="closest [data-menu-item]"
-              hx-swap="delete"
-              hx-confirm="Remove this menu item?"
-            {% else %}
-              data-remove-menu-item
-            {% endif %}
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 6h18"></path>
-              <path d="M8 6V4h8v2"></path>
-              <path d="M6 6l1 14h10l1-14"></path>
-            </svg>
-            <span class="menu-item__label">Remove item</span>
-            <span class="menu-item__deleting hidden text-(--admin-muted)">Deleting...</span>
-          </button>
-        </div>
-      </div>
-    {% endfor %}
+        <div data-menu-empty class="mt-5 rounded-2xl border border-dashed border-(--admin-border) px-5 py-8 text-center text-sm text-(--admin-muted){% if formset.total_form_count %} hidden{% endif %}">No links yet. Add the first destination visitors should see.</div>
+      </section>
+    </div>
+    <aside class="space-y-4">
+      <section class="rounded-2xl border border-(--admin-border) bg-white p-4"><h2 class="text-sm font-semibold">Where it appears</h2>{% if menu %}<div class="mt-3 flex flex-wrap gap-2">{% if is_main_menu %}<span class="rounded-full bg-(--admin-bg) px-3 py-1 text-xs font-semibold">Main navigation</span>{% endif %}{% if is_footer_menu %}<span class="rounded-full bg-(--admin-bg) px-3 py-1 text-xs font-semibold">Footer navigation</span>{% endif %}{% if not is_main_menu and not is_footer_menu %}<span class="text-sm text-(--admin-muted)">Not currently assigned.</span>{% endif %}</div><a href="{% url 'site_admin:site_settings' %}" class="mt-3 inline-block text-sm font-semibold text-(--admin-accent)">Change assignments</a>{% else %}<p class="mt-2 text-sm text-(--admin-muted)">Save the menu, then assign it in General settings.</p>{% endif %}</section>
+      <section class="rounded-2xl border border-(--admin-border) bg-white p-4"><h2 class="text-sm font-semibold">Destination tips</h2><p class="mt-2 text-sm text-(--admin-muted)">Choose a suggested page or post, use a root-relative path such as <code>/about/</code>, or paste a complete external URL.</p></section>
+    </aside>
   </div>
-
-  <div class="rounded-2xl border border-dashed border-(--admin-border) bg-(--admin-bg) px-4 py-5 text-center text-sm text-(--admin-muted){% if formset.total_form_count %} hidden{% endif %}" data-menu-empty>
-    No items yet. Add your first link.
-  </div>
-
-  <div class="flex flex-wrap items-center gap-3">
-    <button
-      type="submit"
-      class="rounded-full bg-(--admin-accent) px-5 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)"
-    >
-      Save menu
-    </button>
-    {% if menu %}
-      <span class="text-xs text-(--admin-muted)">{{ formset.total_form_count }} item{{ formset.total_form_count|pluralize }}</span>
-    {% endif %}
-  </div>
+  <datalist id="menu-destination-options">{% for suggestion in path_suggestions %}<option value="{{ suggestion.url }}">{{ suggestion.label }}</option>{% endfor %}</datalist>
+  <div class="sticky bottom-4 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-(--admin-border) bg-(--admin-surface) px-4 py-3 shadow-xs"><button type="submit" class="rounded-xl bg-(--admin-accent) px-5 py-2 text-sm font-semibold text-white hover:bg-(--admin-accent-strong)">Save menu</button><span data-unsaved-indicator class="hidden text-xs font-semibold text-(--admin-warn)">Unsaved changes</span></div>
 </form>
 
-<template id="menu-item-template">
-  <div class="rounded-2xl border border-(--admin-border) bg-white p-4" data-menu-item>
-    {{ formset.empty_form.id }}
-    <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_140px]">
-      <div>
-        <label
-          for="{{ formset.empty_form.text.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
-        >
-          Label
-        </label>
-        {{ formset.empty_form.text }}
-      </div>
-      <div>
-        <label
-          for="{{ formset.empty_form.url.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
-        >
-          URL
-        </label>
-        {{ formset.empty_form.url }}
-      </div>
-      <div>
-        <label
-          for="{{ formset.empty_form.weight.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
-        >
-          Order
-        </label>
-        {{ formset.empty_form.weight }}
-      </div>
-    </div>
-    <div class="mt-3 flex items-center gap-2">
-      <button
-        type="button"
-        class="inline-flex items-center gap-2 rounded-full border border-(--admin-border) px-3 py-1 text-xs font-semibold text-(--admin-warn) transition hover:bg-(--admin-bg)"
-        data-remove-menu-item
-      >
-        <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 6h18"></path>
-          <path d="M8 6V4h8v2"></path>
-          <path d="M6 6l1 14h10l1-14"></path>
-        </svg>
-        Remove item
-      </button>
-    </div>
-  </div>
-</template>
+<template id="menu-item-template"><article draggable="true" class="rounded-2xl border border-(--admin-border) bg-(--admin-surface) p-4" data-menu-item>{{ formset.empty_form.id }}<div class="hidden">{{ formset.empty_form.DELETE }}</div><div class="flex items-center justify-between gap-3"><div class="flex items-center gap-2"><span class="cursor-grab text-(--admin-muted)" title="Drag to reorder" aria-hidden="true">⋮⋮</span><span class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)" data-position-label>New item</span></div><span data-link-kind class="text-xs font-semibold text-(--admin-muted)"></span></div><div class="mt-3 grid gap-3 md:grid-cols-2"><div><label for="{{ formset.empty_form.text.id_for_label }}" class="text-xs font-semibold text-(--admin-muted)">Label</label>{{ formset.empty_form.text }}</div><div><label for="{{ formset.empty_form.url.id_for_label }}" class="text-xs font-semibold text-(--admin-muted)">Destination</label>{{ formset.empty_form.url }}</div></div><div class="mt-3 flex flex-wrap items-center justify-between gap-2"><div class="flex gap-2"><button type="button" data-move-up class="rounded-lg border border-(--admin-border) px-2.5 py-1 text-xs font-semibold">Move up</button><button type="button" data-move-down class="rounded-lg border border-(--admin-border) px-2.5 py-1 text-xs font-semibold">Move down</button></div><button type="button" data-remove-menu-item class="text-xs font-semibold text-(--admin-warn)">Remove</button></div><div class="hidden">{{ formset.empty_form.weight }}</div></article></template>
 
-<style>
-  .htmx-request .menu-item__label {
-    display: none;
-  }
-
-  .htmx-request .menu-item__deleting {
-    display: inline;
-  }
-</style>
-
-<script>
-(function () {
-  const form = document.getElementById("menu-form");
-  if (!form || form.dataset.menuInit === "1") return;
-  form.dataset.menuInit = "1";
-
-  const addButton = form.querySelector("[data-add-menu-item]");
-  const itemsContainer = form.querySelector("[data-menu-items]");
-  const emptyState = form.querySelector("[data-menu-empty]");
-  const totalForms = form.querySelector("#id_items-TOTAL_FORMS");
-  const initialForms = form.querySelector("#id_items-INITIAL_FORMS");
-  const template = document.getElementById("menu-item-template");
-
-  function updateEmptyState() {
-    if (!emptyState || !itemsContainer) return;
-    const count = itemsContainer.querySelectorAll("[data-menu-item]").length;
-    emptyState.classList.toggle("hidden", count > 0);
-  }
-
-  function reindexForms() {
-    if (!itemsContainer || !totalForms) return;
-    const forms = Array.from(itemsContainer.querySelectorAll("[data-menu-item]"));
-    forms.forEach((formEl, index) => {
-      formEl.querySelectorAll("input, select, textarea, label").forEach((field) => {
-        if (field.name) {
-          field.name = field.name.replace(/items-\\d+-/g, `items-${index}-`);
-        }
-        if (field.id) {
-          field.id = field.id.replace(/items-\\d+-/g, `items-${index}-`);
-        }
-        if (field.htmlFor) {
-          field.htmlFor = field.htmlFor.replace(/items-\\d+-/g, `items-${index}-`);
-        }
-      });
-    });
-    totalForms.value = forms.length;
-    if (initialForms) {
-      const existingCount = forms.filter((formEl) => {
-        const idInput = formEl.querySelector('input[name$="-id"]');
-        return idInput && idInput.value;
-      }).length;
-      initialForms.value = existingCount;
-    }
-  }
-
-  function removeItem(button) {
-    const row = button.closest("[data-menu-item]");
-    if (!row) return;
-    row.remove();
-    reindexForms();
-    updateEmptyState();
-  }
-
-  function addItem() {
-    if (!template || !itemsContainer || !totalForms) return;
-    const index = parseInt(totalForms.value, 10);
-    const fragment = template.content.cloneNode(true);
-    const html = fragment.firstElementChild.innerHTML.replace(/__prefix__/g, index);
-    fragment.firstElementChild.innerHTML = html;
-    itemsContainer.appendChild(fragment);
-    totalForms.value = index + 1;
-    updateEmptyState();
-  }
-
-  if (addButton) {
-    addButton.addEventListener("click", addItem);
-  }
-
-  form.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-remove-menu-item]");
-    if (button) {
-      event.preventDefault();
-      removeItem(button);
-    }
-  });
-
-  function extractRequestPath(detail) {
-    return (
-      (detail.requestConfig && detail.requestConfig.path) ||
-      (detail.pathInfo && detail.pathInfo.requestPath) ||
-      detail.path ||
-      ""
-    );
-  }
-
-  document.body.addEventListener("htmx:afterRequest", (event) => {
-    const detail = event.detail || {};
-    const requestPath = extractRequestPath(detail);
-    if (!requestPath.includes("/admin/settings/menus/items/")) return;
-    setTimeout(() => {
-      reindexForms();
-      updateEmptyState();
-    }, 0);
-  });
-
-  updateEmptyState();
-})();
-</script>
+<script>(()=>{const form=document.querySelector("[data-menu-form]");if(!form)return;const container=form.querySelector("[data-menu-items]");const total=form.querySelector("[name='items-TOTAL_FORMS']");const template=document.querySelector("#menu-item-template");const empty=form.querySelector("[data-menu-empty]");const indicator=form.querySelector("[data-unsaved-indicator]");const known=new Set(Array.from(document.querySelectorAll("#menu-destination-options option")).map(option=>option.value));let dirty=false;let submitting=false;let dragged=null;
+const active=()=>Array.from(container.querySelectorAll("[data-menu-item]:not([data-deleted])"));const mark=()=>{dirty=true;indicator.classList.remove("hidden");};
+const refresh=()=>{const rows=active();rows.forEach((row,index)=>{row.querySelector("[data-position-label]").textContent=`Item ${index+1}`;row.querySelector("[name$='-weight']").value=index*10;row.querySelector("[data-move-up]").disabled=index===0;row.querySelector("[data-move-down]").disabled=index===rows.length-1;const url=row.querySelector("[name$='-url']").value.trim();const kind=row.querySelector("[data-link-kind]");kind.textContent=!url?"":url.startsWith("http://")||url.startsWith("https://")?"External link":known.has(url)?"Site content":url.startsWith("/")?"Custom site path":"Check destination";});empty.classList.toggle("hidden",rows.length>0);};
+const move=(row,delta)=>{const rows=active();const index=rows.indexOf(row);const target=rows[index+delta];if(!target)return;if(delta<0)container.insertBefore(row,target);else container.insertBefore(target,row);mark();refresh();};
+form.querySelector("[data-add-menu-item]").addEventListener("click",()=>{const index=parseInt(total.value,10);const fragment=template.content.cloneNode(true);const row=fragment.firstElementChild;row.innerHTML=row.innerHTML.replaceAll("__prefix__",index);row.querySelector("[name$='-url']").setAttribute("list","menu-destination-options");container.appendChild(fragment);total.value=index+1;mark();refresh();row.querySelector("[name$='-text']").focus();});
+container.addEventListener("click",event=>{const row=event.target.closest("[data-menu-item]");if(!row)return;if(event.target.closest("[data-move-up]"))move(row,-1);if(event.target.closest("[data-move-down]"))move(row,1);if(event.target.closest("[data-remove-menu-item]")){const deletion=row.querySelector("[name$='-DELETE']");if(deletion&&row.querySelector("[name$='-id']")?.value){deletion.checked=true;row.dataset.deleted="true";row.classList.add("hidden");}else row.remove();mark();refresh();}});
+container.addEventListener("input",event=>{if(event.target.matches("[name$='-url']"))refresh();mark();});container.addEventListener("dragstart",event=>{dragged=event.target.closest("[data-menu-item]");dragged?.classList.add("opacity-50");});container.addEventListener("dragend",()=>{dragged?.classList.remove("opacity-50");dragged=null;refresh();});container.addEventListener("dragover",event=>{event.preventDefault();const target=event.target.closest("[data-menu-item]");if(!dragged||!target||target===dragged)return;const rect=target.getBoundingClientRect();container.insertBefore(dragged,event.clientY<rect.top+rect.height/2?target:target.nextSibling);mark();});form.addEventListener("input",mark);form.addEventListener("change",mark);form.addEventListener("submit",()=>{submitting=true;refresh();});window.addEventListener("beforeunload",event=>{if(!dirty||submitting)return;event.preventDefault();event.returnValue="";});container.querySelectorAll("[name$='-url']").forEach(input=>input.setAttribute("list","menu-destination-options"));refresh();})();</script>

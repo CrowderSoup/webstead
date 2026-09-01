@@ -10,6 +10,11 @@ urlpatterns = [
     path("bar/", views.admin_bar, name="admin_bar"),
     path("", views.dashboard, name="dashboard"),
     path("interactions/", views.interactions, name="interactions"),
+    path(
+        "interactions/moderate/",
+        views.interaction_bulk_action,
+        name="interaction_bulk_action",
+    ),
     path("analytics/", views.analytics_dashboard, name="analytics_dashboard"),
     path("analytics/user-agents/", views.analytics_user_agents, name="analytics_user_agents"),
     path(
@@ -95,6 +100,7 @@ urlpatterns = [
     path("settings/menus/", views.menu_list, name="menu_list"),
     path("settings/menus/new/", views.menu_edit, name="menu_create"),
     path("settings/menus/<int:menu_id>/", views.menu_edit, name="menu_edit"),
+    path("settings/menus/<int:menu_id>/delete/", views.menu_delete, name="menu_delete"),
     path(
         "settings/menus/items/<int:item_id>/delete/",
         views.menu_item_delete,
@@ -128,6 +134,7 @@ urlpatterns = [
     path("posts/delete-photo/", views.delete_post_photo, name="post_delete_photo"),
     path("posts/nearby-places/", views.nearby_checkin_places, name="nearby_checkin_places"),
     path("posts/", views.post_list, name="post_list"),
+    path("posts/bulk/", views.post_bulk_action, name="post_bulk_action"),
     path("posts/new/", views.post_edit, name="post_create"),
     path("posts/<slug:slug>/delete/", views.post_delete, name="post_delete"),
     path(

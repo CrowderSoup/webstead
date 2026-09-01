@@ -29,5 +29,6 @@
       <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
         {% include "site_admin/menus/_form.html" %}
       </section>
+      {% if menu %}<details class="rounded-2xl border border-rose-200 bg-(--admin-surface) p-4"><summary class="cursor-pointer text-sm font-semibold text-rose-700">Danger zone</summary><div class="mt-4 flex flex-wrap items-center justify-between gap-3"><p class="text-sm text-(--admin-muted)">{% if is_main_menu or is_footer_menu %}This menu is assigned to your site. Choose another menu in General settings before deleting it.{% else %}Deleting this menu also deletes all of its navigation items.{% endif %}</p><form method="post" action="{% url 'site_admin:menu_delete' menu_id=menu.id %}" onsubmit="return confirm('Permanently delete this menu and all its links?');">{% csrf_token %}<button type="submit" class="rounded-xl border border-rose-300 px-4 py-2 text-sm font-semibold text-rose-700 disabled:opacity-50" {% if is_main_menu or is_footer_menu %}disabled{% endif %}>Delete menu</button></form></div></details>{% endif %}
   </div>
 {% endblock %}

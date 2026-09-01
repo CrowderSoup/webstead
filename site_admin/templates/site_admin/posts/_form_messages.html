@@ -1,6 +1,6 @@
 <div id="post-form-messages" class="space-y-3">
   {% if saved %}
-    <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+    <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700" data-post-saved>
       Post saved. You can keep editing or jump back to the list.
     </div>
   {% endif %}
@@ -10,7 +10,7 @@
       <ul class="mt-2 list-disc space-y-1 pl-5">
         {% for field in form %}
           {% for error in field.errors %}
-            <li>{{ field.label }}: {{ error }}</li>
+            <li data-error-field="{{ field.html_name }}">{{ field.label }}: {{ error }}</li>
           {% endfor %}
         {% endfor %}
         {% for error in form.non_field_errors %}

@@ -1,215 +1,52 @@
-<form method="post" class="flex flex-col gap-6">
+<form method="post" class="flex flex-col gap-6" data-settings-form data-original-site-url="{{ form.site_url.value|default:'' }}">
   {% csrf_token %}
-  {% if form.non_field_errors %}
-    <div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-      {{ form.non_field_errors }}
-    </div>
-  {% endif %}
+  {% if form.errors %}<div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"><p class="font-semibold">Some settings need attention.</p><ul class="mt-2 list-disc pl-5">{% for field in form %}{% for error in field.errors %}<li>{{ field.label }}: {{ error }}</li>{% endfor %}{% endfor %}{% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul></div>{% endif %}
+
   <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-    <div class="space-y-5">
-      <div>
-        <label
-          for="{{ form.title.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
-        >
-          Site title
-        </label>
-        {{ form.title }}
-        {{ form.title.errors }}
-      </div>
-      <div>
-        <label
-          for="{{ form.tagline.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
-        >
-          Tagline
-        </label>
-        {{ form.tagline }}
-        {{ form.tagline.errors }}
-      </div>
-      <div>
-        <label
-          for="{{ form.site_url.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
-        >
-          Canonical site URL
-        </label>
-        {{ form.site_url }}
-        {% if form.site_url.help_text %}
-          <p class="mt-1 text-xs text-(--admin-muted)">{{ form.site_url.help_text }}</p>
-        {% endif %}
-        {{ form.site_url.errors }}
-      </div>
-      <div>
-        <label
-          for="{{ form.home_page.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
-        >
-          Homepage content
-        </label>
-        {{ form.home_page }}
-        {% if form.home_page.help_text %}
-          <p class="mt-1 text-xs text-(--admin-muted)">{{ form.home_page.help_text }}</p>
-        {% endif %}
-        {{ form.home_page.errors }}
-      </div>
-      <div>
-        <label
-          for="{{ form.favicon.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
-        >
-          Favicon
-        </label>
-        {{ form.favicon }}
-        {% if form.favicon.help_text %}
-          <p class="mt-1 text-xs text-(--admin-muted)">{{ form.favicon.help_text }}</p>
-        {% endif %}
-        {{ form.favicon.errors }}
-      </div>
-      <div>
-        <label
-          for="{{ form.site_author.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
-        >
-          Default author
-        </label>
-        {{ form.site_author }}
-        {{ form.site_author.errors }}
-      </div>
-      <div>
-        <label
-          for="{{ form.active_theme.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
-        >
-          Active theme
-        </label>
-        {{ form.active_theme }}
-        {{ form.active_theme.errors }}
-      </div>
-      <div>
-        <label
-          for="{{ form.main_menu.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
-        >
-          Main menu
-        </label>
-        {{ form.main_menu }}
-        {{ form.main_menu.errors }}
-      </div>
-      <div>
-        <label
-          for="{{ form.footer_menu.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
-        >
-          Footer menu
-        </label>
-        {{ form.footer_menu }}
-        {{ form.footer_menu.errors }}
-      </div>
-      <div>
-        <label
-          for="{{ form.default_feed_kinds.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
-        >
-          Default feed kinds
-        </label>
-        {{ form.default_feed_kinds }}
-        {% if form.default_feed_kinds.help_text %}
-          <p class="mt-1 text-xs text-(--admin-muted)">{{ form.default_feed_kinds.help_text }}</p>
-        {% endif %}
-        {{ form.default_feed_kinds.errors }}
-      </div>
-      <div>
-        <p class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">
-          Comments
-        </p>
-        <label for="{{ form.comments_enabled.id_for_label }}" class="mt-2 flex items-center gap-2 text-sm">
-          {{ form.comments_enabled }}
-          <span>Enable comments on blog posts</span>
-        </label>
-        {{ form.comments_enabled.errors }}
-      </div>
-      <div>
-        <p class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">
-          Developer tools
-        </p>
-        <label for="{{ form.developer_tools_enabled.id_for_label }}" class="mt-2 flex items-center gap-2 text-sm">
-          {{ form.developer_tools_enabled }}
-          <span>Show advanced tools like error logs</span>
-        </label>
-        {{ form.developer_tools_enabled.errors }}
-      </div>
-      <div>
-        <p class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">
-          Microsub
-        </p>
-        <label for="{{ form.microsub_unfollow_removes_entries.id_for_label }}" class="mt-2 flex items-center gap-2 text-sm">
-          {{ form.microsub_unfollow_removes_entries }}
-          <span>Remove previously fetched entries when a feed is unfollowed</span>
-        </label>
-        {% if form.microsub_unfollow_removes_entries.help_text %}
-          <p class="mt-1 text-xs text-(--admin-muted)">{{ form.microsub_unfollow_removes_entries.help_text }}</p>
-        {% endif %}
-        {{ form.microsub_unfollow_removes_entries.errors }}
-      </div>
-      <div>
-        <label
-          for="{{ form.activity_units.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
-        >
-          Activity units
-        </label>
-        {{ form.activity_units }}
-        {% if form.activity_units.help_text %}
-          <p class="mt-1 text-xs text-(--admin-muted)">{{ form.activity_units.help_text }}</p>
-        {% endif %}
-        {{ form.activity_units.errors }}
-      </div>
-    </div>
-    <div class="space-y-5">
-      <div>
-        <label
-          for="{{ form.robots_txt.id_for_label }}"
-          class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)"
-        >
-          Robots.txt
-        </label>
-        {{ form.robots_txt }}
-        {{ form.robots_txt.errors }}
-      </div>
-      <div>
-        <p class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">
-          Bridgy Publish links
-        </p>
-        <p class="mt-1 text-xs text-(--admin-muted)">
-          Toggle each hidden link used for Bridgy Publish webmentions.
-        </p>
-        <div class="mt-3 space-y-2 text-sm text-(--admin-ink)">
-          <label for="{{ form.bridgy_publish_bluesky.id_for_label }}" class="flex items-center gap-2">
-            {{ form.bridgy_publish_bluesky }}
-            <span>Bluesky</span>
-          </label>
-          {{ form.bridgy_publish_bluesky.errors }}
-          <label for="{{ form.bridgy_publish_flickr.id_for_label }}" class="flex items-center gap-2">
-            {{ form.bridgy_publish_flickr }}
-            <span>Flickr</span>
-          </label>
-          {{ form.bridgy_publish_flickr.errors }}
-          <label for="{{ form.bridgy_publish_github.id_for_label }}" class="flex items-center gap-2">
-            {{ form.bridgy_publish_github }}
-            <span>GitHub</span>
-          </label>
-          {{ form.bridgy_publish_github.errors }}
+    <div class="space-y-6">
+      <section class="rounded-2xl border border-(--admin-border) bg-white p-5">
+        <div><h2 class="text-lg font-semibold">Identity</h2><p class="mt-1 text-sm text-(--admin-muted)">How the site identifies itself to readers and other services.</p></div>
+        <div class="mt-5 grid gap-4 sm:grid-cols-2">
+          <div><label for="{{ form.title.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Site title</label>{{ form.title }}{{ form.title.errors }}</div>
+          <div><label for="{{ form.site_author.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Default author</label>{{ form.site_author }}<p class="mt-1 text-xs text-(--admin-muted)">Used when content has no author assigned. <a href="{% url 'site_admin:profile_edit' %}" class="font-semibold text-(--admin-accent)">Edit your public profile</a>.</p>{{ form.site_author.errors }}</div>
         </div>
-      </div>
+        <div class="mt-4"><label for="{{ form.tagline.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Tagline</label>{{ form.tagline }}{{ form.tagline.errors }}</div>
+        <div class="mt-4"><label for="{{ form.site_url.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Canonical site URL</label>{{ form.site_url }}<p class="mt-1 text-xs text-(--admin-muted)">The permanent public origin used for background jobs, feeds, and webmentions. Change this only when the site moves domains.</p>{{ form.site_url.errors }}</div>
+      </section>
+
+      <section class="rounded-2xl border border-(--admin-border) bg-white p-5">
+        <div class="flex flex-wrap items-start justify-between gap-3"><div><h2 class="text-lg font-semibold">Homepage and appearance</h2><p class="mt-1 text-sm text-(--admin-muted)">Choose the landing page, visual theme, favicon, and navigation.</p></div><div class="flex gap-3 text-sm"><a href="{% url 'site_admin:theme_settings' %}" class="font-semibold text-(--admin-accent)">Manage themes</a><a href="{% url 'site_admin:menu_list' %}" class="font-semibold text-(--admin-accent)">Manage menus</a></div></div>
+        <div class="mt-5 grid gap-4 sm:grid-cols-2">
+          <div><label for="{{ form.home_page.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Homepage content</label>{{ form.home_page }}<p class="mt-1 text-xs text-(--admin-muted)">{{ form.home_page.help_text }}</p>{{ form.home_page.errors }}</div>
+          <div><label for="{{ form.active_theme.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Active theme</label>{{ form.active_theme }}{{ form.active_theme.errors }}</div>
+          <div><label for="{{ form.main_menu.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Main menu</label>{{ form.main_menu }}{{ form.main_menu.errors }}</div>
+          <div><label for="{{ form.footer_menu.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Footer menu</label>{{ form.footer_menu }}{{ form.footer_menu.errors }}</div>
+        </div>
+        <div class="mt-4 grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end"><div><label for="{{ form.favicon.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Favicon</label>{{ form.favicon }}<p class="mt-1 text-xs text-(--admin-muted)">Choose an image from the <a href="{% url 'site_admin:file_list' %}?kind=image" class="font-semibold text-(--admin-accent)">media library</a>.</p>{{ form.favicon.errors }}</div>{% if settings_obj.favicon %}<img src="{{ settings_obj.favicon.file.url }}" alt="Current favicon" class="h-12 w-12 rounded-xl border border-(--admin-border) object-contain p-1">{% endif %}</div>
+      </section>
+
+      <section class="rounded-2xl border border-(--admin-border) bg-white p-5">
+        <div><h2 class="text-lg font-semibold">Publishing defaults</h2><p class="mt-1 text-sm text-(--admin-muted)">Defaults that affect feeds, activities, and reader participation.</p></div>
+        <div class="mt-5"><label for="{{ form.default_feed_kinds.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Default feed kinds</label>{{ form.default_feed_kinds }}<p class="mt-1 text-xs text-(--admin-muted)">{{ form.default_feed_kinds.help_text }}</p>{{ form.default_feed_kinds.errors }}</div>
+        <div class="mt-4 grid gap-4 sm:grid-cols-2"><div><label for="{{ form.activity_units.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Activity units</label>{{ form.activity_units }}{{ form.activity_units.errors }}</div><div><p class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Discussion</p><label for="{{ form.comments_enabled.id_for_label }}" class="mt-3 flex items-center gap-2 text-sm font-semibold">{{ form.comments_enabled }}<span>Allow comments on posts</span></label>{{ form.comments_enabled.errors }}</div></div>
+      </section>
     </div>
+
+    <aside class="space-y-5">
+      <details class="rounded-2xl border border-(--admin-border) bg-white p-5" {% if form.bridgy_publish_bluesky.errors or form.bridgy_publish_flickr.errors or form.bridgy_publish_github.errors %}open{% endif %}>
+        <summary class="cursor-pointer font-semibold">Syndication</summary><p class="mt-3 text-sm text-(--admin-muted)">Hidden Bridgy Publish links included with new content.</p>
+        <div class="mt-4 space-y-3 text-sm"><label class="flex items-center gap-2">{{ form.bridgy_publish_bluesky }}<span>Bluesky</span></label>{{ form.bridgy_publish_bluesky.errors }}<label class="flex items-center gap-2">{{ form.bridgy_publish_flickr }}<span>Flickr</span></label>{{ form.bridgy_publish_flickr.errors }}<label class="flex items-center gap-2">{{ form.bridgy_publish_github }}<span>GitHub</span></label>{{ form.bridgy_publish_github.errors }}</div>
+      </details>
+      <details class="rounded-2xl border border-(--admin-border) bg-white p-5" {% if form.microsub_unfollow_removes_entries.errors %}open{% endif %}>
+        <summary class="cursor-pointer font-semibold">IndieWeb reader behavior</summary><label for="{{ form.microsub_unfollow_removes_entries.id_for_label }}" class="mt-4 flex items-start gap-2 text-sm">{{ form.microsub_unfollow_removes_entries }}<span>Remove fetched entries when a Microsub feed is unfollowed</span></label><p class="mt-2 text-xs text-(--admin-muted)">{{ form.microsub_unfollow_removes_entries.help_text }}</p>{{ form.microsub_unfollow_removes_entries.errors }}
+      </details>
+      <details class="rounded-2xl border border-(--admin-border) bg-white p-5" {% if form.developer_tools_enabled.errors or form.robots_txt.errors %}open{% endif %}>
+        <summary class="cursor-pointer font-semibold">Crawler and developer controls</summary>
+        <label for="{{ form.developer_tools_enabled.id_for_label }}" class="mt-4 flex items-center gap-2 text-sm">{{ form.developer_tools_enabled }}<span>Show developer tools and diagnostics</span></label>{{ form.developer_tools_enabled.errors }}
+        <div class="mt-5"><label for="{{ form.robots_txt.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Robots.txt</label>{{ form.robots_txt }}<p class="mt-1 text-xs text-(--admin-muted)">Advanced crawler directives served at your site’s robots.txt endpoint.</p>{{ form.robots_txt.errors }}</div>
+      </details>
+    </aside>
   </div>
-  <div class="flex flex-wrap items-center gap-3">
-    <button
-      type="submit"
-      class="rounded-xl bg-(--admin-accent) px-5 py-2 text-sm font-semibold text-white transition hover:bg-(--admin-accent-strong)"
-    >
-      Save settings
-    </button>
-  </div>
+  <div class="sticky bottom-4 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-(--admin-border) bg-(--admin-surface) px-4 py-3 shadow-xs"><button type="submit" class="rounded-xl bg-(--admin-accent) px-5 py-2 text-sm font-semibold text-white hover:bg-(--admin-accent-strong)">Save settings</button><span data-unsaved-indicator class="hidden text-xs font-semibold text-(--admin-warn)">Unsaved changes</span></div>
 </form>
+<script>(()=>{const form=document.querySelector("[data-settings-form]");if(!form)return;const indicator=form.querySelector("[data-unsaved-indicator]");const siteUrl=form.querySelector("[name='site_url']");let dirty=false;let submitting=false;const mark=()=>{dirty=true;indicator?.classList.remove("hidden");};form.addEventListener("input",mark);form.addEventListener("change",mark);window.addEventListener("beforeunload",(event)=>{if(!dirty||submitting)return;event.preventDefault();event.returnValue="";});form.addEventListener("submit",(event)=>{const original=form.dataset.originalSiteUrl||"";const current=siteUrl?.value.trim()||"";if(original&&current!==original&&!window.confirm("Changing the canonical URL affects feeds, webmentions, and generated links. Save this new URL?")){event.preventDefault();return;}submitting=true;});})();</script>

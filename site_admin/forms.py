@@ -37,6 +37,7 @@ class PostFilterForm(forms.Form):
         choices=[
             ("", "Any status"),
             ("draft", "Draft"),
+            ("scheduled", "Scheduled"),
             ("published", "Published"),
             ("deleted", "Deleted"),
         ],
@@ -45,6 +46,9 @@ class PostFilterForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["q"].widget.attrs.setdefault(
+            "placeholder", "Search titles, content, or slugs"
+        )
         for field in self.fields.values():
             field.widget.attrs.setdefault(
                 "class",
@@ -53,6 +57,41 @@ class PostFilterForm(forms.Form):
 
 
 class PostForm(forms.ModelForm):
+    PRIMARY_KIND_CHOICES = [
+        (Post.NOTE, "Note"),
+        (Post.ARTICLE, "Article"),
+        (Post.PHOTO, "Photo"),
+    ]
+    MORE_KIND_GROUPS = [
+        (
+            "Respond",
+            [
+                (Post.REPLY, "Reply"),
+                (Post.LIKE, "Like"),
+                (Post.REPOST, "Repost"),
+                (Post.RSVP, "RSVP"),
+            ],
+        ),
+        (
+            "Places & events",
+            [
+                (Post.CHECKIN, "Check-in"),
+                (Post.ACTIVITY, "Activity"),
+                (Post.EVENT, "Event"),
+            ],
+        ),
+        ("Save", [(Post.BOOKMARK, "Bookmark")]),
+    ]
+    publishing_action = forms.ChoiceField(
+        required=False,
+        choices=[
+            ("save", "Save changes"),
+            ("draft", "Save as draft"),
+            ("publish", "Publish now"),
+            ("schedule", "Schedule"),
+        ],
+        widget=forms.HiddenInput(),
+    )
     tags_text = forms.CharField(
         required=False,
         label="Tags",
@@ -108,6 +147,7 @@ class PostForm(forms.ModelForm):
         "checkin_latitude",
         "checkin_longitude",
         "tags_text",
+        "publishing_action",
         "save_as_draft",
         "published_on",
         "deleted",
@@ -155,11 +195,18 @@ class PostForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.primary_kind_choices = self.PRIMARY_KIND_CHOICES
+        self.more_kind_groups = self.MORE_KIND_GROUPS
+        if not self.instance.pk and not self.is_bound:
+            self.initial["kind"] = Post.NOTE
         self.fields["title"].required = False
         self.fields["slug"].required = False
         self.fields["content"].required = False
         self.fields["activity_type"].required = False
         self.fields["save_as_draft"].initial = not bool(self.instance.published_on)
+        self.fields["publishing_action"].initial = (
+            "save" if self.instance.published_on else "draft"
+        )
         for name, field in self.fields.items():
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.setdefault(
@@ -217,11 +264,6 @@ class PostForm(forms.ModelForm):
         if self.instance.pk and self.instance.published_on:
             local_time = timezone.localtime(self.instance.published_on)
             self.fields["published_on"].initial = local_time.strftime("%Y-%m-%dT%H:%M")
-        elif not self.instance.pk:
-            # New posts: mark the field so client-side JS fills in the
-            # browser's local time (server TIME_ZONE is UTC which is
-            # unlikely to match the author).
-            self.fields["published_on"].widget.attrs["data-default-now"] = "true"
 
     def clean_mastodon_syndicate(self):
         """Convert the Select string value back to True / False / None."""
@@ -239,6 +281,22 @@ class PostForm(forms.ModelForm):
         if value and timezone.is_naive(value):
             return timezone.make_aware(value)
         return value
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if (
+            cleaned_data.get("publishing_action") == "schedule"
+            and not cleaned_data.get("published_on")
+        ):
+            self.add_error(
+                "published_on", "Choose a date and time to schedule this post."
+            )
+        elif (
+            cleaned_data.get("publishing_action") == "schedule"
+            and cleaned_data.get("published_on") <= timezone.now()
+        ):
+            self.add_error("published_on", "Choose a future date and time.")
+        return cleaned_data
 
     def clean_tags_text(self):
         tags_text = self.cleaned_data.get("tags_text", "")
@@ -275,7 +333,13 @@ def _activity_type_from_mf2(mf2_data):
 
 
 class PageFilterForm(forms.Form):
-    q = forms.CharField(required=False, label="Search")
+    q = forms.CharField(
+        required=False,
+        label="Search",
+        widget=forms.SearchInput(
+            attrs={"placeholder": "Search titles, content, or slugs"}
+        ),
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -524,6 +588,7 @@ class FileForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["file"].widget.attrs.setdefault("data-file-input", "")
         for field in self.fields.values():
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.setdefault(
@@ -1061,6 +1126,9 @@ class HCardForm(forms.ModelForm):
                 "class",
                 "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
             )
+        self.fields["uid"].help_text = (
+            "Your permanent public identity URL, usually the homepage of this site."
+        )
 
 
 class HCardUrlForm(forms.ModelForm):

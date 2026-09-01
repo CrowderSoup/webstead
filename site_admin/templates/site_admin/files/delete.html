@@ -12,7 +12,7 @@
       </div>
       <div class="flex flex-wrap items-center gap-3">
         <a
-          href="{% url 'site_admin:file_edit' file_id=asset.id %}"
+          href="{% url 'site_admin:file_edit' file_id=asset.id %}?next={{ file_list_url|urlencode }}"
           class="rounded-full border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
         >
           Back to edit
@@ -69,6 +69,7 @@
 
           <form method="post" class="flex flex-wrap items-center gap-3">
             {% csrf_token %}
+            <input type="hidden" name="next" value="{{ file_list_url }}">
             <button
               type="submit"
               class="rounded-full bg-rose-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
@@ -77,7 +78,7 @@
               Delete file
             </button>
             <a
-              href="{% url 'site_admin:file_edit' file_id=asset.id %}"
+              href="{% url 'site_admin:file_edit' file_id=asset.id %}?next={{ file_list_url|urlencode }}"
               class="rounded-full border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
             >
               Cancel

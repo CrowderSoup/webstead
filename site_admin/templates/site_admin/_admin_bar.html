@@ -318,8 +318,8 @@
 <div class="site-admin-bar" data-site-admin-bar>
   <div class="site-admin-bar__inner">
     <a class="site-admin-bar__brand" href="{% url 'site_admin:dashboard' %}">
-      <span class="site-admin-bar__brand-eyebrow">Webstead Control</span>
-      <span class="site-admin-bar__brand-title">{{ settings.title|default:"Site" }} Admin</span>
+      <span class="site-admin-bar__brand-eyebrow">Webstead</span>
+      <span class="site-admin-bar__brand-title">{{ settings.title|default:"Site" }}</span>
     </a>
 
     {% if request.resolver_match and request.resolver_match.url_name != "admin_bar" %}
@@ -402,7 +402,8 @@
       <details class="site-admin-bar__mobile">
         <summary aria-label="Open admin menu">☰</summary>
         <div class="site-admin-bar__mobile-panel">
-          <a href="{% url 'site_admin:dashboard' %}" class="site-admin-bar__mobile-link">Dashboard</a>
+          <a href="{% url 'site_admin:post_create' %}" class="site-admin-bar__mobile-link">New post</a>
+          <a href="{% url 'site_admin:dashboard' %}" class="site-admin-bar__mobile-link">Home</a>
           <a href="{% url 'site_admin:post_list' %}" class="site-admin-bar__mobile-link">Posts</a>
           <a href="{% url 'site_admin:page_list' %}" class="site-admin-bar__mobile-link">Pages</a>
           <a href="{% url 'site_admin:file_list' %}" class="site-admin-bar__mobile-link">Files</a>
@@ -414,7 +415,6 @@
           </a>
           <a href="{% url 'site_admin:analytics_dashboard' %}" class="site-admin-bar__mobile-link">Analytics</a>
           <a href="{% url 'site_admin:site_settings' %}" class="site-admin-bar__mobile-link">Site settings</a>
-          <a href="{% url 'site_admin:post_create' %}" class="site-admin-bar__mobile-link">+ New Post</a>
           {% if request.resolver_match and request.resolver_match.url_name != "admin_bar" %}
             <button
               type="button"

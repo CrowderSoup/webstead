@@ -10,6 +10,7 @@ from typing import Optional
 from django.contrib import messages
 from django.contrib.auth.views import LoginView, LogoutView
 from django.core.files.base import ContentFile
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.utils import timezone
@@ -20,6 +21,7 @@ from django.db.models.functions import TruncDate
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.forms import inlineformset_factory
+from django.forms.models import BaseInlineFormSet
 from django.views.decorators.http import require_http_methods, require_GET, require_POST
 
 from blog.models import Comment, Post
@@ -152,13 +154,29 @@ def _parse_gpx_anonymize_options(request):
     return options, errors
 
 
+class MenuItemInlineFormSet(BaseInlineFormSet):
+    def clean(self):
+        super().clean()
+        if any(self.errors):
+            return
+        urls = set()
+        for form in self.forms:
+            if not form.cleaned_data or form.cleaned_data.get("DELETE"):
+                continue
+            url = (form.cleaned_data.get("url") or "").strip()
+            if url in urls:
+                raise ValidationError("Each menu destination can appear only once.")
+            urls.add(url)
+
+
 MenuItemFormSet = inlineformset_factory(
     Menu,
     MenuItem,
     form=MenuItemForm,
+    formset=MenuItemInlineFormSet,
     fields=["text", "url", "weight"],
     extra=0,
-    can_delete=False,
+    can_delete=True,
 )
 HCardUrlFormSet = inlineformset_factory(
     HCard,
@@ -166,7 +184,7 @@ HCardUrlFormSet = inlineformset_factory(
     form=HCardUrlForm,
     fields=["value", "kind"],
     extra=0,
-    can_delete=False,
+    can_delete=True,
 )
 HCardEmailFormSet = inlineformset_factory(
     HCard,
@@ -174,7 +192,7 @@ HCardEmailFormSet = inlineformset_factory(
     form=HCardEmailForm,
     fields=["value"],
     extra=0,
-    can_delete=False,
+    can_delete=True,
 )
 
 ALLOWED_SUFFIXES = (".html", ".htm", ".txt", ".xml", ".md", ".css", ".js", ".json")
@@ -507,40 +525,24 @@ def dashboard(request):
     if guard:
         return guard
 
-    recent_posts = Post.objects.order_by("-published_on", "-id")[:5]
-    summary_days = 7
-    end_date = timezone.localdate()
-    start_date = end_date - timedelta(days=summary_days - 1)
-    analytics_qs = (
-        Visit.objects.filter(
-            started_at__date__gte=start_date, started_at__date__lte=end_date
-        )
-        .exclude(path__startswith="/admin")
-        .exclude(path__startswith="/analytics")
-    )
-    analytics_stats = analytics_qs.aggregate(
-        total_page_views=Count("id"),
-        unique_sessions=Count("session_key", distinct=True),
-        unique_users=Count("user", distinct=True),
-        avg_duration=Avg("duration_seconds"),
-    )
-    analytics_labels, analytics_counts = _build_daily_counts(
-        analytics_qs, start_date, end_date
-    )
-    top_paths = (
-        analytics_qs.values("path")
-        .annotate(count=Count("id"))
-        .order_by("-count")[:5]
-    )
+    now = timezone.now()
+    visible_posts = Post.objects.filter(deleted=False)
+    drafts = visible_posts.filter(published_on__isnull=True).order_by("-id")[:5]
+    scheduled_posts = visible_posts.filter(published_on__gt=now).order_by(
+        "published_on"
+    )[:5]
+    recent_posts = visible_posts.filter(published_on__lte=now).order_by(
+        "-published_on", "-id"
+    )[:5]
     return render(
         request,
         "site_admin/dashboard.html",
         {
             "recent_posts": recent_posts,
-            "analytics_stats": analytics_stats,
-            "analytics_labels": analytics_labels,
-            "analytics_counts": analytics_counts,
-            "analytics_top_paths": top_paths,
+            "drafts": drafts,
+            "draft_count": visible_posts.filter(published_on__isnull=True).count(),
+            "scheduled_posts": scheduled_posts,
+            "scheduled_count": visible_posts.filter(published_on__gt=now).count(),
         },
     )
 
@@ -550,29 +552,169 @@ def interactions(request):
     if guard:
         return guard
 
-    pending_comments = (
-        Comment.objects.select_related("post")
-        .filter(status=Comment.PENDING)
-        .order_by("-created_at", "-id")
-    )
-    pending_webmentions = _filter_webmentions_by_direction(
-        Webmention.objects.select_related("target_post")
-        .filter(status=Webmention.PENDING)
-        .order_by("-created_at", "-id"),
-        "incoming",
-        request,
-    )
+    current_status = request.GET.get("status", "pending")
+    if current_status not in {"pending", "approved", "rejected", "spam", "all"}:
+        current_status = "pending"
+    interaction_type = request.GET.get("type", "")
+    if interaction_type not in {"", "comment", "webmention"}:
+        interaction_type = ""
+    query = request.GET.get("q", "").strip()
+
+    comments = Comment.objects.select_related("post").exclude(status=Comment.DELETED)
+    webmentions = Webmention.objects.select_related("target_post").filter(is_incoming=True)
+    status_counts = {
+        "pending": comments.filter(status=Comment.PENDING).count()
+        + webmentions.filter(status=Webmention.PENDING).count(),
+        "approved": comments.filter(status=Comment.APPROVED).count()
+        + webmentions.filter(status=Webmention.ACCEPTED).count(),
+        "rejected": comments.filter(status=Comment.REJECTED).count()
+        + webmentions.filter(status=Webmention.REJECTED).count(),
+        "spam": comments.filter(status=Comment.SPAM).count(),
+        "all": comments.count() + webmentions.count(),
+    }
+
+    if current_status == "pending":
+        comments = comments.filter(status=Comment.PENDING)
+        webmentions = webmentions.filter(status=Webmention.PENDING)
+    elif current_status == "approved":
+        comments = comments.filter(status=Comment.APPROVED)
+        webmentions = webmentions.filter(status=Webmention.ACCEPTED)
+    elif current_status == "rejected":
+        comments = comments.filter(status=Comment.REJECTED)
+        webmentions = webmentions.filter(status=Webmention.REJECTED)
+    elif current_status == "spam":
+        comments = comments.filter(status=Comment.SPAM)
+        webmentions = webmentions.none()
+
+    if query:
+        comments = comments.filter(
+            Q(author_name__icontains=query)
+            | Q(author_email__icontains=query)
+            | Q(content__icontains=query)
+            | Q(post__title__icontains=query)
+            | Q(post__slug__icontains=query)
+        )
+        webmentions = webmentions.filter(
+            Q(source__icontains=query)
+            | Q(target__icontains=query)
+            | Q(target_post__title__icontains=query)
+            | Q(target_post__slug__icontains=query)
+        )
+
+    items = []
+    if interaction_type != "webmention":
+        for comment in comments:
+            comment.interaction_kind = "comment"
+            comment.moderation_status = comment.status
+            items.append(comment)
+    if interaction_type != "comment":
+        for mention in webmentions:
+            mention.interaction_kind = "webmention"
+            mention.moderation_status = (
+                "approved" if mention.status == Webmention.ACCEPTED else mention.status
+            )
+            items.append(mention)
+    items.sort(key=lambda item: (item.created_at, item.id), reverse=True)
+    paginator = Paginator(items, 20)
+    try:
+        page_obj = paginator.page(request.GET.get("page"))
+    except PageNotAnInteger:
+        page_obj = paginator.page(1)
+    except EmptyPage:
+        page_obj = paginator.page(paginator.num_pages)
 
     return render(
         request,
         "site_admin/interactions/index.html",
         {
-            "pending_comment_count": pending_comments.count(),
-            "pending_webmention_count": pending_webmentions.count(),
-            "pending_comments": pending_comments[:5],
-            "pending_webmentions": pending_webmentions[:5],
+            "current_status": current_status,
+            "interaction_type": interaction_type,
+            "query": query,
+            "status_counts": status_counts,
+            "page_obj": page_obj,
+            "paginator": paginator,
+            "base_query": _strip_page_query(request),
         },
     )
+
+
+@require_POST
+def interaction_bulk_action(request):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    selected = request.POST.getlist("interaction_ids")
+    comment_ids = set()
+    mention_ids = set()
+    for value in selected:
+        kind, separator, raw_id = value.partition(":")
+        if not separator or not raw_id.isdigit():
+            continue
+        if kind == "comment":
+            comment_ids.add(int(raw_id))
+        elif kind == "webmention":
+            mention_ids.add(int(raw_id))
+
+    action = request.POST.get("action", "")
+    changed = 0
+    akismet_failures = 0
+    if not comment_ids and not mention_ids:
+        messages.warning(request, "Select at least one interaction.")
+    elif action not in {"approve", "reject", "spam"}:
+        messages.error(request, "Choose a valid moderation action.")
+    else:
+        comments = Comment.objects.select_related("post").filter(
+            id__in=comment_ids
+        ).exclude(status=Comment.DELETED)
+        mentions = Webmention.objects.filter(
+            id__in=mention_ids, is_incoming=True, status=Webmention.PENDING
+        )
+        if action == "approve":
+            for comment in comments.exclude(status=Comment.APPROVED):
+                comment.status = Comment.APPROVED
+                comment.akismet_classification = "ham"
+                comment.save(update_fields=["status", "akismet_classification"])
+                changed += 1
+                try:
+                    submit_ham(_akismet_payload_for_comment(comment, request))
+                except AkismetError:
+                    akismet_failures += 1
+            changed += mentions.update(status=Webmention.ACCEPTED, error="")
+        elif action == "reject":
+            changed += comments.exclude(status=Comment.REJECTED).update(
+                status=Comment.REJECTED
+            )
+            changed += mentions.update(
+                status=Webmention.REJECTED, error="Rejected by admin"
+            )
+        else:
+            for comment in comments.exclude(status=Comment.SPAM):
+                comment.status = Comment.SPAM
+                comment.akismet_classification = "spam"
+                comment.save(update_fields=["status", "akismet_classification"])
+                changed += 1
+                try:
+                    submit_spam(_akismet_payload_for_comment(comment, request))
+                except AkismetError:
+                    akismet_failures += 1
+        messages.success(request, f"Updated {changed} interaction(s).")
+        if action == "spam" and mention_ids:
+            messages.warning(request, "Webmentions cannot be marked as spam and were skipped.")
+        if akismet_failures:
+            messages.warning(
+                request,
+                f"Akismet could not be notified about {akismet_failures} comment(s).",
+            )
+
+    return_url = request.POST.get("next", "")
+    if not url_has_allowed_host_and_scheme(
+        return_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ) or not return_url.startswith(reverse("site_admin:interactions")):
+        return_url = reverse("site_admin:interactions")
+    return redirect(return_url)
 
 
 def _parse_analytics_date_range(request, default_days=30):
@@ -1197,6 +1339,20 @@ def menu_edit(request, menu_id=None):
         form = MenuForm(instance=menu)
         formset = MenuItemFormSet(instance=menu, prefix="items")
 
+    settings_obj = SiteConfiguration.get_solo()
+    path_suggestions = [
+        {"url": reverse("page", kwargs={"slug": page.slug}), "label": f"Page: {page.title}"}
+        for page in Page.objects.order_by("title")
+    ]
+    path_suggestions.extend(
+        {
+            "url": post.get_absolute_url(),
+            "label": f"Post: {post.title or post.slug}",
+        }
+        for post in Post.objects.filter(deleted=False, published_on__lte=timezone.now())
+        .order_by("-published_on")[:50]
+    )
+
     return render(
         request,
         "site_admin/menus/edit.html",
@@ -1204,6 +1360,9 @@ def menu_edit(request, menu_id=None):
             "form": form,
             "formset": formset,
             "menu": menu,
+            "is_main_menu": bool(menu and settings_obj.main_menu_id == menu.id),
+            "is_footer_menu": bool(menu and settings_obj.footer_menu_id == menu.id),
+            "path_suggestions": path_suggestions,
         },
     )
 
@@ -1217,6 +1376,30 @@ def menu_item_delete(request, item_id):
     item = get_object_or_404(MenuItem, pk=item_id)
     item.delete()
     return HttpResponse("")
+
+
+@require_POST
+def menu_delete(request, menu_id):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    menu = get_object_or_404(Menu, pk=menu_id)
+    settings_obj = SiteConfiguration.get_solo()
+    uses = []
+    if settings_obj.main_menu_id == menu.id:
+        uses.append("main navigation")
+    if settings_obj.footer_menu_id == menu.id:
+        uses.append("footer navigation")
+    if uses:
+        messages.error(
+            request,
+            f"This menu is still assigned to {' and '.join(uses)}. Choose another menu in General settings first.",
+        )
+        return redirect("site_admin:menu_edit", menu_id=menu.id)
+    menu.delete()
+    messages.success(request, "Menu deleted.")
+    return redirect("site_admin:menu_list")
 
 
 @require_http_methods(["GET"])
@@ -1287,12 +1470,16 @@ def redirect_delete(request, redirect_id):
 
 
 def _filtered_pages(request):
-    form = PageFilterForm(request.GET or None)
+    form = PageFilterForm(request.GET)
     pages = Page.objects.order_by("-published_on", "-id")
     if form.is_valid():
         query = form.cleaned_data.get("q")
         if query:
-            pages = pages.filter(Q(title__icontains=query) | Q(slug__icontains=query))
+            pages = pages.filter(
+                Q(title__icontains=query)
+                | Q(slug__icontains=query)
+                | Q(content__icontains=query)
+            )
     return form, pages
 
 
@@ -1481,22 +1668,30 @@ def page_delete(request, slug):
 
 
 def _filtered_posts(request):
-    form = PostFilterForm(request.GET or None)
+    form = PostFilterForm(request.GET)
     posts = Post.objects.order_by("-published_on", "-id")
     if form.is_valid():
         query = form.cleaned_data.get("q")
         kind = form.cleaned_data.get("kind")
         status = form.cleaned_data.get("status")
         if query:
-            posts = posts.filter(Q(title__icontains=query) | Q(slug__icontains=query))
+            posts = posts.filter(
+                Q(title__icontains=query)
+                | Q(slug__icontains=query)
+                | Q(content__icontains=query)
+            )
         if kind:
             posts = posts.filter(kind=kind)
         if status == "draft":
             posts = posts.filter(published_on__isnull=True, deleted=False)
+        elif status == "scheduled":
+            posts = posts.filter(published_on__gt=timezone.now(), deleted=False)
         elif status == "published":
-            posts = posts.filter(published_on__isnull=False, deleted=False)
+            posts = posts.filter(published_on__lte=timezone.now(), deleted=False)
         elif status == "deleted":
             posts = posts.filter(deleted=True)
+        else:
+            posts = posts.filter(deleted=False)
     return form, posts
 
 
@@ -1521,12 +1716,61 @@ def post_list(request):
         "page_obj": page_obj,
         "paginator": paginator,
         "base_query": _strip_page_query(request),
+        "current_status": request.GET.get("status", ""),
+        "status_counts": {
+            "all": Post.objects.filter(deleted=False).count(),
+            "draft": Post.objects.filter(deleted=False, published_on__isnull=True).count(),
+            "scheduled": Post.objects.filter(
+                deleted=False, published_on__gt=timezone.now()
+            ).count(),
+            "published": Post.objects.filter(
+                deleted=False, published_on__lte=timezone.now()
+            ).count(),
+            "deleted": Post.objects.filter(deleted=True).count(),
+        },
     }
 
     if request.headers.get("HX-Request"):
         return render(request, "site_admin/posts/_list.html", context)
 
     return render(request, "site_admin/posts/index.html", context)
+
+
+@require_POST
+def post_bulk_action(request):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    try:
+        post_ids = {int(value) for value in request.POST.getlist("post_ids")}
+    except (TypeError, ValueError):
+        post_ids = set()
+    action = request.POST.get("action", "")
+    posts = Post.objects.filter(id__in=post_ids)
+
+    if not post_ids:
+        messages.warning(request, "Select at least one post.")
+    elif action == "draft":
+        count = posts.filter(deleted=False).update(published_on=None)
+        messages.success(request, f"Moved {count} post(s) to drafts.")
+    elif action == "remove":
+        count = posts.filter(deleted=False).update(deleted=True)
+        messages.success(request, f"Removed {count} post(s) from the site.")
+    elif action == "restore":
+        count = posts.filter(deleted=True).update(deleted=False)
+        messages.success(request, f"Restored {count} post(s).")
+    else:
+        messages.error(request, "Choose a valid bulk action.")
+
+    return_url = request.POST.get("next", "")
+    if not url_has_allowed_host_and_scheme(
+        return_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ) or not return_url.startswith(reverse("site_admin:post_list")):
+        return_url = reverse("site_admin:post_list")
+    return redirect(return_url)
 
 
 def _filtered_webmentions(request, data=None):
@@ -2422,7 +2666,23 @@ def file_list(request):
     if guard:
         return guard
 
-    files = File.objects.order_by("-created_at", "-id")
+    current_kind = request.GET.get("kind", "")
+    if current_kind not in {"", File.IMAGE, File.DOC, File.VIDEO}:
+        current_kind = ""
+    query = request.GET.get("q", "").strip()
+    files = File.objects.annotate(
+        attachment_count=Count("attachments", distinct=True),
+        profile_count=Count("hcard_photos", distinct=True),
+    ).order_by("-created_at", "-id")
+    if current_kind:
+        files = files.filter(kind=current_kind)
+    if query:
+        files = files.filter(
+            Q(file__icontains=query)
+            | Q(alt_text__icontains=query)
+            | Q(caption__icontains=query)
+            | Q(owner__username__icontains=query)
+        )
     paginator = Paginator(files, 24)
     page_number = request.GET.get("page")
     try:
@@ -2439,8 +2699,27 @@ def file_list(request):
             "page_obj": page_obj,
             "paginator": paginator,
             "base_query": _strip_page_query(request),
+            "current_kind": current_kind,
+            "query": query,
+            "kind_counts": {
+                "all": File.objects.count(),
+                "image": File.objects.filter(kind=File.IMAGE).count(),
+                "doc": File.objects.filter(kind=File.DOC).count(),
+                "video": File.objects.filter(kind=File.VIDEO).count(),
+            },
         },
     )
+
+
+def _safe_file_list_url(request):
+    return_url = request.POST.get("next") or request.GET.get("next", "")
+    if not url_has_allowed_host_and_scheme(
+        return_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ) or not return_url.startswith(reverse("site_admin:file_list")):
+        return reverse("site_admin:file_list")
+    return return_url
 
 
 @require_http_methods(["GET", "POST"])
@@ -2457,7 +2736,8 @@ def file_create(request):
                 asset.owner = request.user
             asset.save()
             messages.success(request, "File uploaded.")
-            return redirect("site_admin:file_edit", file_id=asset.id)
+            edit_url = reverse("site_admin:file_edit", kwargs={"file_id": asset.id})
+            return redirect(f"{edit_url}?{urlencode({'next': _safe_file_list_url(request)})}")
     else:
         form = FileForm(initial={"owner": request.user})
 
@@ -2466,6 +2746,7 @@ def file_create(request):
         "site_admin/files/new.html",
         {
             "form": form,
+            "file_list_url": _safe_file_list_url(request),
         },
     )
 
@@ -2480,12 +2761,19 @@ def file_edit(request, file_id):
 
     if request.method == "POST":
         form = FileForm(request.POST, request.FILES, instance=asset)
+        form.fields["kind"].disabled = True
+        form.fields["file"].disabled = True
         if form.is_valid():
             form.save()
             messages.success(request, "File updated.")
-            return redirect("site_admin:file_edit", file_id=asset.id)
+            edit_url = reverse("site_admin:file_edit", kwargs={"file_id": asset.id})
+            return redirect(f"{edit_url}?{urlencode({'next': _safe_file_list_url(request)})}")
     else:
         form = FileForm(instance=asset)
+        form.fields["kind"].disabled = True
+        form.fields["file"].disabled = True
+
+    file_list_url = _safe_file_list_url(request)
 
     return render(
         request,
@@ -2493,6 +2781,8 @@ def file_edit(request, file_id):
         {
             "form": form,
             "asset": asset,
+            "usage_items": _file_usage_items(asset, request=request),
+            "file_list_url": file_list_url,
         },
     )
 
@@ -2518,11 +2808,12 @@ def file_delete(request, file_id):
                     "can_delete": can_delete,
                     "in_use_message": in_use_message,
                     "usage_items": usage_items,
+                    "file_list_url": _safe_file_list_url(request),
                 },
                 status=409,
             )
         asset.delete()
-        return redirect("site_admin:file_list")
+        return redirect(_safe_file_list_url(request))
 
     return render(
         request,
@@ -2532,6 +2823,7 @@ def file_delete(request, file_id):
             "can_delete": can_delete,
             "in_use_message": in_use_message,
             "usage_items": usage_items,
+            "file_list_url": _safe_file_list_url(request),
         },
     )
 
@@ -2679,11 +2971,19 @@ def post_edit(request, slug=None):
             saved_post = form.save(commit=False)
             if not saved_post.author_id:
                 saved_post.author = request.user
-            if (
+            publishing_action = form.cleaned_data.get("publishing_action")
+            if publishing_action == "draft":
+                saved_post.published_on = None
+            elif publishing_action == "publish":
+                saved_post.published_on = timezone.now()
+            elif (
                 is_new
+                and not publishing_action
                 and not saved_post.published_on
                 and not form.cleaned_data.get("save_as_draft")
             ):
+                # Preserve the historical default for clients and older forms
+                # that do not submit an explicit publishing action.
                 saved_post.published_on = timezone.now()
             if not content_value:
                 if selected_kind == Post.LIKE:
@@ -3505,6 +3805,7 @@ def site_settings(request):
         "site_admin/settings/edit.html",
         {
             "form": form,
+            "settings_obj": settings_obj,
         },
     )
 
@@ -3680,6 +3981,13 @@ def _build_page_form_context(
     existing_meta = existing_meta or {}
     existing_remove_ids = existing_remove_ids or set()
     uploaded_meta = uploaded_meta or {}
+    page_list_url = request.GET.get("next", "")
+    if not url_has_allowed_host_and_scheme(
+        page_list_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ) or not page_list_url.startswith(reverse("site_admin:page_list")):
+        page_list_url = reverse("site_admin:page_list")
 
     photo_items = []
     if page:
@@ -3725,6 +4033,7 @@ def _build_page_form_context(
         "existing_photos_json": json.dumps(photo_items),
         "photo_upload_url": reverse("site_admin:post_upload_photo"),
         "photo_delete_url": reverse("site_admin:post_delete_photo"),
+        "page_list_url": page_list_url,
     }
 
 
@@ -3742,6 +4051,13 @@ def _build_post_form_context(
     existing_remove_ids = existing_remove_ids or set()
     uploaded_meta = uploaded_meta or {}
     gpx_defaults = _gpx_form_defaults(request)
+    post_list_url = request.GET.get("next", "")
+    if not url_has_allowed_host_and_scheme(
+        post_list_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ) or not post_list_url.startswith(reverse("site_admin:post_list")):
+        post_list_url = reverse("site_admin:post_list")
 
     photo_items = []
     activity_gpx = None
@@ -3804,6 +4120,11 @@ def _build_post_form_context(
         "gpx_blur_enabled": gpx_defaults["gpx_blur_enabled"],
         "gpx_remove_timestamps": gpx_defaults["gpx_remove_timestamps"],
         "mastodon_connected": MastodonAccount.get_active() is not None,
+        "post_list_url": post_list_url,
+        "show_schedule": (
+            request.POST.get("publishing_action") == "schedule"
+            or bool(post and post.published_on and post.published_on > timezone.now())
+        ),
     }
 
 

@@ -22,8 +22,11 @@ from analytics.models import (
 from blog.models import Comment, Post
 from core.models import (
     HCard,
+    HCardEmail,
     HCardPhoto,
+    HCardUrl,
     Menu,
+    MenuItem,
     Page,
     RequestErrorLog,
     SiteConfiguration,
@@ -127,6 +130,132 @@ class SiteAdminAccessTests(TestCase):
             html=False,
         )
 
+    def test_dashboard_prioritizes_drafts_scheduled_and_recent_posts(self):
+        self.client.force_login(self.staff)
+        draft = Post.objects.create(
+            title="Unfinished thought", slug="unfinished", kind=Post.NOTE, content="Draft"
+        )
+        scheduled = Post.objects.create(
+            title="Tomorrow's post",
+            slug="tomorrow",
+            kind=Post.ARTICLE,
+            content="Later",
+            published_on=timezone.now() + timedelta(days=1),
+        )
+        published = Post.objects.create(
+            title="Already live",
+            slug="already-live",
+            kind=Post.ARTICLE,
+            content="Live",
+            published_on=timezone.now() - timedelta(days=1),
+        )
+
+        response = self.client.get(reverse("site_admin:dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(draft, response.context["drafts"])
+        self.assertIn(scheduled, response.context["scheduled_posts"])
+        self.assertIn(published, response.context["recent_posts"])
+        self.assertContains(response, "What would you like to publish?")
+        self.assertNotContains(response, "Control Center")
+
+    def test_post_status_filters_separate_scheduled_from_published(self):
+        self.client.force_login(self.staff)
+        scheduled = Post.objects.create(
+            title="Future post",
+            slug="future-post",
+            kind=Post.ARTICLE,
+            content="Later",
+            published_on=timezone.now() + timedelta(days=1),
+        )
+        published = Post.objects.create(
+            title="Live post",
+            slug="live-post",
+            kind=Post.ARTICLE,
+            content="Now",
+            published_on=timezone.now() - timedelta(days=1),
+        )
+
+        scheduled_response = self.client.get(
+            reverse("site_admin:post_list"), {"status": "scheduled"}
+        )
+        published_response = self.client.get(
+            reverse("site_admin:post_list"), {"status": "published"}
+        )
+
+        self.assertContains(scheduled_response, scheduled.title)
+        self.assertNotContains(scheduled_response, published.title)
+        self.assertContains(published_response, published.title)
+        self.assertNotContains(published_response, scheduled.title)
+
+    def test_post_list_all_excludes_removed_posts(self):
+        self.client.force_login(self.staff)
+        Post.objects.create(
+            title="Visible post", slug="visible", content="Visible", kind=Post.NOTE
+        )
+        Post.objects.create(
+            title="Removed post",
+            slug="removed",
+            content="Removed",
+            kind=Post.NOTE,
+            deleted=True,
+        )
+
+        response = self.client.get(reverse("site_admin:post_list"))
+
+        self.assertContains(response, "Visible post")
+        self.assertNotContains(response, 'href="/admin/posts/removed/')
+
+    def test_post_bulk_actions_move_remove_and_restore(self):
+        self.client.force_login(self.staff)
+        post = Post.objects.create(
+            title="Bulk post",
+            slug="bulk-post",
+            content="Bulk",
+            kind=Post.NOTE,
+            published_on=timezone.now(),
+        )
+        bulk_url = reverse("site_admin:post_bulk_action")
+
+        response = self.client.post(
+            bulk_url,
+            {"post_ids": [post.id], "action": "draft", "next": "/admin/posts/?status=published"},
+        )
+        post.refresh_from_db()
+        self.assertIsNone(post.published_on)
+        self.assertEqual(response.url, "/admin/posts/?status=published")
+
+        self.client.post(bulk_url, {"post_ids": [post.id], "action": "remove"})
+        post.refresh_from_db()
+        self.assertTrue(post.deleted)
+
+        self.client.post(bulk_url, {"post_ids": [post.id], "action": "restore"})
+        post.refresh_from_db()
+        self.assertFalse(post.deleted)
+
+    def test_post_bulk_action_requires_selection(self):
+        self.client.force_login(self.staff)
+
+        response = self.client.post(
+            reverse("site_admin:post_bulk_action"), {"action": "remove"}, follow=True
+        )
+
+        self.assertContains(response, "Select at least one post.")
+
+    def test_post_edit_back_link_preserves_list_filters(self):
+        self.client.force_login(self.staff)
+        post = Post.objects.create(
+            title="Filtered post", slug="filtered-post", content="Body", kind=Post.NOTE
+        )
+        return_url = "/admin/posts/?status=draft&amp;kind=note"
+
+        response = self.client.get(
+            reverse("site_admin:post_edit", kwargs={"slug": post.slug}),
+            {"next": "/admin/posts/?status=draft&kind=note"},
+        )
+
+        self.assertContains(response, f'href="{return_url}"', html=False)
+
 
 class SiteAdminPageTests(TestCase):
     def setUp(self):
@@ -157,6 +286,62 @@ class SiteAdminPageTests(TestCase):
         page = self.staff.page_set.first()
         self.assertIsNotNone(page)
         self.assertEqual(page.author, self.staff)
+
+    def test_page_list_searches_content_and_has_safe_actions(self):
+        self.client.force_login(self.staff)
+        page = Page.objects.create(
+            title="About",
+            slug="about",
+            content="A uniquely searchable biography",
+            published_on=timezone.now(),
+            author=self.staff,
+        )
+
+        response = self.client.get(
+            reverse("site_admin:page_list"), {"q": "searchable biography"}
+        )
+
+        self.assertContains(response, page.title)
+        self.assertContains(response, "View")
+        self.assertNotContains(response, "Delete")
+
+    def test_page_edit_back_link_preserves_list_search(self):
+        self.client.force_login(self.staff)
+        page = Page.objects.create(
+            title="Contact",
+            slug="contact",
+            content="Contact details",
+            published_on=timezone.now(),
+            author=self.staff,
+        )
+
+        response = self.client.get(
+            reverse("site_admin:page_edit", kwargs={"slug": page.slug}),
+            {"next": "/admin/pages/?q=contact"},
+        )
+
+        self.assertContains(
+            response, 'href="/admin/pages/?q=contact"', html=False
+        )
+
+    def test_page_edit_rejects_external_back_link(self):
+        self.client.force_login(self.staff)
+        page = Page.objects.create(
+            title="Contact",
+            slug="contact",
+            content="Contact details",
+            published_on=timezone.now(),
+            author=self.staff,
+        )
+
+        response = self.client.get(
+            reverse("site_admin:page_edit", kwargs={"slug": page.slug}),
+            {"next": "https://example.com/steal"},
+        )
+
+        self.assertContains(
+            response, f'href="{reverse("site_admin:page_list")}"', html=False
+        )
 
     def test_page_edit_saves_uploaded_photo(self):
         self.client.force_login(self.staff)
@@ -738,6 +923,104 @@ class SiteAdminPostTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'name="in_reply_to"', count=1)
 
+    def test_post_composer_offers_explicit_publishing_actions(self):
+        self.client.force_login(self.staff)
+
+        response = self.client.get(reverse("site_admin:post_create"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Save draft")
+        self.assertContains(response, "Schedule")
+        self.assertContains(response, "Publish now")
+        self.assertNotContains(response, "Permanently delete")
+
+    def test_new_post_composer_defaults_to_note_and_groups_more_types(self):
+        self.client.force_login(self.staff)
+
+        response = self.client.get(reverse("site_admin:post_create"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["form"].initial["kind"], Post.NOTE)
+        self.assertContains(response, "More post types")
+        self.assertContains(response, "Respond")
+        self.assertContains(response, "Places &amp; events")
+
+    def test_admin_lists_replace_generated_title_with_content_excerpt(self):
+        self.client.force_login(self.staff)
+        Post.objects.create(
+            title="Note: 123456",
+            slug="generated-note",
+            kind=Post.NOTE,
+            content="A useful preview of this untitled note",
+        )
+
+        response = self.client.get(reverse("site_admin:post_list"))
+
+        self.assertContains(response, "A useful preview of this untitled note")
+        self.assertNotContains(response, "Note: 123456")
+
+    def test_composer_includes_progressive_scheduling_and_dirty_guard(self):
+        self.client.force_login(self.staff)
+
+        response = self.client.get(reverse("site_admin:post_create"))
+
+        self.assertContains(response, "data-schedule-toggle")
+        self.assertContains(response, "data-schedule-panel")
+        self.assertContains(response, 'window.addEventListener("beforeunload"')
+        self.assertContains(response, "data-error-field")
+
+    def test_post_create_can_explicitly_save_a_draft(self):
+        self.client.force_login(self.staff)
+
+        response = self.client.post(
+            reverse("site_admin:post_create"),
+            {
+                "kind": Post.NOTE,
+                "content": "Still working on this",
+                "title": "",
+                "slug": "",
+                "publishing_action": "draft",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIsNone(Post.objects.get().published_on)
+
+    def test_post_create_can_explicitly_publish_now(self):
+        self.client.force_login(self.staff)
+
+        response = self.client.post(
+            reverse("site_admin:post_create"),
+            {
+                "kind": Post.NOTE,
+                "content": "Ready to go",
+                "title": "",
+                "slug": "",
+                "publishing_action": "publish",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIsNotNone(Post.objects.get().published_on)
+
+    def test_scheduling_requires_a_publish_time(self):
+        self.client.force_login(self.staff)
+
+        response = self.client.post(
+            reverse("site_admin:post_create"),
+            {
+                "kind": Post.NOTE,
+                "content": "For later",
+                "title": "",
+                "slug": "",
+                "publishing_action": "schedule",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Choose a date and time to schedule this post.")
+        self.assertEqual(Post.objects.count(), 0)
+
     def test_rsvp_post_uses_in_reply_to_as_event_url(self):
         self.client.force_login(self.staff)
         response = self.client.post(
@@ -852,6 +1135,58 @@ class SiteAdminProfileEditTests(TestCase):
             f"{prefix}-MAX_NUM_FORMS": "1000",
         }
 
+    def test_profile_edit_prioritizes_public_identity_and_privacy(self):
+        self.client.force_login(self.staff)
+
+        response = self.client.get(reverse("site_admin:profile_edit"))
+
+        self.assertContains(response, "Public identity")
+        self.assertContains(response, "Public preview")
+        self.assertContains(response, "More identity details")
+        self.assertContains(response, "Canonical profile URL")
+        self.assertContains(response, "Unsaved changes")
+        self.assertContains(response, "may be published publicly")
+        for field_name in response.context["form"].fields:
+            self.assertContains(response, f'name="{field_name}"', html=False)
+
+    def test_profile_edit_defers_existing_contact_deletions_until_save(self):
+        self.client.force_login(self.staff)
+        hcard = HCard.objects.create(
+            user=self.staff,
+            name="Editor",
+            uid="https://example.com/",
+        )
+        profile_url = HCardUrl.objects.create(
+            hcard=hcard,
+            value="https://social.example.com/editor",
+            kind=HCardUrl.OTHER,
+        )
+        email = HCardEmail.objects.create(hcard=hcard, value="public@example.com")
+
+        get_response = self.client.get(reverse("site_admin:profile_edit"))
+        self.assertContains(get_response, 'name="urls-0-DELETE"', html=False)
+        self.assertContains(get_response, 'name="emails-0-DELETE"', html=False)
+        self.assertNotContains(get_response, "hx-post")
+
+        data = {
+            "name": "Editor",
+            "uid": "https://example.com/",
+            **self._formset_management_data("urls", total=1, initial=1),
+            "urls-0-id": str(profile_url.id),
+            "urls-0-value": profile_url.value,
+            "urls-0-kind": profile_url.kind,
+            "urls-0-DELETE": "on",
+            **self._formset_management_data("emails", total=1, initial=1),
+            "emails-0-id": str(email.id),
+            "emails-0-value": email.value,
+            "emails-0-DELETE": "on",
+        }
+        response = self.client.post(reverse("site_admin:profile_edit"), data)
+
+        self.assertRedirects(response, reverse("site_admin:profile_edit"))
+        self.assertFalse(HCardUrl.objects.filter(pk=profile_url.pk).exists())
+        self.assertFalse(HCardEmail.objects.filter(pk=email.pk).exists())
+
     def test_profile_edit_saves_photos(self):
         self.client.force_login(self.staff)
         with tempfile.TemporaryDirectory() as media_root:
@@ -901,6 +1236,57 @@ class SiteAdminProfileEditTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Settings saved.")
+
+    def test_site_settings_groups_primary_and_advanced_controls(self):
+        self.client.force_login(self.staff)
+        settings_obj = SiteConfiguration.get_solo()
+        settings_obj.site_url = "https://blog.example.com"
+        settings_obj.save()
+
+        response = self.client.get(reverse("site_admin:site_settings"))
+
+        self.assertContains(response, "Identity")
+        self.assertContains(response, "Homepage and appearance")
+        self.assertContains(response, "Publishing defaults")
+        self.assertContains(response, "Syndication")
+        self.assertContains(response, "Crawler and developer controls")
+        self.assertContains(response, "Unsaved changes")
+        self.assertContains(
+            response,
+            'data-original-site-url="https://blog.example.com"',
+            html=False,
+        )
+        for field_name in response.context["form"].fields:
+            self.assertContains(response, f'name="{field_name}"', html=False)
+
+    def test_site_settings_saves_advanced_controls(self):
+        self.client.force_login(self.staff)
+        main_menu = Menu.objects.create(title="Main")
+        footer_menu = Menu.objects.create(title="Footer")
+
+        response = self.client.post(
+            reverse("site_admin:site_settings"),
+            {
+                "title": "Advanced site",
+                "site_url": "https://advanced.example.com",
+                "main_menu": main_menu.id,
+                "footer_menu": footer_menu.id,
+                "activity_units": "metric",
+                "comments_enabled": "on",
+                "developer_tools_enabled": "on",
+                "microsub_unfollow_removes_entries": "on",
+                "bridgy_publish_bluesky": "on",
+                "robots_txt": "User-agent: *\nDisallow: /private/",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        settings_obj = SiteConfiguration.get_solo()
+        self.assertTrue(settings_obj.comments_enabled)
+        self.assertTrue(settings_obj.developer_tools_enabled)
+        self.assertTrue(settings_obj.microsub_unfollow_removes_entries)
+        self.assertEqual(settings_obj.activity_units, "metric")
+        self.assertIn("Disallow", settings_obj.robots_txt)
 
     def test_profile_edit_reports_photo_sync_errors(self):
         self.client.force_login(self.staff)
@@ -958,6 +1344,63 @@ class SiteAdminFileDeleteTests(TestCase):
 
                 self.assertRedirects(response, reverse("site_admin:file_list"))
                 self.assertFalse(File.objects.filter(id=asset.id).exists())
+
+    def test_file_library_filters_searches_and_shows_usage(self):
+        self.client.force_login(self.staff)
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                image = File.objects.create(
+                    kind=File.IMAGE,
+                    file=SimpleUploadedFile("portrait.jpg", b"image"),
+                    alt_text="Azure portrait",
+                    owner=self.staff,
+                )
+                File.objects.create(
+                    kind=File.DOC,
+                    file=SimpleUploadedFile("notes.pdf", b"document"),
+                    owner=self.staff,
+                )
+                post = Post.objects.create(
+                    title="Uses image",
+                    slug="uses-image",
+                    content="Body",
+                    published_on=timezone.now(),
+                )
+                Attachment.objects.create(content_object=post, asset=image, role="photo")
+
+                response = self.client.get(
+                    reverse("site_admin:file_list"),
+                    {"kind": "image", "q": "Azure"},
+                )
+
+                self.assertContains(response, "Azure portrait")
+                self.assertNotContains(response, "notes.pdf")
+                self.assertContains(response, "Used 1 time")
+                self.assertContains(response, "Copy URL")
+                self.assertNotContains(response, ">Delete<")
+
+    def test_file_edit_preserves_library_context_and_locks_binary(self):
+        self.client.force_login(self.staff)
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                asset = File.objects.create(
+                    kind=File.IMAGE,
+                    file=SimpleUploadedFile("asset.jpg", b"image"),
+                    owner=self.staff,
+                )
+
+                response = self.client.get(
+                    reverse("site_admin:file_edit", kwargs={"file_id": asset.id}),
+                    {"next": "/admin/files/?kind=image&q=asset"},
+                )
+
+                self.assertContains(
+                    response,
+                    'href="/admin/files/?kind=image&amp;q=asset"',
+                    html=False,
+                )
+                self.assertTrue(response.context["form"].fields["file"].disabled)
+                self.assertTrue(response.context["form"].fields["kind"].disabled)
 
     def test_file_delete_blocks_in_use_asset(self):
         self.client.force_login(self.staff)
@@ -1095,6 +1538,119 @@ class SiteAdminFileDeleteTests(TestCase):
                     Attachment.objects.filter(asset=asset).count(),
                     1,
                 )
+
+
+class SiteAdminMenuBuilderTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.staff = get_user_model().objects.create_user(
+            username="menu-editor",
+            password="password",
+            is_staff=True,
+        )
+        self.client.force_login(self.staff)
+
+    def _menu_data(self, menu, items):
+        data = {
+            "title": menu.title,
+            "items-TOTAL_FORMS": str(len(items)),
+            "items-INITIAL_FORMS": str(menu.menuitem_set.count()),
+            "items-MIN_NUM_FORMS": "0",
+            "items-MAX_NUM_FORMS": "1000",
+        }
+        for index, item in enumerate(items):
+            data[f"items-{index}-id"] = str(item.get("id", ""))
+            data[f"items-{index}-text"] = item["text"]
+            data[f"items-{index}-url"] = item["url"]
+            data[f"items-{index}-weight"] = str(item["weight"])
+            if item.get("delete"):
+                data[f"items-{index}-DELETE"] = "on"
+        return data
+
+    def test_menu_editor_has_suggestions_usage_and_visual_ordering(self):
+        menu = Menu.objects.create(title="Primary")
+        MenuItem.objects.create(menu=menu, text="About", url="/about/", weight=0)
+        Page.objects.create(
+            title="Contact",
+            slug="contact",
+            content="Contact",
+            published_on=timezone.now(),
+            author=self.staff,
+        )
+        settings_obj = SiteConfiguration.get_solo()
+        settings_obj.main_menu = menu
+        settings_obj.save()
+
+        response = self.client.get(
+            reverse("site_admin:menu_edit", kwargs={"menu_id": menu.id})
+        )
+
+        self.assertContains(response, "Main navigation")
+        self.assertContains(response, "Move up")
+        self.assertContains(response, "Drag items")
+        self.assertContains(response, "/contact/")
+        self.assertNotContains(response, ">Order<")
+
+    def test_menu_save_reorders_and_removes_items(self):
+        menu = Menu.objects.create(title="Primary")
+        first = MenuItem.objects.create(menu=menu, text="First", url="/first/", weight=0)
+        second = MenuItem.objects.create(menu=menu, text="Second", url="/second/", weight=10)
+        data = self._menu_data(
+            menu,
+            [
+                {"id": first.id, "text": "First", "url": "/first/", "weight": 10, "delete": True},
+                {"id": second.id, "text": "Second", "url": "/second/", "weight": 0},
+            ],
+        )
+
+        response = self.client.post(
+            reverse("site_admin:menu_edit", kwargs={"menu_id": menu.id}), data
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(MenuItem.objects.filter(id=first.id).exists())
+        second.refresh_from_db()
+        self.assertEqual(second.weight, 0)
+
+    def test_menu_rejects_duplicate_destinations(self):
+        menu = Menu.objects.create(title="Primary")
+        data = self._menu_data(
+            menu,
+            [
+                {"text": "One", "url": "/same/", "weight": 0},
+                {"text": "Two", "url": "/same/", "weight": 10},
+            ],
+        )
+
+        response = self.client.post(
+            reverse("site_admin:menu_edit", kwargs={"menu_id": menu.id}), data
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Each menu destination can appear only once.")
+
+    def test_assigned_menu_cannot_be_deleted(self):
+        menu = Menu.objects.create(title="Primary")
+        settings_obj = SiteConfiguration.get_solo()
+        settings_obj.main_menu = menu
+        settings_obj.save()
+
+        response = self.client.post(
+            reverse("site_admin:menu_delete", kwargs={"menu_id": menu.id})
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(Menu.objects.filter(id=menu.id).exists())
+
+    def test_unassigned_menu_can_be_deleted(self):
+        menu = Menu.objects.create(title="Unused")
+
+        response = self.client.post(
+            reverse("site_admin:menu_delete", kwargs={"menu_id": menu.id})
+        )
+
+        self.assertRedirects(response, reverse("site_admin:menu_list"))
+        self.assertFalse(Menu.objects.filter(id=menu.id).exists())
 
 
 class SiteAdminThemeFileTests(TestCase):
@@ -1242,6 +1798,104 @@ class SiteAdminThemeInstallTests(TestCase):
         self.assertEqual(response.status_code, 302)
         messages = [message.message for message in get_messages(response.wsgi_request)]
         self.assertTrue(any("healthcheck" in message.lower() for message in messages))
+
+
+class SiteAdminInteractionInboxTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.staff = get_user_model().objects.create_user(
+            username="inbox-editor",
+            email="inbox@example.com",
+            password="password",
+            is_staff=True,
+        )
+        self.post = Post.objects.create(
+            title="Inbox Post",
+            slug="inbox-post",
+            content="text",
+            published_on=timezone.now(),
+        )
+        self.comment = Comment.objects.create(
+            post=self.post,
+            author_name="Ada",
+            content="A thoughtful response",
+            status=Comment.PENDING,
+        )
+        self.mention = Webmention.objects.create(
+            source="https://source.example/thoughtful-note",
+            target="https://testserver/blog/inbox-post/",
+            target_post=self.post,
+            status=Webmention.PENDING,
+            is_incoming=True,
+        )
+        self.client.force_login(self.staff)
+
+    def test_inbox_combines_pending_comments_and_webmentions(self):
+        response = self.client.get(reverse("site_admin:interactions"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Ada")
+        self.assertContains(response, self.mention.source)
+        self.assertEqual(response.context["status_counts"]["pending"], 2)
+
+    def test_inbox_filters_by_type_and_search(self):
+        response = self.client.get(
+            reverse("site_admin:interactions"),
+            {"status": "pending", "type": "webmention", "q": "thoughtful-note"},
+        )
+
+        self.assertContains(response, self.mention.source)
+        self.assertNotContains(response, "A thoughtful response")
+
+    def test_bulk_approve_updates_mixed_interactions(self):
+        with mock.patch("site_admin.views.submit_ham") as submit_ham:
+            response = self.client.post(
+                reverse("site_admin:interaction_bulk_action"),
+                {
+                    "interaction_ids": [
+                        f"comment:{self.comment.id}",
+                        f"webmention:{self.mention.id}",
+                    ],
+                    "action": "approve",
+                    "next": "/admin/interactions/?status=pending",
+                },
+            )
+
+        self.comment.refresh_from_db()
+        self.mention.refresh_from_db()
+        self.assertEqual(self.comment.status, Comment.APPROVED)
+        self.assertEqual(self.mention.status, Webmention.ACCEPTED)
+        self.assertEqual(response.url, "/admin/interactions/?status=pending")
+        submit_ham.assert_called_once()
+
+    def test_bulk_spam_skips_webmentions(self):
+        with mock.patch("site_admin.views.submit_spam") as submit_spam:
+            response = self.client.post(
+                reverse("site_admin:interaction_bulk_action"),
+                {
+                    "interaction_ids": [
+                        f"comment:{self.comment.id}",
+                        f"webmention:{self.mention.id}",
+                    ],
+                    "action": "spam",
+                },
+                follow=True,
+            )
+
+        self.comment.refresh_from_db()
+        self.mention.refresh_from_db()
+        self.assertEqual(self.comment.status, Comment.SPAM)
+        self.assertEqual(self.mention.status, Webmention.PENDING)
+        self.assertContains(response, "Webmentions cannot be marked as spam")
+        submit_spam.assert_called_once()
+
+    def test_bulk_action_requires_selection_and_rejects_external_return(self):
+        response = self.client.post(
+            reverse("site_admin:interaction_bulk_action"),
+            {"action": "approve", "next": "https://example.com/steal"},
+        )
+
+        self.assertEqual(response.url, reverse("site_admin:interactions"))
 
 
 class SiteAdminWebmentionModerationTests(TestCase):

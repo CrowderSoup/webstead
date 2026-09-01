@@ -1,113 +1,64 @@
 {% extends "site_admin/base.html" %}
-
 {% block title %}Interactions{% endblock %}
-
 {% block content %}
   <div class="flex flex-col gap-6">
     {% include "site_admin/_section_subnav.html" with section="interactions" %}
-    <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
+    <header class="flex flex-wrap items-end justify-between gap-4">
       <div>
-        <p class="text-xs font-semibold uppercase tracking-[0.24em] text-(--admin-muted)">Engagement Inbox</p>
+        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-(--admin-muted)">Engagement inbox</p>
         <h1 class="mt-2 text-2xl font-semibold">Interactions</h1>
-        <p class="mt-1 text-sm text-(--admin-muted)">
-          Review and moderate incoming comments and webmentions in one place.
-        </p>
+        <p class="mt-1 text-sm text-(--admin-muted)">Review comments and incoming webmentions without bouncing between screens.</p>
       </div>
-      <div class="mt-4 grid gap-3 sm:grid-cols-2">
-        <div class="rounded-2xl border border-(--admin-border) bg-(--admin-bg) p-4">
-          <div class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Pending comments</div>
-          <div class="mt-2 text-3xl font-semibold">{{ pending_comment_count }}</div>
+      <div class="text-sm text-(--admin-muted)"><span class="font-semibold text-(--admin-ink)">{{ status_counts.pending }}</span> awaiting review</div>
+    </header>
+    <section class="overflow-hidden rounded-3xl border border-(--admin-border) bg-(--admin-surface) shadow-xs">
+      <nav class="overflow-x-auto border-b border-(--admin-border) px-4" aria-label="Moderation status">
+        <div class="flex min-w-max gap-1">
+          <a href="?status=pending" class="border-b-2 px-3 py-3 text-sm font-semibold {% if current_status == 'pending' %}border-(--admin-accent) text-(--admin-accent){% else %}border-transparent text-(--admin-muted){% endif %}">Needs review <span class="ml-1 text-xs">{{ status_counts.pending }}</span></a>
+          <a href="?status=approved" class="border-b-2 px-3 py-3 text-sm font-semibold {% if current_status == 'approved' %}border-(--admin-accent) text-(--admin-accent){% else %}border-transparent text-(--admin-muted){% endif %}">Approved <span class="ml-1 text-xs">{{ status_counts.approved }}</span></a>
+          <a href="?status=rejected" class="border-b-2 px-3 py-3 text-sm font-semibold {% if current_status == 'rejected' %}border-(--admin-accent) text-(--admin-accent){% else %}border-transparent text-(--admin-muted){% endif %}">Rejected <span class="ml-1 text-xs">{{ status_counts.rejected }}</span></a>
+          <a href="?status=spam" class="border-b-2 px-3 py-3 text-sm font-semibold {% if current_status == 'spam' %}border-(--admin-accent) text-(--admin-accent){% else %}border-transparent text-(--admin-muted){% endif %}">Spam <span class="ml-1 text-xs">{{ status_counts.spam }}</span></a>
+          <a href="?status=all" class="border-b-2 px-3 py-3 text-sm font-semibold {% if current_status == 'all' %}border-(--admin-accent) text-(--admin-accent){% else %}border-transparent text-(--admin-muted){% endif %}">All <span class="ml-1 text-xs">{{ status_counts.all }}</span></a>
         </div>
-        <div class="rounded-2xl border border-(--admin-border) bg-(--admin-bg) p-4">
-          <div class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Pending webmentions</div>
-          <div class="mt-2 text-3xl font-semibold">{{ pending_webmention_count }}</div>
+      </nav>
+      <div class="p-4 sm:p-6">
+        <form method="get" class="flex flex-col gap-3 sm:flex-row">
+          <input type="hidden" name="status" value="{{ current_status }}">
+          <label class="flex-1"><span class="sr-only">Search interactions</span><input type="search" name="q" value="{{ query }}" placeholder="Search people, content, sources, or posts" class="w-full rounded-xl border border-(--admin-border) bg-white px-3 py-2 text-sm"></label>
+          <label class="sm:w-48"><span class="sr-only">Interaction type</span><select name="type" class="w-full rounded-xl border border-(--admin-border) bg-white px-3 py-2 text-sm"><option value="" {% if not interaction_type %}selected{% endif %}>Comments + webmentions</option><option value="comment" {% if interaction_type == 'comment' %}selected{% endif %}>Comments only</option><option value="webmention" {% if interaction_type == 'webmention' %}selected{% endif %}>Webmentions only</option></select></label>
+          <button type="submit" class="rounded-xl border border-(--admin-border) px-4 py-2 text-sm font-semibold hover:bg-(--admin-bg)">Filter</button>
+        </form>
+        <div class="mt-5">
+          {% if page_obj.object_list %}
+            <form method="post" action="{% url 'site_admin:interaction_bulk_action' %}" data-interaction-bulk-form>
+              {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+              <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <label class="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" data-select-all-interactions class="rounded border-(--admin-border) text-(--admin-accent)">Select all on page</label>
+                {% if current_status == "pending" or current_status == "all" %}<div class="flex items-center gap-2"><label for="moderation-action" class="sr-only">Moderation action</label><select id="moderation-action" name="action" class="rounded-xl border border-(--admin-border) bg-white px-3 py-2 text-sm"><option value="">Choose action</option><option value="approve">Approve</option><option value="reject">Reject</option><option value="spam">Mark comments as spam</option></select><button type="submit" class="rounded-xl bg-(--admin-accent) px-4 py-2 text-sm font-semibold text-white hover:bg-(--admin-accent-strong)">Apply</button></div>{% endif %}
+              </div>
+              <div class="divide-y divide-(--admin-border) border-y border-(--admin-border)">
+                {% for item in page_obj.object_list %}
+                  <article class="grid gap-3 py-5 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-start">
+                    <div class="pt-1"><input type="checkbox" name="interaction_ids" value="{{ item.interaction_kind }}:{{ item.id }}" data-interaction-checkbox aria-label="Select interaction {{ forloop.counter }}" class="rounded border-(--admin-border) text-(--admin-accent)"></div>
+                    <div class="min-w-0">
+                      <div class="flex flex-wrap items-center gap-2">
+                        {% if item.interaction_kind == "comment" %}<span class="rounded-full bg-(--admin-bg) px-2.5 py-1 text-xs font-semibold">Comment</span><span class="font-semibold">{{ item.author_name|default:"Anonymous" }}</span>{% else %}<span class="rounded-full bg-(--admin-bg) px-2.5 py-1 text-xs font-semibold">{{ item.get_mention_type_display }}</span><span class="min-w-0 truncate font-semibold">{{ item.source }}</span>{% endif %}
+                        <span class="text-xs font-semibold {% if item.moderation_status == 'rejected' or item.moderation_status == 'spam' %}text-(--admin-warn){% else %}text-(--admin-accent){% endif %}">{{ item.moderation_status|capfirst }}</span>
+                      </div>
+                      {% if item.interaction_kind == "comment" %}<p class="mt-2 text-sm leading-6 text-(--admin-ink)">{{ item.excerpt|default:item.content|truncatechars:220 }}</p><p class="mt-2 text-xs text-(--admin-muted)">On {{ item.post.title|default:item.post.slug }} · {{ item.created_at|date:"M j, Y, g:i A" }}</p>{% else %}<p class="mt-2 text-sm text-(--admin-muted)">Mentions {% if item.target_post %}{{ item.target_post.title|default:item.target_post.slug }}{% else %}{{ item.target|truncatechars:90 }}{% endif %}</p><p class="mt-2 text-xs text-(--admin-muted)">{{ item.created_at|date:"M j, Y, g:i A" }}</p>{% endif %}
+                    </div>
+                    <div class="flex items-center gap-3 sm:justify-end">{% if item.interaction_kind == "comment" %}<a href="{% url 'site_admin:comment_detail' comment_id=item.id %}" class="text-sm font-semibold text-(--admin-accent)">Context</a>{% else %}<a href="{% url 'site_admin:webmention_detail' mention_id=item.id %}" class="text-sm font-semibold text-(--admin-accent)">Context</a><a href="{{ item.source }}" target="_blank" rel="noopener noreferrer" class="text-sm font-semibold text-(--admin-accent)">Source</a>{% endif %}</div>
+                  </article>
+                {% endfor %}
+              </div>
+            </form>
+            {% if paginator.num_pages > 1 %}<nav class="mt-5 flex items-center justify-between gap-3 text-sm" aria-label="Interaction pages"><span class="text-(--admin-muted)">Page {{ page_obj.number }} of {{ paginator.num_pages }}</span><div class="flex gap-2">{% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}{% if base_query %}&{{ base_query }}{% endif %}" class="rounded-xl border border-(--admin-border) px-3 py-2 font-semibold">Previous</a>{% endif %}{% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}{% if base_query %}&{{ base_query }}{% endif %}" class="rounded-xl border border-(--admin-border) px-3 py-2 font-semibold">Next</a>{% endif %}</div></nav>{% endif %}
+          {% else %}
+            <div class="rounded-2xl border border-dashed border-(--admin-border) px-6 py-12 text-center">{% if current_status == "pending" %}<h2 class="font-semibold">Inbox zero</h2><p class="mt-1 text-sm text-(--admin-muted)">There’s nothing waiting for review.</p>{% else %}<h2 class="font-semibold">No interactions found</h2><p class="mt-1 text-sm text-(--admin-muted)">Try another status, type, or search.</p>{% endif %}</div>
+          {% endif %}
         </div>
-      </div>
-    </section>
-
-    <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 class="text-lg font-semibold">Comments to review</h2>
-          <p class="text-sm text-(--admin-muted)">
-            {{ pending_comment_count }} pending review.
-          </p>
-        </div>
-        <a
-          href="{% url 'site_admin:comment_list' %}?status=pending"
-          class="text-sm font-semibold text-(--admin-accent)"
-        >
-          View comments
-        </a>
-      </div>
-      <div class="mt-5 grid gap-3">
-        {% for comment in pending_comments %}
-          <a
-            href="{% url 'site_admin:comment_detail' comment_id=comment.id %}"
-            class="rounded-2xl border border-(--admin-border) bg-(--admin-bg) p-4 transition hover:border-(--admin-accent)"
-          >
-            <div class="flex flex-wrap items-center justify-between gap-2">
-              <div class="text-sm font-semibold">{{ comment.author_name }}</div>
-              <span class="rounded-xl bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">
-                {{ comment.get_status_display }}
-              </span>
-            </div>
-            <div class="mt-2 text-sm text-(--admin-muted)">
-              {{ comment.excerpt|default:comment.content|truncatechars:120 }}
-            </div>
-            <div class="mt-2 text-xs text-(--admin-muted)">
-              {{ comment.post.title|default:comment.post.slug }} · {{ comment.created_at|date:"M j, Y" }}
-            </div>
-          </a>
-        {% empty %}
-          <p class="text-sm text-(--admin-muted)">No comments waiting for review.</p>
-        {% endfor %}
-      </div>
-    </section>
-
-    <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 class="text-lg font-semibold">Incoming webmentions</h2>
-          <p class="text-sm text-(--admin-muted)">
-            {{ pending_webmention_count }} pending approval.
-          </p>
-        </div>
-        <a
-          href="{% url 'site_admin:webmention_list' %}?direction=incoming&status=pending"
-          class="text-sm font-semibold text-(--admin-accent)"
-        >
-          View webmentions
-        </a>
-      </div>
-      <div class="mt-5 grid gap-3">
-        {% for mention in pending_webmentions %}
-          <a
-            href="{% url 'site_admin:webmention_detail' mention_id=mention.id %}"
-            class="rounded-2xl border border-(--admin-border) bg-(--admin-bg) p-4 transition hover:border-(--admin-accent)"
-          >
-            <div class="flex flex-wrap items-center justify-between gap-2">
-              <div class="text-sm font-semibold">{{ mention.get_mention_type_display }}</div>
-              <span class="rounded-xl bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">
-                Pending
-              </span>
-            </div>
-            <div class="mt-2 text-sm text-(--admin-muted)">
-              {{ mention.source|truncatechars:80 }}
-            </div>
-            <div class="mt-2 text-xs text-(--admin-muted)">
-              {% if mention.target_post %}
-                {{ mention.target_post.title|default:mention.target_post.slug }}
-              {% else %}
-                {{ mention.target }}
-              {% endif %}
-              · {{ mention.created_at|date:"M j, Y" }}
-            </div>
-          </a>
-        {% empty %}
-          <p class="text-sm text-(--admin-muted)">No incoming webmentions waiting for review.</p>
-        {% endfor %}
       </div>
     </section>
   </div>
 {% endblock %}
+{% block body_end %}<script>document.addEventListener("change",(event)=>{if(!event.target.matches("[data-select-all-interactions]"))return;document.querySelectorAll("[data-interaction-checkbox]").forEach((checkbox)=>{checkbox.checked=event.target.checked;});});</script>{% endblock %}
