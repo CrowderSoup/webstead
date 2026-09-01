@@ -3746,6 +3746,7 @@ def site_settings(request):
         "site_admin/settings/edit.html",
         {
             "form": form,
+            "settings_obj": settings_obj,
         },
     )
 

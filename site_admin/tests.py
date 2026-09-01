@@ -1182,6 +1182,57 @@ class SiteAdminProfileEditTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Settings saved.")
 
+    def test_site_settings_groups_primary_and_advanced_controls(self):
+        self.client.force_login(self.staff)
+        settings_obj = SiteConfiguration.get_solo()
+        settings_obj.site_url = "https://blog.example.com"
+        settings_obj.save()
+
+        response = self.client.get(reverse("site_admin:site_settings"))
+
+        self.assertContains(response, "Identity")
+        self.assertContains(response, "Homepage and appearance")
+        self.assertContains(response, "Publishing defaults")
+        self.assertContains(response, "Syndication")
+        self.assertContains(response, "Crawler and developer controls")
+        self.assertContains(response, "Unsaved changes")
+        self.assertContains(
+            response,
+            'data-original-site-url="https://blog.example.com"',
+            html=False,
+        )
+        for field_name in response.context["form"].fields:
+            self.assertContains(response, f'name="{field_name}"', html=False)
+
+    def test_site_settings_saves_advanced_controls(self):
+        self.client.force_login(self.staff)
+        main_menu = Menu.objects.create(title="Main")
+        footer_menu = Menu.objects.create(title="Footer")
+
+        response = self.client.post(
+            reverse("site_admin:site_settings"),
+            {
+                "title": "Advanced site",
+                "site_url": "https://advanced.example.com",
+                "main_menu": main_menu.id,
+                "footer_menu": footer_menu.id,
+                "activity_units": "metric",
+                "comments_enabled": "on",
+                "developer_tools_enabled": "on",
+                "microsub_unfollow_removes_entries": "on",
+                "bridgy_publish_bluesky": "on",
+                "robots_txt": "User-agent: *\nDisallow: /private/",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        settings_obj = SiteConfiguration.get_solo()
+        self.assertTrue(settings_obj.comments_enabled)
+        self.assertTrue(settings_obj.developer_tools_enabled)
+        self.assertTrue(settings_obj.microsub_unfollow_removes_entries)
+        self.assertEqual(settings_obj.activity_units, "metric")
+        self.assertIn("Disallow", settings_obj.robots_txt)
+
     def test_profile_edit_reports_photo_sync_errors(self):
         self.client.force_login(self.staff)
         data = {
