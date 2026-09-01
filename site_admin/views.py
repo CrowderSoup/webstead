@@ -2607,7 +2607,23 @@ def file_list(request):
     if guard:
         return guard
 
-    files = File.objects.order_by("-created_at", "-id")
+    current_kind = request.GET.get("kind", "")
+    if current_kind not in {"", File.IMAGE, File.DOC, File.VIDEO}:
+        current_kind = ""
+    query = request.GET.get("q", "").strip()
+    files = File.objects.annotate(
+        attachment_count=Count("attachments", distinct=True),
+        profile_count=Count("hcard_photos", distinct=True),
+    ).order_by("-created_at", "-id")
+    if current_kind:
+        files = files.filter(kind=current_kind)
+    if query:
+        files = files.filter(
+            Q(file__icontains=query)
+            | Q(alt_text__icontains=query)
+            | Q(caption__icontains=query)
+            | Q(owner__username__icontains=query)
+        )
     paginator = Paginator(files, 24)
     page_number = request.GET.get("page")
     try:
@@ -2624,8 +2640,27 @@ def file_list(request):
             "page_obj": page_obj,
             "paginator": paginator,
             "base_query": _strip_page_query(request),
+            "current_kind": current_kind,
+            "query": query,
+            "kind_counts": {
+                "all": File.objects.count(),
+                "image": File.objects.filter(kind=File.IMAGE).count(),
+                "doc": File.objects.filter(kind=File.DOC).count(),
+                "video": File.objects.filter(kind=File.VIDEO).count(),
+            },
         },
     )
+
+
+def _safe_file_list_url(request):
+    return_url = request.POST.get("next") or request.GET.get("next", "")
+    if not url_has_allowed_host_and_scheme(
+        return_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ) or not return_url.startswith(reverse("site_admin:file_list")):
+        return reverse("site_admin:file_list")
+    return return_url
 
 
 @require_http_methods(["GET", "POST"])
@@ -2642,7 +2677,8 @@ def file_create(request):
                 asset.owner = request.user
             asset.save()
             messages.success(request, "File uploaded.")
-            return redirect("site_admin:file_edit", file_id=asset.id)
+            edit_url = reverse("site_admin:file_edit", kwargs={"file_id": asset.id})
+            return redirect(f"{edit_url}?{urlencode({'next': _safe_file_list_url(request)})}")
     else:
         form = FileForm(initial={"owner": request.user})
 
@@ -2651,6 +2687,7 @@ def file_create(request):
         "site_admin/files/new.html",
         {
             "form": form,
+            "file_list_url": _safe_file_list_url(request),
         },
     )
 
@@ -2665,12 +2702,19 @@ def file_edit(request, file_id):
 
     if request.method == "POST":
         form = FileForm(request.POST, request.FILES, instance=asset)
+        form.fields["kind"].disabled = True
+        form.fields["file"].disabled = True
         if form.is_valid():
             form.save()
             messages.success(request, "File updated.")
-            return redirect("site_admin:file_edit", file_id=asset.id)
+            edit_url = reverse("site_admin:file_edit", kwargs={"file_id": asset.id})
+            return redirect(f"{edit_url}?{urlencode({'next': _safe_file_list_url(request)})}")
     else:
         form = FileForm(instance=asset)
+        form.fields["kind"].disabled = True
+        form.fields["file"].disabled = True
+
+    file_list_url = _safe_file_list_url(request)
 
     return render(
         request,
@@ -2678,6 +2722,8 @@ def file_edit(request, file_id):
         {
             "form": form,
             "asset": asset,
+            "usage_items": _file_usage_items(asset, request=request),
+            "file_list_url": file_list_url,
         },
     )
 
@@ -2703,11 +2749,12 @@ def file_delete(request, file_id):
                     "can_delete": can_delete,
                     "in_use_message": in_use_message,
                     "usage_items": usage_items,
+                    "file_list_url": _safe_file_list_url(request),
                 },
                 status=409,
             )
         asset.delete()
-        return redirect("site_admin:file_list")
+        return redirect(_safe_file_list_url(request))
 
     return render(
         request,
@@ -2717,6 +2764,7 @@ def file_delete(request, file_id):
             "can_delete": can_delete,
             "in_use_message": in_use_message,
             "usage_items": usage_items,
+            "file_list_url": _safe_file_list_url(request),
         },
     )
 

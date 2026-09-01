@@ -588,6 +588,7 @@ class FileForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["file"].widget.attrs.setdefault("data-file-input", "")
         for field in self.fields.values():
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.setdefault(

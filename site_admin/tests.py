@@ -1239,6 +1239,63 @@ class SiteAdminFileDeleteTests(TestCase):
                 self.assertRedirects(response, reverse("site_admin:file_list"))
                 self.assertFalse(File.objects.filter(id=asset.id).exists())
 
+    def test_file_library_filters_searches_and_shows_usage(self):
+        self.client.force_login(self.staff)
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                image = File.objects.create(
+                    kind=File.IMAGE,
+                    file=SimpleUploadedFile("portrait.jpg", b"image"),
+                    alt_text="Azure portrait",
+                    owner=self.staff,
+                )
+                File.objects.create(
+                    kind=File.DOC,
+                    file=SimpleUploadedFile("notes.pdf", b"document"),
+                    owner=self.staff,
+                )
+                post = Post.objects.create(
+                    title="Uses image",
+                    slug="uses-image",
+                    content="Body",
+                    published_on=timezone.now(),
+                )
+                Attachment.objects.create(content_object=post, asset=image, role="photo")
+
+                response = self.client.get(
+                    reverse("site_admin:file_list"),
+                    {"kind": "image", "q": "Azure"},
+                )
+
+                self.assertContains(response, "Azure portrait")
+                self.assertNotContains(response, "notes.pdf")
+                self.assertContains(response, "Used 1 time")
+                self.assertContains(response, "Copy URL")
+                self.assertNotContains(response, ">Delete<")
+
+    def test_file_edit_preserves_library_context_and_locks_binary(self):
+        self.client.force_login(self.staff)
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                asset = File.objects.create(
+                    kind=File.IMAGE,
+                    file=SimpleUploadedFile("asset.jpg", b"image"),
+                    owner=self.staff,
+                )
+
+                response = self.client.get(
+                    reverse("site_admin:file_edit", kwargs={"file_id": asset.id}),
+                    {"next": "/admin/files/?kind=image&q=asset"},
+                )
+
+                self.assertContains(
+                    response,
+                    'href="/admin/files/?kind=image&amp;q=asset"',
+                    html=False,
+                )
+                self.assertTrue(response.context["form"].fields["file"].disabled)
+                self.assertTrue(response.context["form"].fields["kind"].disabled)
+
     def test_file_delete_blocks_in_use_asset(self):
         self.client.force_login(self.staff)
         with tempfile.TemporaryDirectory() as media_root:
