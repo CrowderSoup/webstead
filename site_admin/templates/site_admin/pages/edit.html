@@ -19,7 +19,7 @@
       </div>
       <div class="flex flex-wrap items-center gap-3">
         <a
-          href="{% url 'site_admin:page_list' %}"
+          href="{{ page_list_url }}"
           class="rounded-full border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
         >
           Back to pages
@@ -31,15 +31,6 @@
           >
             View page
           </a>
-          <form method="post" action="{% url 'site_admin:page_delete' slug=page.slug %}">
-            {% csrf_token %}
-            <button
-              type="submit"
-              class="rounded-full border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
-            >
-              Delete page
-            </button>
-          </form>
         {% endif %}
       </div>
     </section>
@@ -47,5 +38,14 @@
     <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
       {% include "site_admin/pages/_form.html" %}
     </section>
+    {% if page %}
+      <details class="rounded-2xl border border-rose-200 bg-(--admin-surface) p-4">
+        <summary class="cursor-pointer text-sm font-semibold text-rose-700">Danger zone</summary>
+        <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <p class="text-sm text-(--admin-muted)">Deleting this page breaks its public URL and cannot be undone.</p>
+          <form method="post" action="{% url 'site_admin:page_delete' slug=page.slug %}" onsubmit="return confirm('Permanently delete this page?');">{% csrf_token %}<button type="submit" class="rounded-xl border border-rose-300 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50">Delete permanently</button></form>
+        </div>
+      </details>
+    {% endif %}
   </div>
 {% endblock %}

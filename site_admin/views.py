@@ -1411,12 +1411,16 @@ def redirect_delete(request, redirect_id):
 
 
 def _filtered_pages(request):
-    form = PageFilterForm(request.GET or None)
+    form = PageFilterForm(request.GET)
     pages = Page.objects.order_by("-published_on", "-id")
     if form.is_valid():
         query = form.cleaned_data.get("q")
         if query:
-            pages = pages.filter(Q(title__icontains=query) | Q(slug__icontains=query))
+            pages = pages.filter(
+                Q(title__icontains=query)
+                | Q(slug__icontains=query)
+                | Q(content__icontains=query)
+            )
     return form, pages
 
 
@@ -3869,6 +3873,13 @@ def _build_page_form_context(
     existing_meta = existing_meta or {}
     existing_remove_ids = existing_remove_ids or set()
     uploaded_meta = uploaded_meta or {}
+    page_list_url = request.GET.get("next", "")
+    if not url_has_allowed_host_and_scheme(
+        page_list_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ) or not page_list_url.startswith(reverse("site_admin:page_list")):
+        page_list_url = reverse("site_admin:page_list")
 
     photo_items = []
     if page:
@@ -3914,6 +3925,7 @@ def _build_page_form_context(
         "existing_photos_json": json.dumps(photo_items),
         "photo_upload_url": reverse("site_admin:post_upload_photo"),
         "photo_delete_url": reverse("site_admin:post_delete_photo"),
+        "page_list_url": page_list_url,
     }
 
 

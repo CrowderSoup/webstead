@@ -37,8 +37,9 @@
         </div>
       </div>
 
-      <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs">
-        <div class="flex flex-wrap items-center justify-between gap-3">
+      <details class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs" {% if page.is_gallery or existing_photos_json != '[]' %}open{% endif %}>
+        <summary class="cursor-pointer font-semibold text-(--admin-ink)">Photos and gallery</summary>
+        <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <label
               for="page-photo-uploader"
@@ -80,7 +81,7 @@
           No photos yet.
         </div>
         <div id="page-photo-metadata-fields"></div>
-      </div>
+      </details>
     </div>
     <div class="space-y-5">
       <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs">
@@ -96,8 +97,8 @@
           {{ form.published_on.errors }}
         </div>
       </div>
-      <div class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs">
-        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-(--admin-muted)">Advanced</div>
+      <details class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-5 shadow-xs">
+        <summary class="cursor-pointer font-semibold text-(--admin-ink)">URL and display options</summary>
         <div class="mt-4">
           <label
             for="{{ form.slug.id_for_label }}"
@@ -106,7 +107,7 @@
             Slug
           </label>
           {{ form.slug }}
-          <p class="mt-1 text-xs text-(--admin-muted)">Leave blank to auto-generate.</p>
+          <p class="mt-1 text-xs text-(--admin-muted)">Leave blank to generate from the title. Changing an existing slug changes its public URL.</p>
           {{ form.slug.errors }}
         </div>
         <div class="mt-4">
@@ -117,7 +118,7 @@
           <p class="mt-1 text-xs text-(--admin-muted)">When enabled, uploaded images display as a photo slider on the public page.</p>
           {{ form.is_gallery.errors }}
         </div>
-      </div>
+      </details>
     </div>
   </div>
   <div class="sticky bottom-4 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-(--admin-border) bg-(--admin-surface) px-4 py-3 shadow-xs">
@@ -431,8 +432,26 @@
     removedExisting.forEach((id) => makeHidden("existing_remove_ids", id));
   }
 
-  form.addEventListener("submit", syncMetadataFields);
+  let formIsDirty = false;
+  let formIsSubmitting = false;
+  form.addEventListener("input", () => { formIsDirty = true; });
+  form.addEventListener("change", () => { formIsDirty = true; });
+  window.addEventListener("beforeunload", (event) => {
+    if (!formIsDirty || formIsSubmitting) return;
+    event.preventDefault();
+    event.returnValue = "";
+  });
+  form.addEventListener("submit", () => {
+    formIsSubmitting = true;
+    syncMetadataFields();
+  });
   form.addEventListener("htmx:beforeRequest", syncMetadataFields);
+  form.addEventListener("htmx:afterRequest", (event) => {
+    formIsSubmitting = event.detail.xhr.status === 204;
+  });
+  form.addEventListener("htmx:afterSwap", (event) => {
+    if (event.target.querySelector?.("[data-page-saved]")) formIsDirty = false;
+  });
 
   renderPhotos();
 })();

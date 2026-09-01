@@ -333,7 +333,13 @@ def _activity_type_from_mf2(mf2_data):
 
 
 class PageFilterForm(forms.Form):
-    q = forms.CharField(required=False, label="Search")
+    q = forms.CharField(
+        required=False,
+        label="Search",
+        widget=forms.SearchInput(
+            attrs={"placeholder": "Search titles, content, or slugs"}
+        ),
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

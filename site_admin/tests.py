@@ -284,6 +284,62 @@ class SiteAdminPageTests(TestCase):
         self.assertIsNotNone(page)
         self.assertEqual(page.author, self.staff)
 
+    def test_page_list_searches_content_and_has_safe_actions(self):
+        self.client.force_login(self.staff)
+        page = Page.objects.create(
+            title="About",
+            slug="about",
+            content="A uniquely searchable biography",
+            published_on=timezone.now(),
+            author=self.staff,
+        )
+
+        response = self.client.get(
+            reverse("site_admin:page_list"), {"q": "searchable biography"}
+        )
+
+        self.assertContains(response, page.title)
+        self.assertContains(response, "View")
+        self.assertNotContains(response, "Delete")
+
+    def test_page_edit_back_link_preserves_list_search(self):
+        self.client.force_login(self.staff)
+        page = Page.objects.create(
+            title="Contact",
+            slug="contact",
+            content="Contact details",
+            published_on=timezone.now(),
+            author=self.staff,
+        )
+
+        response = self.client.get(
+            reverse("site_admin:page_edit", kwargs={"slug": page.slug}),
+            {"next": "/admin/pages/?q=contact"},
+        )
+
+        self.assertContains(
+            response, 'href="/admin/pages/?q=contact"', html=False
+        )
+
+    def test_page_edit_rejects_external_back_link(self):
+        self.client.force_login(self.staff)
+        page = Page.objects.create(
+            title="Contact",
+            slug="contact",
+            content="Contact details",
+            published_on=timezone.now(),
+            author=self.staff,
+        )
+
+        response = self.client.get(
+            reverse("site_admin:page_edit", kwargs={"slug": page.slug}),
+            {"next": "https://example.com/steal"},
+        )
+
+        self.assertContains(
+            response, f'href="{reverse("site_admin:page_list")}"', html=False
+        )
+
     def test_page_edit_saves_uploaded_photo(self):
         self.client.force_login(self.staff)
         with tempfile.TemporaryDirectory() as media_root:
