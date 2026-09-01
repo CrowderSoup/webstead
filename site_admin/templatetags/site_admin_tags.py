@@ -58,7 +58,7 @@ _NAV_SECTIONS = {
         "file_list", "file_create", "file_edit", "file_delete",
     },
     "interactions": {
-        "interactions",
+        "interactions", "interaction_bulk_action",
         "comment_list", "comment_detail", "comment_approve",
         "comment_mark_spam", "comment_delete",
         "webmention_list", "webmention_create", "webmention_detail",

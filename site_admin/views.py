@@ -534,29 +534,169 @@ def interactions(request):
     if guard:
         return guard
 
-    pending_comments = (
-        Comment.objects.select_related("post")
-        .filter(status=Comment.PENDING)
-        .order_by("-created_at", "-id")
-    )
-    pending_webmentions = _filter_webmentions_by_direction(
-        Webmention.objects.select_related("target_post")
-        .filter(status=Webmention.PENDING)
-        .order_by("-created_at", "-id"),
-        "incoming",
-        request,
-    )
+    current_status = request.GET.get("status", "pending")
+    if current_status not in {"pending", "approved", "rejected", "spam", "all"}:
+        current_status = "pending"
+    interaction_type = request.GET.get("type", "")
+    if interaction_type not in {"", "comment", "webmention"}:
+        interaction_type = ""
+    query = request.GET.get("q", "").strip()
+
+    comments = Comment.objects.select_related("post").exclude(status=Comment.DELETED)
+    webmentions = Webmention.objects.select_related("target_post").filter(is_incoming=True)
+    status_counts = {
+        "pending": comments.filter(status=Comment.PENDING).count()
+        + webmentions.filter(status=Webmention.PENDING).count(),
+        "approved": comments.filter(status=Comment.APPROVED).count()
+        + webmentions.filter(status=Webmention.ACCEPTED).count(),
+        "rejected": comments.filter(status=Comment.REJECTED).count()
+        + webmentions.filter(status=Webmention.REJECTED).count(),
+        "spam": comments.filter(status=Comment.SPAM).count(),
+        "all": comments.count() + webmentions.count(),
+    }
+
+    if current_status == "pending":
+        comments = comments.filter(status=Comment.PENDING)
+        webmentions = webmentions.filter(status=Webmention.PENDING)
+    elif current_status == "approved":
+        comments = comments.filter(status=Comment.APPROVED)
+        webmentions = webmentions.filter(status=Webmention.ACCEPTED)
+    elif current_status == "rejected":
+        comments = comments.filter(status=Comment.REJECTED)
+        webmentions = webmentions.filter(status=Webmention.REJECTED)
+    elif current_status == "spam":
+        comments = comments.filter(status=Comment.SPAM)
+        webmentions = webmentions.none()
+
+    if query:
+        comments = comments.filter(
+            Q(author_name__icontains=query)
+            | Q(author_email__icontains=query)
+            | Q(content__icontains=query)
+            | Q(post__title__icontains=query)
+            | Q(post__slug__icontains=query)
+        )
+        webmentions = webmentions.filter(
+            Q(source__icontains=query)
+            | Q(target__icontains=query)
+            | Q(target_post__title__icontains=query)
+            | Q(target_post__slug__icontains=query)
+        )
+
+    items = []
+    if interaction_type != "webmention":
+        for comment in comments:
+            comment.interaction_kind = "comment"
+            comment.moderation_status = comment.status
+            items.append(comment)
+    if interaction_type != "comment":
+        for mention in webmentions:
+            mention.interaction_kind = "webmention"
+            mention.moderation_status = (
+                "approved" if mention.status == Webmention.ACCEPTED else mention.status
+            )
+            items.append(mention)
+    items.sort(key=lambda item: (item.created_at, item.id), reverse=True)
+    paginator = Paginator(items, 20)
+    try:
+        page_obj = paginator.page(request.GET.get("page"))
+    except PageNotAnInteger:
+        page_obj = paginator.page(1)
+    except EmptyPage:
+        page_obj = paginator.page(paginator.num_pages)
 
     return render(
         request,
         "site_admin/interactions/index.html",
         {
-            "pending_comment_count": pending_comments.count(),
-            "pending_webmention_count": pending_webmentions.count(),
-            "pending_comments": pending_comments[:5],
-            "pending_webmentions": pending_webmentions[:5],
+            "current_status": current_status,
+            "interaction_type": interaction_type,
+            "query": query,
+            "status_counts": status_counts,
+            "page_obj": page_obj,
+            "paginator": paginator,
+            "base_query": _strip_page_query(request),
         },
     )
+
+
+@require_POST
+def interaction_bulk_action(request):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    selected = request.POST.getlist("interaction_ids")
+    comment_ids = set()
+    mention_ids = set()
+    for value in selected:
+        kind, separator, raw_id = value.partition(":")
+        if not separator or not raw_id.isdigit():
+            continue
+        if kind == "comment":
+            comment_ids.add(int(raw_id))
+        elif kind == "webmention":
+            mention_ids.add(int(raw_id))
+
+    action = request.POST.get("action", "")
+    changed = 0
+    akismet_failures = 0
+    if not comment_ids and not mention_ids:
+        messages.warning(request, "Select at least one interaction.")
+    elif action not in {"approve", "reject", "spam"}:
+        messages.error(request, "Choose a valid moderation action.")
+    else:
+        comments = Comment.objects.select_related("post").filter(
+            id__in=comment_ids
+        ).exclude(status=Comment.DELETED)
+        mentions = Webmention.objects.filter(
+            id__in=mention_ids, is_incoming=True, status=Webmention.PENDING
+        )
+        if action == "approve":
+            for comment in comments.exclude(status=Comment.APPROVED):
+                comment.status = Comment.APPROVED
+                comment.akismet_classification = "ham"
+                comment.save(update_fields=["status", "akismet_classification"])
+                changed += 1
+                try:
+                    submit_ham(_akismet_payload_for_comment(comment, request))
+                except AkismetError:
+                    akismet_failures += 1
+            changed += mentions.update(status=Webmention.ACCEPTED, error="")
+        elif action == "reject":
+            changed += comments.exclude(status=Comment.REJECTED).update(
+                status=Comment.REJECTED
+            )
+            changed += mentions.update(
+                status=Webmention.REJECTED, error="Rejected by admin"
+            )
+        else:
+            for comment in comments.exclude(status=Comment.SPAM):
+                comment.status = Comment.SPAM
+                comment.akismet_classification = "spam"
+                comment.save(update_fields=["status", "akismet_classification"])
+                changed += 1
+                try:
+                    submit_spam(_akismet_payload_for_comment(comment, request))
+                except AkismetError:
+                    akismet_failures += 1
+        messages.success(request, f"Updated {changed} interaction(s).")
+        if action == "spam" and mention_ids:
+            messages.warning(request, "Webmentions cannot be marked as spam and were skipped.")
+        if akismet_failures:
+            messages.warning(
+                request,
+                f"Akismet could not be notified about {akismet_failures} comment(s).",
+            )
+
+    return_url = request.POST.get("next", "")
+    if not url_has_allowed_host_and_scheme(
+        return_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ) or not return_url.startswith(reverse("site_admin:interactions")):
+        return_url = reverse("site_admin:interactions")
+    return redirect(return_url)
 
 
 def _parse_analytics_date_range(request, default_days=30):

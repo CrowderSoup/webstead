@@ -10,6 +10,11 @@ urlpatterns = [
     path("bar/", views.admin_bar, name="admin_bar"),
     path("", views.dashboard, name="dashboard"),
     path("interactions/", views.interactions, name="interactions"),
+    path(
+        "interactions/moderate/",
+        views.interaction_bulk_action,
+        name="interaction_bulk_action",
+    ),
     path("analytics/", views.analytics_dashboard, name="analytics_dashboard"),
     path("analytics/user-agents/", views.analytics_user_agents, name="analytics_user_agents"),
     path(

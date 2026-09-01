@@ -1468,6 +1468,104 @@ class SiteAdminThemeInstallTests(TestCase):
         self.assertTrue(any("healthcheck" in message.lower() for message in messages))
 
 
+class SiteAdminInteractionInboxTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.staff = get_user_model().objects.create_user(
+            username="inbox-editor",
+            email="inbox@example.com",
+            password="password",
+            is_staff=True,
+        )
+        self.post = Post.objects.create(
+            title="Inbox Post",
+            slug="inbox-post",
+            content="text",
+            published_on=timezone.now(),
+        )
+        self.comment = Comment.objects.create(
+            post=self.post,
+            author_name="Ada",
+            content="A thoughtful response",
+            status=Comment.PENDING,
+        )
+        self.mention = Webmention.objects.create(
+            source="https://source.example/thoughtful-note",
+            target="https://testserver/blog/inbox-post/",
+            target_post=self.post,
+            status=Webmention.PENDING,
+            is_incoming=True,
+        )
+        self.client.force_login(self.staff)
+
+    def test_inbox_combines_pending_comments_and_webmentions(self):
+        response = self.client.get(reverse("site_admin:interactions"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Ada")
+        self.assertContains(response, self.mention.source)
+        self.assertEqual(response.context["status_counts"]["pending"], 2)
+
+    def test_inbox_filters_by_type_and_search(self):
+        response = self.client.get(
+            reverse("site_admin:interactions"),
+            {"status": "pending", "type": "webmention", "q": "thoughtful-note"},
+        )
+
+        self.assertContains(response, self.mention.source)
+        self.assertNotContains(response, "A thoughtful response")
+
+    def test_bulk_approve_updates_mixed_interactions(self):
+        with mock.patch("site_admin.views.submit_ham") as submit_ham:
+            response = self.client.post(
+                reverse("site_admin:interaction_bulk_action"),
+                {
+                    "interaction_ids": [
+                        f"comment:{self.comment.id}",
+                        f"webmention:{self.mention.id}",
+                    ],
+                    "action": "approve",
+                    "next": "/admin/interactions/?status=pending",
+                },
+            )
+
+        self.comment.refresh_from_db()
+        self.mention.refresh_from_db()
+        self.assertEqual(self.comment.status, Comment.APPROVED)
+        self.assertEqual(self.mention.status, Webmention.ACCEPTED)
+        self.assertEqual(response.url, "/admin/interactions/?status=pending")
+        submit_ham.assert_called_once()
+
+    def test_bulk_spam_skips_webmentions(self):
+        with mock.patch("site_admin.views.submit_spam") as submit_spam:
+            response = self.client.post(
+                reverse("site_admin:interaction_bulk_action"),
+                {
+                    "interaction_ids": [
+                        f"comment:{self.comment.id}",
+                        f"webmention:{self.mention.id}",
+                    ],
+                    "action": "spam",
+                },
+                follow=True,
+            )
+
+        self.comment.refresh_from_db()
+        self.mention.refresh_from_db()
+        self.assertEqual(self.comment.status, Comment.SPAM)
+        self.assertEqual(self.mention.status, Webmention.PENDING)
+        self.assertContains(response, "Webmentions cannot be marked as spam")
+        submit_spam.assert_called_once()
+
+    def test_bulk_action_requires_selection_and_rejects_external_return(self):
+        response = self.client.post(
+            reverse("site_admin:interaction_bulk_action"),
+            {"action": "approve", "next": "https://example.com/steal"},
+        )
+
+        self.assertEqual(response.url, reverse("site_admin:interactions"))
+
+
 class SiteAdminWebmentionModerationTests(TestCase):
     def setUp(self):
         super().setUp()

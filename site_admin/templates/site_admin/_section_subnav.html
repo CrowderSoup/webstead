@@ -98,19 +98,19 @@
         <div class="text-sm font-medium text-(--admin-muted)">
           Interactions /
           <span class="text-(--admin-ink)">
-            {% if current == 'interactions' %}Overview{% elif current == 'comment_list' or current == 'comment_detail' or current == 'comment_approve' or current == 'comment_mark_spam' or current == 'comment_delete' %}Comments{% elif current == 'webmention_list' or current == 'webmention_detail' or current == 'webmention_create' or current == 'webmention_approve' or current == 'webmention_reject' or current == 'webmention_delete' or current == 'webmention_resend' %}Webmentions{% else %}Section{% endif %}
+            {% if current == 'interactions' or current == 'interaction_bulk_action' %}Inbox{% elif current == 'comment_list' or current == 'comment_detail' or current == 'comment_approve' or current == 'comment_mark_spam' or current == 'comment_delete' %}Comments{% elif current == 'webmention_list' or current == 'webmention_detail' or current == 'webmention_create' or current == 'webmention_approve' or current == 'webmention_reject' or current == 'webmention_delete' or current == 'webmention_resend' %}Webmentions{% else %}Section{% endif %}
           </span>
         </div>
       </div>
       <nav class="mt-3 hidden items-center gap-2 overflow-x-auto pb-1 md:flex" aria-label="Interactions sections">
-        <a href="{% url 'site_admin:interactions' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'interactions' %}bg-(--admin-accent) text-white{% else %}border border-(--admin-border) text-(--admin-ink) hover:bg-(--admin-bg){% endif %}">Overview</a>
+        <a href="{% url 'site_admin:interactions' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'interactions' or current == 'interaction_bulk_action' %}bg-(--admin-accent) text-white{% else %}border border-(--admin-border) text-(--admin-ink) hover:bg-(--admin-bg){% endif %}">Inbox</a>
         <a href="{% url 'site_admin:comment_list' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'comment_list' or current == 'comment_detail' or current == 'comment_approve' or current == 'comment_mark_spam' or current == 'comment_delete' %}bg-(--admin-accent) text-white{% else %}border border-(--admin-border) text-(--admin-ink) hover:bg-(--admin-bg){% endif %}">Comments</a>
         <a href="{% url 'site_admin:webmention_list' %}" class="rounded-xl px-3 py-1.5 text-xs font-semibold transition {% if current == 'webmention_list' or current == 'webmention_detail' or current == 'webmention_create' or current == 'webmention_approve' or current == 'webmention_reject' or current == 'webmention_delete' or current == 'webmention_resend' %}bg-(--admin-accent) text-white{% else %}border border-(--admin-border) text-(--admin-ink) hover:bg-(--admin-bg){% endif %}">Webmentions</a>
       </nav>
       <div class="mt-3 md:hidden">
         <label for="section-interactions-nav" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Interactions section</label>
         <select id="section-interactions-nav" class="mt-1 w-full rounded-xl border border-(--admin-border) bg-white px-3 py-2 text-sm" onchange="if (this.value) window.location.href=this.value;">
-          <option value="{% url 'site_admin:interactions' %}" {% if current == 'interactions' %}selected{% endif %}>Overview</option>
+          <option value="{% url 'site_admin:interactions' %}" {% if current == 'interactions' or current == 'interaction_bulk_action' %}selected{% endif %}>Inbox</option>
           <option value="{% url 'site_admin:comment_list' %}" {% if current == 'comment_list' or current == 'comment_detail' or current == 'comment_approve' or current == 'comment_mark_spam' or current == 'comment_delete' %}selected{% endif %}>Comments</option>
           <option value="{% url 'site_admin:webmention_list' %}" {% if current == 'webmention_list' or current == 'webmention_detail' or current == 'webmention_create' or current == 'webmention_approve' or current == 'webmention_reject' or current == 'webmention_delete' or current == 'webmention_resend' %}selected{% endif %}>Webmentions</option>
         </select>
