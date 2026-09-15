@@ -4949,11 +4949,16 @@ def strava_settings(request):
 
             verify_token = secrets.token_urlsafe(24)
             callback_url = request.build_absolute_uri(reverse("strava_webhook"))
+
+            # Strava verifies the subscription synchronously, GETing callback_url
+            # with this verify_token, as part of the create call below — so it
+            # must already be saved before we call create_push_subscription().
+            account.webhook_verify_token = verify_token
+            account.save(update_fields=["webhook_verify_token"])
             try:
                 result = strava_client.create_push_subscription(callback_url, verify_token)
                 account.webhook_subscription_id = str(result.get("id", ""))
-                account.webhook_verify_token = verify_token
-                account.save(update_fields=["webhook_subscription_id", "webhook_verify_token"])
+                account.save(update_fields=["webhook_subscription_id"])
                 messages.success(request, "Strava webhook enabled.")
             except Exception as exc:
                 logger.exception("strava_settings: failed to create webhook subscription")
