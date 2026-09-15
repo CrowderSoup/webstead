@@ -3,20 +3,23 @@ import time
 from django.db import DatabaseError, transaction
 from django.utils.deprecation import MiddlewareMixin
 
-from .models import UserAgentIgnore, Visit
-from .bot_detection import should_flag_user_agent
-from .utils import get_client_ip, geolocate_ip  # you write these
-from .user_agents import enqueue_user_agent_lookup
+from .utils import get_client_ip  # you write these
+
+# Paths that shouldn't pay for visit tracking: the Django admin, and
+# machine-to-machine endpoints (webhooks) that other services call under a
+# tight response-time budget.
+EXCLUDED_PATH_PREFIXES = ("/admin", "/strava/webhook")
+
 
 class AnalyticsMiddleware(MiddlewareMixin):
     def process_request(self, request):
-        if request.path.startswith("/admin"):
+        if request.path.startswith(EXCLUDED_PATH_PREFIXES):
             return
         request._analytics_start_ts = time.time()
 
     def process_response(self, request, response):
         try:
-            if request.path.startswith("/admin"):
+            if request.path.startswith(EXCLUDED_PATH_PREFIXES):
                 return response
 
             started_ts = getattr(request, "_analytics_start_ts", None)
@@ -32,31 +35,22 @@ class AnalyticsMiddleware(MiddlewareMixin):
                 session_key = request.session.session_key
 
             user_agent = request.META.get("HTTP_USER_AGENT", "")
-            if UserAgentIgnore.objects.filter(user_agent=user_agent).exists():
-                return response
-            is_suspected_bot, pattern_version = should_flag_user_agent(user_agent)
-
             ip = get_client_ip(request)
-            geo = geolocate_ip(ip) if ip else {}
 
-            visit = Visit.objects.create(
+            # The rest (geolocation HTTP call, bot-pattern check, Visit write)
+            # is slow and must not delay the response — do it in Celery.
+            from .tasks import record_visit
+
+            record_visit.delay(
                 session_key=session_key,
-                user=request.user if request.user.is_authenticated else None,
-                ip_address=ip,
+                user_id=request.user.id if request.user.is_authenticated else None,
+                ip=ip,
                 user_agent=user_agent,
                 path=request.path,
                 referrer=request.META.get("HTTP_REFERER", ""),
-                duration_seconds=duration,
-                country=geo.get("country", ""),
-                region=geo.get("region", ""),
-                city=geo.get("city", ""),
+                duration=duration,
                 response_status_code=response.status_code,
-                is_suspected_bot=is_suspected_bot,
-                suspected_bot_pattern_version=pattern_version,
             )
-
-            enqueue_user_agent_lookup(visit.id, visit.user_agent)
-            request.visit_id = visit.id
         except DatabaseError:
             # Clear rollback flag so analytics hiccups don't poison the request transaction.
             conn = transaction.get_connection()
