@@ -4,9 +4,14 @@ Strava Celery tasks.
 import_activity_task(strava_activity_id, skip_if_private=False) — imports a
     single activity as a blog.Post; shared by the historical-import view, the
     webhook handler, and the reconciliation safety net below.
+update_activity_task(strava_activity_id) — refreshes an already-imported
+    post's title/content/stats/photos from Strava's current data.
+delete_activity_task(strava_activity_id) — soft-deletes the post linked to
+    an activity that was deleted on Strava.
 download_strava_photo(post_id, url)   — downloads and attaches a Strava
     activity photo to a post.
-handle_strava_webhook_event(payload)  — processes a single webhook event.
+handle_strava_webhook_event(payload)  — dispatches a single webhook event to
+    one of the above, by its aspect_type (create/update/delete).
 reconcile_strava_activities()         — hourly safety net for activities a
     missed/failed webhook delivery never told us about.
 """
@@ -52,6 +57,57 @@ def import_activity_task(self, strava_activity_id, skip_if_private=False):
         logger.exception(
             "import_activity_task: non-retriable error for %s", strava_activity_id
         )
+    finally:
+        close_old_connections()
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def update_activity_task(self, strava_activity_id):
+    from django.db import close_old_connections
+
+    from .importer import update_activity
+    from .models import StravaAccount
+
+    close_old_connections()
+    try:
+        account = StravaAccount.get_active()
+        if not account:
+            logger.warning("update_activity_task: no active Strava account")
+            return
+
+        post = update_activity(account, strava_activity_id)
+        if post:
+            logger.info(
+                "update_activity_task: refreshed post %s from activity %s",
+                post.id, strava_activity_id,
+            )
+    except StravaAPIError as exc:
+        if exc.retriable:
+            logger.warning(
+                "update_activity_task: retriable error for %s: %s", strava_activity_id, exc
+            )
+            raise self.retry(exc=exc)
+        logger.exception(
+            "update_activity_task: non-retriable error for %s", strava_activity_id
+        )
+    finally:
+        close_old_connections()
+
+
+@shared_task(ignore_result=True)
+def delete_activity_task(strava_activity_id) -> None:
+    from django.db import close_old_connections
+
+    from .importer import delete_activity
+
+    close_old_connections()
+    try:
+        post = delete_activity(strava_activity_id)
+        if post:
+            logger.info(
+                "delete_activity_task: soft-deleted post %s for activity %s",
+                post.id, strava_activity_id,
+            )
     finally:
         close_old_connections()
 
@@ -102,7 +158,7 @@ def handle_strava_webhook_event(payload: dict) -> None:
 
     close_old_connections()
 
-    if payload.get("object_type") != "activity" or payload.get("aspect_type") != "create":
+    if payload.get("object_type") != "activity":
         return
 
     account = StravaAccount.get_active()
@@ -113,7 +169,14 @@ def handle_strava_webhook_event(payload: dict) -> None:
     if not object_id:
         return
 
-    import_activity_task.delay(str(object_id), skip_if_private=True)
+    aspect_type = payload.get("aspect_type")
+    if aspect_type == "create":
+        import_activity_task.delay(str(object_id), skip_if_private=True)
+    elif aspect_type == "update":
+        update_activity_task.delay(str(object_id))
+    elif aspect_type == "delete":
+        delete_activity_task.delay(str(object_id))
+
     close_old_connections()
 
 
