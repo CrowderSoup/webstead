@@ -12,7 +12,7 @@ MICROPUB_URL = "/micropub"
 
 
 class AnalyticsMiddlewareTests(TestCase):
-    @patch("analytics.middleware.Visit.objects.create", side_effect=IntegrityError)
+    @patch("analytics.models.Visit.objects.create", side_effect=IntegrityError)
     @patch("micropub.views._authorized", return_value=(True, ["update"]))
     def test_db_error_does_not_break_request_transaction(self, _authorized, _visit_create):
         post = Post.objects.create(title="Tags", slug="page-5", content="hi")
@@ -35,8 +35,8 @@ class AnalyticsMiddlewareTests(TestCase):
         self.assertEqual(response.status_code, 204)
         self.assertSetEqual(set(post.tags.values_list("tag", flat=True)), {"added"})
 
-    @patch("analytics.middleware.Visit.objects.create")
-    @patch("analytics.middleware.enqueue_user_agent_lookup")
+    @patch("analytics.models.Visit.objects.create")
+    @patch("analytics.user_agents.enqueue_user_agent_lookup")
     def test_user_agent_lookup_is_enqueued_off_thread(self, enqueue_lookup, create_visit):
         user_agent = "Test User Agent"
         create_visit.return_value.id = 123
@@ -49,8 +49,8 @@ class AnalyticsMiddlewareTests(TestCase):
         self.assertEqual(enqueue_lookup.call_args[0], (123, user_agent))
         create_visit.assert_called_once()
 
-    @patch("analytics.middleware.Visit.objects.create")
-    @patch("analytics.middleware.enqueue_user_agent_lookup")
+    @patch("analytics.models.Visit.objects.create")
+    @patch("analytics.user_agents.enqueue_user_agent_lookup")
     def test_matching_user_agent_is_flagged_when_rule_enabled(self, enqueue_lookup, create_visit):
         UserAgentBotRule.objects.create(enabled=True, pattern=r"(?i)bot")
         create_visit.return_value.id = 123
@@ -66,8 +66,8 @@ class AnalyticsMiddlewareTests(TestCase):
         )
         enqueue_lookup.assert_called_once()
 
-    @patch("analytics.middleware.Visit.objects.create")
-    @patch("analytics.middleware.enqueue_user_agent_lookup")
+    @patch("analytics.models.Visit.objects.create")
+    @patch("analytics.user_agents.enqueue_user_agent_lookup")
     def test_matching_user_agent_is_not_flagged_if_false_positive(
         self, enqueue_lookup, create_visit
     ):
