@@ -61,4 +61,14 @@ USER app
 EXPOSE 8000
 
 ENTRYPOINT ["/app/scripts/entrypoint.sh"]
-CMD ["sh", "-c", "gunicorn config.wsgi:application -b 0.0.0.0:${PORT:-8000}"]
+# gunicorn defaults to a single sync worker, which serves one request at a
+# time for the whole process. That's a self-deadlock for anything that makes
+# an outbound call which triggers an inbound callback to this same app (e.g.
+# Strava's webhook verification handshake: POST /push_subscriptions blocks
+# the only worker while Strava GETs /strava/webhook/ back, times out after
+# 2s with no worker free to answer, and the outbound call fails as
+# "not verifiable"). gthread with a few threads gives it real concurrency in
+# one process — this host is memory-constrained and shares 2 vCPUs with
+# several other services, so threads (shared memory) beat extra worker
+# processes (each a full copy of the app) here.
+CMD ["sh", "-c", "gunicorn config.wsgi:application -b 0.0.0.0:${PORT:-8000} --worker-class gthread --workers ${WEB_CONCURRENCY:-1} --threads ${GUNICORN_THREADS:-4}"]
