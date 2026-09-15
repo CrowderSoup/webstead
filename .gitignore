@@ -72,3 +72,6 @@ celerybeat-schedule*
 .kamal/secrets
 .kamal/secrets.*
 !.kamal/secrets.example
+
+# Claude Code
+.claude/
