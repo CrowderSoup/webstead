@@ -10,7 +10,13 @@ from blog.models import Post
 from core.models import SiteConfiguration
 from files.gpx import anonymize_gpx, GpxAnonymizeOptions
 from strava_integration.gpx import streams_to_gpx
-from strava_integration.importer import _activity_summary, _build_mf2, import_activity
+from strava_integration.importer import (
+    _activity_summary,
+    _build_mf2,
+    delete_activity,
+    import_activity,
+    update_activity,
+)
 from strava_integration.models import StravaAccount, StravaActivity
 from strava_integration.tasks import handle_strava_webhook_event
 
@@ -267,6 +273,100 @@ class ImportActivityTests(TestCase):
         self.assertTrue(track_values[0])
 
 
+def _photo(unique_id, url="https://example.com/photo-2000.jpg"):
+    return {"unique_id": unique_id, "urls": {"2000": url}}
+
+
+class UpdateActivityTests(TestCase):
+    def setUp(self):
+        self.account = _make_account()
+        with patch("strava_integration.importer.client.list_activity_photos", return_value=[]), \
+             patch("strava_integration.importer.client.get_activity_streams", return_value={}), \
+             patch("strava_integration.importer.client.get_activity", return_value=_activity_payload()):
+            self.post = import_activity(self.account, 1001)
+        self.link = StravaActivity.objects.get(strava_activity_id="1001")
+
+    @patch("strava_integration.importer.client.list_activity_photos")
+    @patch("strava_integration.importer.client.get_activity")
+    def test_refreshes_title_and_content(self, mock_get_activity, mock_photos):
+        mock_get_activity.return_value = _activity_payload(
+            name="Evening Run (renamed)", description="Actually felt rough."
+        )
+        mock_photos.return_value = []
+
+        updated = update_activity(self.account, 1001)
+
+        self.post.refresh_from_db()
+        self.assertEqual(updated.id, self.post.id)
+        self.assertEqual(self.post.title, "Evening Run (renamed)")
+        self.assertEqual(self.post.content, "Actually felt rough.")
+        self.assertFalse(self.post.deleted)
+
+    @patch("strava_integration.importer.client.list_activity_photos")
+    @patch("strava_integration.importer.client.get_activity")
+    def test_syncs_only_new_photos(self, mock_get_activity, mock_photos):
+        mock_get_activity.return_value = _activity_payload()
+        mock_photos.return_value = [_photo("photo-a"), _photo("photo-b")]
+
+        with patch("strava_integration.tasks.download_strava_photo.delay") as mock_download, \
+             self.captureOnCommitCallbacks(execute=True) as callbacks:
+            update_activity(self.account, 1001)
+
+        self.assertEqual(len(callbacks), 2)
+        self.assertEqual(mock_download.call_count, 2)
+        self.link.refresh_from_db()
+        self.assertCountEqual(self.link.synced_photo_ids, ["photo-a", "photo-b"])
+
+        # A second update with one already-known photo and one new one only
+        # downloads the new one.
+        mock_photos.return_value = [_photo("photo-a"), _photo("photo-c")]
+        with patch("strava_integration.tasks.download_strava_photo.delay") as mock_download, \
+             self.captureOnCommitCallbacks(execute=True) as callbacks:
+            update_activity(self.account, 1001)
+
+        self.assertEqual(len(callbacks), 1)
+        self.assertEqual(mock_download.call_count, 1)
+        self.link.refresh_from_db()
+        self.assertCountEqual(self.link.synced_photo_ids, ["photo-a", "photo-b", "photo-c"])
+
+    @patch("strava_integration.importer.client.list_activity_photos")
+    @patch("strava_integration.importer.client.get_activity")
+    def test_soft_deletes_post_when_activity_made_private(self, mock_get_activity, mock_photos):
+        mock_get_activity.return_value = _activity_payload(private=True)
+        mock_photos.return_value = []
+
+        update_activity(self.account, 1001)
+
+        self.post.refresh_from_db()
+        self.assertTrue(self.post.deleted)
+
+    def test_noop_for_activity_never_imported(self):
+        result = update_activity(self.account, "does-not-exist")
+
+        self.assertIsNone(result)
+
+
+class DeleteActivityTests(TestCase):
+    def setUp(self):
+        self.account = _make_account()
+        with patch("strava_integration.importer.client.list_activity_photos", return_value=[]), \
+             patch("strava_integration.importer.client.get_activity_streams", return_value={}), \
+             patch("strava_integration.importer.client.get_activity", return_value=_activity_payload()):
+            self.post = import_activity(self.account, 1001)
+
+    def test_soft_deletes_linked_post(self):
+        result = delete_activity(1001)
+
+        self.post.refresh_from_db()
+        self.assertEqual(result.id, self.post.id)
+        self.assertTrue(self.post.deleted)
+
+    def test_noop_for_activity_never_imported(self):
+        result = delete_activity("does-not-exist")
+
+        self.assertIsNone(result)
+
+
 class WebhookEventHandlingTests(TestCase):
     def setUp(self):
         self.account = _make_account(auto_post_enabled=True)
@@ -282,15 +382,25 @@ class WebhookEventHandlingTests(TestCase):
 
         mock_delay.assert_called_once_with("555", skip_if_private=True)
 
-    @patch("strava_integration.tasks.import_activity_task.delay")
-    def test_update_event_is_ignored(self, mock_delay):
+    @patch("strava_integration.tasks.update_activity_task.delay")
+    def test_update_event_triggers_update_task(self, mock_delay):
         handle_strava_webhook_event({
             "object_type": "activity",
             "aspect_type": "update",
             "object_id": 555,
         })
 
-        mock_delay.assert_not_called()
+        mock_delay.assert_called_once_with("555")
+
+    @patch("strava_integration.tasks.delete_activity_task.delay")
+    def test_delete_event_triggers_delete_task(self, mock_delay):
+        handle_strava_webhook_event({
+            "object_type": "activity",
+            "aspect_type": "delete",
+            "object_id": 555,
+        })
+
+        mock_delay.assert_called_once_with("555")
 
     @patch("strava_integration.tasks.import_activity_task.delay")
     def test_ignored_when_auto_post_disabled(self, mock_delay):

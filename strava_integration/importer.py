@@ -198,25 +198,56 @@ def _attach_gpx(post, account, strava_activity_id, activity, start_date) -> str:
     return asset.file.url
 
 
-def _queue_photo_downloads(post_id, account, strava_activity_id) -> None:
+def _describe_activity(activity: dict) -> str:
+    """Strava's own description if it set one, else our generated summary."""
+    description = activity.get("description") or ""
+    if description:
+        return description
+    units = SiteConfiguration.get_solo().activity_units
+    return _activity_summary(activity, units=units)
+
+
+def _sync_photos(link: StravaActivity, account, strava_activity_id) -> None:
+    """
+    Queue downloads for any activity photos not already synced. Safe to call
+    repeatedly (e.g. once at import, then again on every update webhook) --
+    photos already recorded in link.synced_photo_ids are skipped.
+    """
     try:
         photos = client.list_activity_photos(account, strava_activity_id)
     except client.StravaAPIError as exc:
         logger.warning(
-            "import_activity: could not fetch photos for %s: %s", strava_activity_id, exc
+            "_sync_photos: could not fetch photos for %s: %s", strava_activity_id, exc
         )
         return
 
     from .tasks import download_strava_photo
 
+    known_ids = set(link.synced_photo_ids)
+    new_ids = []
     for photo in photos:
+        unique_id = photo.get("unique_id")
+        if not unique_id or unique_id in known_ids:
+            continue
         urls = photo.get("urls") or {}
         if not urls:
             continue
         # Prefer the largest available size; fall back to whatever's there.
         url = urls.get("2000") or urls.get("1000") or urls.get("600") or next(iter(urls.values()), None)
-        if url:
-            transaction.on_commit(lambda u=url: download_strava_photo.delay(post_id, u))
+        if not url:
+            continue
+        new_ids.append(unique_id)
+        transaction.on_commit(lambda u=url: download_strava_photo.delay(link.post_id, u))
+
+    if not new_ids:
+        return
+
+    with transaction.atomic():
+        # select_for_update so two update webhooks for the same activity in
+        # close succession can't clobber each other's synced_photo_ids.
+        locked = StravaActivity.objects.select_for_update().get(pk=link.pk)
+        locked.synced_photo_ids = sorted(set(locked.synced_photo_ids) | set(new_ids))
+        locked.save(update_fields=["synced_photo_ids"])
 
 
 def import_activity(account, strava_activity_id, *, skip_if_private=False):
@@ -240,10 +271,7 @@ def import_activity(account, strava_activity_id, *, skip_if_private=False):
         return None
 
     start_date = _parse_start_date(activity)
-    description = activity.get("description") or ""
-    if not description:
-        units = SiteConfiguration.get_solo().activity_units
-        description = _activity_summary(activity, units=units)
+    description = _describe_activity(activity)
 
     with transaction.atomic():
         post = Post(
@@ -261,13 +289,92 @@ def import_activity(account, strava_activity_id, *, skip_if_private=False):
             post.save(update_fields=["mf2"])
 
         try:
-            StravaActivity.objects.create(post=post, strava_activity_id=strava_activity_id)
+            link = StravaActivity.objects.create(post=post, strava_activity_id=strava_activity_id)
         except IntegrityError:
             # Lost a race with another import of the same activity — roll the
             # whole thing back rather than leaving an orphaned duplicate post.
             transaction.set_rollback(True)
             return None
 
-    _queue_photo_downloads(post.id, account, strava_activity_id)
+    _sync_photos(link, account, strava_activity_id)
 
     return post
+
+
+def soft_delete_activity_post(link: StravaActivity) -> None:
+    post = link.post
+    if not post.deleted:
+        post.deleted = True
+        post.save(update_fields=["deleted"])
+
+
+def update_activity(account, strava_activity_id):
+    """
+    Refresh a previously-imported activity's post from Strava's current
+    data: title, content, stats (mf2), and any photos added since import.
+
+    A no-op (returns None) if this activity was never imported -- create
+    events and the reconciliation task are what create posts in the first
+    place, so an update for an unknown activity has nothing to update.
+
+    If the activity has been made private on Strava, the post is
+    soft-deleted instead of refreshed, same as an outright delete -- there's
+    no reason to keep serving a post for an activity its owner no longer
+    wants public.
+    """
+    strava_activity_id = str(strava_activity_id)
+
+    try:
+        link = StravaActivity.objects.select_related("post").get(
+            strava_activity_id=strava_activity_id
+        )
+    except StravaActivity.DoesNotExist:
+        logger.debug(
+            "update_activity: %s was never imported, nothing to update", strava_activity_id
+        )
+        return None
+
+    activity = client.get_activity(account, strava_activity_id)
+
+    if activity.get("private"):
+        logger.debug(
+            "update_activity: %s is now private, soft-deleting post", strava_activity_id
+        )
+        soft_delete_activity_post(link)
+        return link.post
+
+    post = link.post
+    post.title = activity.get("name") or post.title
+    post.content = _describe_activity(activity)
+
+    # Keep the existing GPX track (the route doesn't change on an edit) --
+    # just carry its URL forward into the refreshed mf2 properties.
+    existing_track = post.gpx_attachment
+    track_url = existing_track.asset.file.url if existing_track else ""
+    mf2 = _build_mf2(activity, track_url)
+    if mf2:
+        post.mf2 = mf2
+
+    post.save(update_fields=["title", "content", "mf2"])
+
+    _sync_photos(link, account, strava_activity_id)
+
+    return post
+
+
+def delete_activity(strava_activity_id):
+    """Soft-delete the post linked to a Strava activity that was deleted."""
+    strava_activity_id = str(strava_activity_id)
+
+    try:
+        link = StravaActivity.objects.select_related("post").get(
+            strava_activity_id=strava_activity_id
+        )
+    except StravaActivity.DoesNotExist:
+        logger.debug(
+            "delete_activity: %s was never imported, nothing to delete", strava_activity_id
+        )
+        return None
+
+    soft_delete_activity_post(link)
+    return link.post

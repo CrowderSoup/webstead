@@ -77,6 +77,11 @@ class StravaActivity(models.Model):
     )
     strava_activity_id = models.CharField(max_length=64, unique=True, db_index=True)
     imported_at = models.DateTimeField(auto_now_add=True)
+    synced_photo_ids = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Strava photo unique_ids already downloaded, so update webhooks don't re-download them.",
+    )
 
     def __str__(self):
         return f"{self.post} → strava:{self.strava_activity_id}"
