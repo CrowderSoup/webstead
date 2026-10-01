@@ -118,6 +118,8 @@ def dispatch_webmentions(post_id: int, source_url: str, *, include_bridgy: bool 
         post = Post.objects.get(id=post_id)
     except Post.DoesNotExist:
         return
+    if not post.is_live():
+        return
 
     source_host = urllib.parse.urlparse(source_url).netloc
     targets = [
@@ -151,3 +153,25 @@ def dispatch_webmentions(post_id: int, source_url: str, *, include_bridgy: bool 
         for target in bridgy_targets:
             if target not in bridgy_existing and post.kind not in (Post.LIKE, Post.REPLY, Post.REPOST):
                 send_single_webmention.delay(post_id, source_url, target, Webmention.MENTION)
+
+
+@shared_task
+def publish_due_posts() -> None:
+    """Send go-live side effects for scheduled posts whose time has come.
+
+    Scheduled posts are hidden until their publish time, and saving them sends
+    nothing (see queue_webmentions_for_post). This picks them up once they're
+    live. Scheduled every minute by Celery Beat.
+    """
+    from blog.models import Post
+    from mastodon_integration.tasks import _build_canonical_url
+    from micropub.webmention import queue_webmentions_for_post
+
+    for post in Post.objects.live().filter(went_live_at__isnull=True):
+        source_url = _build_canonical_url(post)
+        if not source_url.startswith(("http://", "https://")):
+            logger.warning(
+                "publish_due_posts: no site URL configured; post %s goes live without webmentions",
+                post.id,
+            )
+        queue_webmentions_for_post(post, source_url, include_bridgy=True)

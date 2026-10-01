@@ -119,7 +119,7 @@ def publish_post_to_mastodon(self, post_id: int):
         return
 
     # Guard: deleted or unpublished
-    if post.deleted or not post.is_published():
+    if not post.is_live():
         return
 
     # Guard: idempotency — already syndicated

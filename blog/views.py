@@ -102,7 +102,7 @@ def _local_target_from_url(target_url, request):
         return None
 
     target_post = (
-        Post.objects.filter(slug=slug, deleted=False, published_on__isnull=False)
+        Post.objects.live().filter(slug=slug)
         .only("title", "content")
         .first()
     )
@@ -347,8 +347,7 @@ def build_posts_listing_context(request, *, include_og=True):
     query_set = (
         Post.objects.select_related("author")
         .prefetch_related("author__hcards", "tags")
-        .exclude(published_on__isnull=True)
-        .filter(deleted=False)
+        .live()
         .order_by("-published_on")
     )
     if selected_kinds:
@@ -479,7 +478,7 @@ def post(request, slug):
         slug=slug,
         deleted=False,
     )
-    if not post.is_published() and not request.user.is_authenticated:
+    if not post.is_live() and not request.user.is_authenticated:
         raise Http404
     return render(request, "blog/post.html", _post_context(request, post))
 
@@ -495,7 +494,7 @@ def comment_create(request, slug):
         slug=slug,
         deleted=False,
     )
-    if not post.is_published():
+    if not post.is_live():
         raise Http404
 
     settings_obj = SiteConfiguration.get_solo()
