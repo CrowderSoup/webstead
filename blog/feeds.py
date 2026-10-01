@@ -59,8 +59,7 @@ class PostsFeed(Feed):
         selected_kinds = [kind for kind in selected_kinds if kind in valid_kinds]
 
         queryset = (
-            Post.objects.exclude(published_on__isnull=True)
-            .filter(deleted=False)
+            Post.objects.live()
             .prefetch_related("attachments__asset")
             .order_by("-published_on")
         )

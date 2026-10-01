@@ -48,7 +48,7 @@ class RecentPostsWidget(BaseWidget):
 
         count = int(config.get("count") or 5)
         kind = config.get("kind", "")
-        qs = Post.objects.filter(deleted=False, published_on__isnull=False)
+        qs = Post.objects.live()
         if kind:
             qs = qs.filter(kind=kind)
         posts = qs.order_by("-published_on")[:count]

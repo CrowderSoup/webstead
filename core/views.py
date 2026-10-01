@@ -13,8 +13,8 @@ from core.themes import get_active_theme_settings
 
 def index(request):
     recent_blog_posts = (
-        Post.objects.filter(kind=Post.ARTICLE)
-        .exclude(published_on__isnull=True)
+        Post.objects.live()
+        .filter(kind=Post.ARTICLE)
         .order_by("-published_on")[:5]
     )
     settings_obj = SiteConfiguration.get_solo()
@@ -100,7 +100,7 @@ def sitemap(request):
         urls.add(request.build_absolute_uri(path))
 
     pages = Page.objects.all()
-    posts = Post.objects.exclude(published_on__isnull=True).filter(deleted=False)
+    posts = Post.objects.live()
     tags = Tag.objects.all()
 
     for page in pages:

@@ -8,6 +8,7 @@ from html.parser import HTMLParser
 from typing import Iterable, Optional
 
 from django.conf import settings
+from django.utils import timezone
 from django.utils.encoding import force_str
 
 from blog.models import Post
@@ -390,6 +391,20 @@ def queue_webmentions_for_post(
     settings_obj=None,
 ) -> None:
     from micropub.tasks import dispatch_webmentions
+
+    # Drafts and scheduled posts send nothing yet; publish_due_posts queues
+    # them once their publish time has passed.
+    if not post.is_live():
+        return
+    if post.went_live_at is None:
+        claimed = Post.objects.filter(pk=post.pk, went_live_at__isnull=True).update(
+            went_live_at=timezone.now()
+        )
+        post.went_live_at = timezone.now()
+        # the first time a post goes live it always goes to Bridgy, even when
+        # the caller thought it was already published (e.g. a scheduled post)
+        if claimed:
+            include_bridgy = True
 
     dispatch_webmentions.delay(post.id, source_url, include_bridgy=include_bridgy)
 

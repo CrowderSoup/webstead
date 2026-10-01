@@ -975,3 +975,174 @@ class CommentSubmissionTests(TestCase):
         self.assertContains(response, "Visible")
         self.assertNotContains(response, "Hidden")
         self.assertNotContains(response, "Also hidden")
+
+
+class ScheduledPostVisibilityTests(TestCase):
+    def setUp(self):
+        self.scheduled = Post.objects.create(
+            title="Future Post",
+            slug="future-post",
+            content="not yet",
+            kind=Post.NOTE,
+            published_on=timezone.now() + timezone.timedelta(days=1),
+        )
+        self.published = Post.objects.create(
+            title="Past Post",
+            slug="past-post",
+            content="already out",
+            kind=Post.NOTE,
+            published_on=timezone.now() - timezone.timedelta(hours=1),
+        )
+
+    def test_live_excludes_scheduled_drafts_and_deleted(self):
+        Post.objects.create(title="Draft", slug="draft", content="text")
+        Post.objects.create(
+            title="Gone",
+            slug="gone",
+            content="text",
+            published_on=timezone.now() - timezone.timedelta(hours=1),
+            deleted=True,
+        )
+
+        self.assertEqual(list(Post.objects.live()), [self.published])
+        self.assertTrue(self.published.is_live())
+        self.assertFalse(self.scheduled.is_live())
+
+    def test_scheduled_post_is_404_when_logged_out(self):
+        response = self.client.get(reverse("post", kwargs={"slug": self.scheduled.slug}))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_logged_in_user_can_view_scheduled_post(self):
+        user = get_user_model().objects.create_user(
+            username="owner", email="owner@example.com", password="password"
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("post", kwargs={"slug": self.scheduled.slug}))
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_scheduled_post_not_in_listing(self):
+        response = self.client.get(reverse("posts"), follow=True)
+
+        self.assertContains(response, "/blog/post/past-post/")
+        self.assertNotContains(response, "future-post")
+
+    def test_scheduled_post_not_in_feed(self):
+        response = self.client.get(reverse("posts_feed"))
+
+        self.assertContains(response, "past-post")
+        self.assertNotContains(response, "future-post")
+
+    def test_scheduled_post_not_in_sitemap(self):
+        response = self.client.get(reverse("sitemap"))
+
+        self.assertContains(response, "past-post")
+        self.assertNotContains(response, "future-post")
+
+
+@patch("mastodon_integration.tasks.publish_post_to_mastodon.delay")
+@patch("micropub.tasks.dispatch_webmentions.delay")
+class GoLiveSideEffectTests(TestCase):
+    source_url = "https://example.com/blog/post/x/"
+
+    def test_draft_sends_nothing(self, dispatch, mastodon):
+        from micropub.webmention import queue_webmentions_for_post
+
+        post = Post.objects.create(title="Draft", slug="draft", content="text")
+        queue_webmentions_for_post(post, self.source_url, include_bridgy=True)
+
+        dispatch.assert_not_called()
+        mastodon.assert_not_called()
+
+    def test_scheduled_post_sends_nothing_until_due(self, dispatch, mastodon):
+        from micropub.tasks import publish_due_posts
+        from micropub.webmention import queue_webmentions_for_post
+
+        post = Post.objects.create(
+            title="Later",
+            slug="later",
+            content="text",
+            published_on=timezone.now() + timezone.timedelta(hours=1),
+        )
+        queue_webmentions_for_post(post, self.source_url, include_bridgy=True)
+        publish_due_posts()
+
+        dispatch.assert_not_called()
+        mastodon.assert_not_called()
+        post.refresh_from_db()
+        self.assertIsNone(post.went_live_at)
+
+    @override_settings(MICROSUB_BASE_URL="https://example.com")
+    def test_publish_due_posts_sends_once_when_time_passes(self, dispatch, mastodon):
+        from micropub.tasks import publish_due_posts
+
+        post = Post.objects.create(
+            title="Due",
+            slug="due",
+            content="text",
+            published_on=timezone.now() - timezone.timedelta(minutes=1),
+        )
+
+        publish_due_posts()
+        publish_due_posts()
+
+        dispatch.assert_called_once_with(
+            post.id, "https://example.com/blog/post/due/", include_bridgy=True
+        )
+        mastodon.assert_called_once_with(post.id)
+        post.refresh_from_db()
+        self.assertIsNotNone(post.went_live_at)
+
+    def test_first_go_live_always_includes_bridgy(self, dispatch, mastodon):
+        from micropub.webmention import queue_webmentions_for_post
+
+        post = Post.objects.create(
+            title="Now",
+            slug="now",
+            content="text",
+            published_on=timezone.now() - timezone.timedelta(minutes=1),
+        )
+        queue_webmentions_for_post(post, self.source_url, include_bridgy=False)
+        queue_webmentions_for_post(post, self.source_url, include_bridgy=False)
+
+        self.assertEqual(
+            [call.kwargs["include_bridgy"] for call in dispatch.call_args_list],
+            [True, False],
+        )
+
+    def test_already_live_posts_are_not_picked_up(self, dispatch, mastodon):
+        from micropub.tasks import publish_due_posts
+
+        Post.objects.create(
+            title="Old",
+            slug="old",
+            content="text",
+            published_on=timezone.now() - timezone.timedelta(days=30),
+            went_live_at=timezone.now() - timezone.timedelta(days=30),
+        )
+
+        publish_due_posts()
+
+        dispatch.assert_not_called()
+        mastodon.assert_not_called()
+
+
+class MastodonScheduledGuardTests(TestCase):
+    @patch("mastodon_integration.tasks._should_syndicate", return_value=True)
+    def test_scheduled_post_is_not_tooted(self, should_syndicate):
+        from mastodon_integration.models import MastodonPost
+        from mastodon_integration.tasks import publish_post_to_mastodon
+
+        post = Post.objects.create(
+            title="Later",
+            slug="later-toot",
+            content="text",
+            published_on=timezone.now() + timezone.timedelta(hours=1),
+        )
+
+        publish_post_to_mastodon(post.id)
+
+        should_syndicate.assert_not_called()
+        self.assertFalse(MastodonPost.objects.filter(post=post).exists())

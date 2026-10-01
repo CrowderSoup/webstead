@@ -279,6 +279,8 @@ def import_activity(account, strava_activity_id, *, skip_if_private=False):
             content=description,
             kind=Post.ACTIVITY,
             published_on=start_date,
+            # imported activities don't syndicate; keep publish_due_posts away
+            went_live_at=dj_timezone.now(),
         )
         post.save()
 

@@ -330,6 +330,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "mastodon_integration.tasks.poll_mastodon_notifications",
         "schedule": 900,  # every 15 min
     },
+    "publish-due-posts": {
+        "task": "micropub.tasks.publish_due_posts",
+        "schedule": 60,  # every minute, so scheduled posts go out on time
+    },
     "reconcile-strava-activities": {
         "task": "strava_integration.tasks.reconcile_strava_activities",
         "schedule": 3600,  # hourly safety net; the webhook does the real-time work

@@ -22,6 +22,12 @@ class Tag(models.Model):
     class Meta:
         ordering = ['tag']
 
+class PostQuerySet(models.QuerySet):
+    def live(self):
+        """Posts the public can see: not deleted, with a publish time that has passed."""
+        return self.filter(deleted=False, published_on__lte=timezone.now())
+
+
 class Post(models.Model):
     ARTICLE = "article"; NOTE = "note"; PHOTO = "photo"; ACTIVITY = "activity"; LIKE = "like"; REPOST = "repost"; REPLY = "reply"; EVENT = "event"; RSVP = "rsvp"; CHECKIN = "checkin"; BOOKMARK = "bookmark"
     KIND_CHOICES = [
@@ -60,6 +66,16 @@ class Post(models.Model):
             "Null = use the per-kind default from MastodonSyndicationDefault."
         ),
     )
+    went_live_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "When go-live side effects (webmentions, syndication) were queued. "
+            "Null on drafts and scheduled posts that haven't reached their time."
+        ),
+    )
+
+    objects = PostQuerySet.as_manager()
 
     def __str__(self):
         return self.title
@@ -104,6 +120,14 @@ class Post(models.Model):
     
     def is_published(self):
         return self.published_on is not None
+
+    def is_live(self):
+        """Visible to the public: not deleted and the publish time has passed."""
+        return (
+            not self.deleted
+            and self.published_on is not None
+            and self.published_on <= timezone.now()
+        )
 
     @property
     def photo_attachments(self):
