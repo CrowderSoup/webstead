@@ -3,7 +3,6 @@ import json
 import logging
 import mimetypes
 import os
-import re
 from datetime import datetime
 from html.parser import HTMLParser
 from typing import Optional
@@ -19,7 +18,6 @@ from django.http import (
     JsonResponse,
 )
 from django.utils import timezone
-from django.utils.text import slugify
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -32,12 +30,25 @@ from django.db import IntegrityError, transaction
 
 from markdownify import markdownify as html_to_markdown
 
-from blog.models import Post, Tag
+from blog.models import Post
+from blog.services import (
+    DRAFT,
+    PUBLISHED,
+    Actor,
+    ContentError,
+    create_media,
+    create_post,
+    delete_post,
+    parse_geo_uri as _parse_geo_uri,
+    post_url,
+    undelete_post,
+    update_post,
+)
 from core.models import Page, SiteConfiguration, RequestErrorLog
 from core.request_logs import extract_response_error, log_request_error
 from files.models import Attachment, File
 from .models import Webmention
-from .webmention import BRIDGY_PUBLISH_TARGETS, queue_webmentions_for_post
+from .webmention import BRIDGY_PUBLISH_TARGETS
 
 DEFAULT_TOKEN_ENDPOINT = "https://tokens.indieauth.com/token"
 logger = logging.getLogger(__name__)
@@ -48,26 +59,6 @@ def _first_value(data: dict, key: str, default=None):
     if isinstance(value, list):
         return value[0] if value else default
     return value or default
-
-
-_GEO_URI_RE = re.compile(
-    r"^geo:(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)(?:,(-?\d+(?:\.\d+)?))?(?:;.*)?$"
-)
-
-
-def _parse_geo_uri(uri: str) -> dict | None:
-    if not uri:
-        return None
-    match = _GEO_URI_RE.match(uri.strip())
-    if not match:
-        return None
-    result = {
-        "latitude": float(match.group(1)),
-        "longitude": float(match.group(2)),
-    }
-    if match.group(3) is not None:
-        result["altitude"] = float(match.group(3))
-    return result
 
 
 class _IndieAuthEndpointParser(HTMLParser):
@@ -442,9 +433,11 @@ def _extract_mf2_objects(data: dict):
     return mf2_objects
 
 
-def _require_scope(request, needed):
+def _require_scope(request, *needed):
+    """403 unless the token has at least one of ``needed`` (no scopes needed: always OK)."""
     scopes = getattr(request, "micropub_scopes", [])
-    if needed and needed not in scopes:
+    needed = [scope for scope in needed if scope]
+    if needed and not any(scope in scopes for scope in needed):
         return JsonResponse({"error": "insufficient_scope"}, status=403)
     return None
 
@@ -530,6 +523,8 @@ def _build_properties_response(post, requested_props=None):
         props["repost-of"] = [post.repost_of]
     if post.in_reply_to:
         props["in-reply-to"] = [post.in_reply_to]
+    if post.published_on is None:
+        props["post-status"] = [DRAFT]
 
     mf2 = post.mf2 if isinstance(post.mf2, dict) else {}
     checkin = mf2.get("checkin")
@@ -552,66 +547,56 @@ def _build_properties_response(post, requested_props=None):
     return props
 
 
+def _actor(request) -> Actor:
+    token = getattr(request, "micropub_token", None)
+    return Actor(
+        user=token.user if token else None,
+        source="micropub",
+        token_id=token.pk if token else None,
+        client_id=token.client_id if token else "",
+        base_url=request.build_absolute_uri("/").rstrip("/"),
+    )
+
+
+def _post_for_url(data, action, **kwargs):
+    target_url = _first_value(data, "url")
+    slug, error = _slug_from_url(target_url, action)
+    if error:
+        return None, error
+    return _get_post_for_action(slug, **kwargs)
+
+
+def _edit_scope(post, needed):
+    """The scope a change to ``post`` needs; drafts can also be changed with ``draft``."""
+    if post.published_on is None:
+        return (needed, "draft")
+    return (needed,)
+
+
 def _handle_delete_action(request, data):
-    insufficient = _require_scope(request, "delete")
+    post, error = _post_for_url(data, "delete")
+    if error:
+        # check scope first so an unauthorized client can't probe for posts
+        return _require_scope(request, "delete", "draft") or error
+
+    insufficient = _require_scope(request, *_edit_scope(post, "delete"))
     if insufficient:
         return insufficient
 
-    target_url = _first_value(data, "url")
-    slug, error = _slug_from_url(target_url, "delete")
-    if error:
-        return error
-
-    post, error = _get_post_for_action(slug)
-    if error:
-        return error
-
-    post.deleted = True
-    post.save(update_fields=["deleted"])
+    delete_post(_actor(request), post)
     return HttpResponse(status=204)
 
 
-def _apply_categories(post, categories, *, clear_first=False):
-    if clear_first:
-        post.tags.clear()
-    for category in categories:
-        tag_slug = slugify(str(category))
-        if not tag_slug:
-            continue
-        tag, _ = Tag.objects.get_or_create(tag=tag_slug)
-        post.tags.add(tag)
-
-
-def _remove_photo_attachments(post, urls):
-    normalized_urls = set()
-    for item in urls:
-        if isinstance(item, dict):
-            item = item.get("url")
-        if isinstance(item, str) and item:
-            normalized_urls.add(item)
-
-    attachments = post.attachments.filter(asset__kind=File.IMAGE).select_related("asset")
-    for attachment in attachments:
-        asset = attachment.asset
-        if urls == [] or asset.file.url in normalized_urls:
-            attachment.delete()
-            if not asset.is_in_use():
-                asset.delete()
-
-
 def _handle_update_action(request, data):
-    insufficient = _require_scope(request, "update")
+    post, error = _post_for_url(
+        data, "update", not_found_status=400, not_found_message="Post not found for update"
+    )
+    if error:
+        return _require_scope(request, "update", "draft") or error
+
+    insufficient = _require_scope(request, *_edit_scope(post, "update"))
     if insufficient:
         return insufficient
-
-    target_url = _first_value(data, "url")
-    slug, error = _slug_from_url(target_url, "update")
-    if error:
-        return error
-
-    post, error = _get_post_for_action(slug, not_found_status=400, not_found_message="Post not found for update")
-    if error:
-        return error
 
     replace_data = _first_value(data, "replace", {}) or {}
     normalized_replace, error = _normalize_update_ops(replace_data, error_message="Invalid replace payload")
@@ -628,68 +613,24 @@ def _handle_update_action(request, data):
     if error:
         return error
 
-    if "location" in normalized_replace and post.kind != Post.CHECKIN:
-        return HttpResponseBadRequest("location is only editable on check-in posts")
+    # publishing a draft is going live, which takes the create scope
+    new_status = _first_value(normalized_replace, "post-status")
+    if new_status == PUBLISHED and post.published_on is None:
+        insufficient = _require_scope(request, "create")
+        if insufficient:
+            return insufficient
 
-    if "content" in normalized_replace:
-        new_content = _first_value({"content": normalized_replace["content"]}, "content")
-        if new_content is not None:
-            post.content = new_content
-
-    if "name" in normalized_replace:
-        new_name = _first_value({"name": normalized_replace["name"]}, "name")
-        if new_name:
-            post.title = new_name
-
-    if "category" in normalized_replace:
-        _apply_categories(post, normalized_replace["category"], clear_first=True)
-
-    if "category" in normalized_add:
-        _apply_categories(post, normalized_add["category"])
-
-    if "category" in normalized_delete:
-        for category in normalized_delete["category"]:
-            tag_slug = slugify(str(category))
-            if not tag_slug:
-                continue
-            post.tags.filter(tag=tag_slug).delete()
-        if normalized_delete["category"] == []:
-            post.tags.clear()
-
-    if "location" in normalized_replace:
-        new_location = _first_value({"location": normalized_replace["location"]}, "location")
-        geo = _parse_geo_uri(new_location) if new_location else None
-        if geo:
-            if not isinstance(post.mf2, dict):
-                post.mf2 = {}
-            checkin = {"latitude": geo["latitude"], "longitude": geo["longitude"]}
-            if post.title:
-                checkin["name"] = post.title
-            post.mf2["checkin"] = checkin
-
-    if "photo" in normalized_delete:
-        _remove_photo_attachments(post, normalized_delete["photo"])
-
-    if "photo" in normalized_replace:
-        _remove_photo_attachments(post, [])
-        _attach_uploaded_photos(request, post)
-        _attach_remote_photos(normalized_replace, post)
-
-    if "photo" in normalized_add:
-        _attach_uploaded_photos(request, post)
-        _attach_remote_photos(normalized_add, post)
-
-    post.save()
-    source_url = request.build_absolute_uri(post.get_absolute_url())
-    settings_obj = SiteConfiguration.get_solo()
-    transaction.on_commit(
-        lambda: queue_webmentions_for_post(
+    try:
+        update_post(
+            _actor(request),
             post,
-            source_url,
-            include_bridgy=True,
-            settings_obj=settings_obj,
+            replace=normalized_replace,
+            add=normalized_add,
+            delete=normalized_delete,
+            photo_files=_uploaded_photos(request),
         )
-    )
+    except ContentError as exc:
+        return HttpResponseBadRequest(str(exc))
     return HttpResponse(status=204)
 
 
@@ -698,19 +639,11 @@ def _handle_undelete_action(request, data):
     if insufficient:
         return insufficient
 
-    target_url = _first_value(data, "url")
-    slug, error = _slug_from_url(target_url, "undelete")
+    post, error = _post_for_url(data, "undelete")
     if error:
         return error
 
-    post, error = _get_post_for_action(slug)
-    if error:
-        return error
-
-    if post.deleted:
-        post.deleted = False
-        post.save(update_fields=["deleted"])
-
+    undelete_post(_actor(request), post)
     return HttpResponse(status=204)
 
 
@@ -745,34 +678,21 @@ def _determine_kind(request, data, name, like_of, repost_of, in_reply_to, bookma
     return Post.NOTE
 
 
-def _attach_uploaded_photos(request, post):
-    uploaded_photos = request.FILES.getlist("photo") + request.FILES.getlist("photo[]")
-    for uploaded in uploaded_photos:
-        asset = File.objects.create(kind=File.IMAGE, file=uploaded)
-        Attachment.objects.create(content_object=post, asset=asset, role="photo")
-
-
-def _attach_remote_photos(data, post):
-    from micropub.tasks import download_post_photo
-    for photo_item in data.get("photo", []):
-        if isinstance(photo_item, str) and photo_item and not photo_item.startswith("<UploadedFile"):
-            if photo_item.startswith("!["):
-                post.content += f"\n{photo_item}\n"
-                continue
-            transaction.on_commit(lambda u=photo_item: download_post_photo.delay(post.pk, u))
-        elif isinstance(photo_item, dict):
-            url = photo_item.get("url")
-            alt_text = photo_item.get("alt") or ""
-            if isinstance(url, str) and url:
-                transaction.on_commit(lambda u=url, a=alt_text: download_post_photo.delay(post.pk, u, a))
-    if data.get("photo"):
-        post.save()
+def _uploaded_photos(request):
+    return request.FILES.getlist("photo") + request.FILES.getlist("photo[]")
 
 
 def _handle_create_action(request, data):
-    insufficient = _require_scope(request, "create")
+    insufficient = _require_scope(request, "create", "draft")
     if insufficient:
         return insufficient
+
+    post_status = _first_value(data, "post-status") or PUBLISHED
+    if post_status not in (DRAFT, PUBLISHED):
+        return HttpResponseBadRequest(f"post-status must be one of: {DRAFT}, {PUBLISHED}")
+    # a draft-only token always makes drafts (Micropub draft scope)
+    if "create" not in getattr(request, "micropub_scopes", []):
+        post_status = DRAFT
 
     content = _first_value(data, "content", "") or ""
     name = _first_value(data, "name")
@@ -795,50 +715,29 @@ def _handle_create_action(request, data):
                 checkin["name"] = name
             mf2_objects["checkin"] = checkin
 
-    if not content:
-        if kind == Post.LIKE:
-            content = f"Liked {like_of}"
-        elif kind == Post.REPOST:
-            content = f"Reposted {repost_of}"
-        elif kind == Post.REPLY:
-            content = f"Reply to {in_reply_to}"
-        elif kind == Post.BOOKMARK:
-            content = f"Bookmarked {bookmark_of}"
-        elif kind == Post.CHECKIN:
-            content = "Checked in"
-
-    published_on = _parse_published_date(published)
-
-    post = Post(
-        title=name or "",
-        content=content,
-        kind=kind,
-        published_on=published_on,
-        like_of=like_of or "",
-        repost_of=repost_of or "",
-        in_reply_to=in_reply_to or "",
-        bookmark_of=bookmark_of or "",
-        mf2=mf2_objects,
-    )
-    post.save()
-
-    _apply_categories(post, categories)
-    _attach_uploaded_photos(request, post)
-    _attach_remote_photos(data, post)
-
-    location = request.build_absolute_uri(post.get_absolute_url())
-    settings_obj = SiteConfiguration.get_solo()
-    transaction.on_commit(
-        lambda: queue_webmentions_for_post(
-            post,
-            location,
-            include_bridgy=True,
-            settings_obj=settings_obj,
+    actor = _actor(request)
+    try:
+        post = create_post(
+            actor,
+            kind=kind,
+            content=content,
+            name=name,
+            tags=categories,
+            photos=data.get("photo", []),
+            photo_files=_uploaded_photos(request),
+            status=post_status,
+            published_on=_parse_published_date(published) if published else None,
+            like_of=like_of or "",
+            repost_of=repost_of or "",
+            in_reply_to=in_reply_to or "",
+            bookmark_of=bookmark_of or "",
+            mf2=mf2_objects,
         )
-    )
+    except ContentError as exc:
+        return HttpResponseBadRequest(str(exc))
 
     response = HttpResponse(status=201)
-    response["Location"] = location
+    response["Location"] = post_url(actor, post)
     return response
 
 
@@ -865,7 +764,9 @@ def _download_and_attach_photo(post, url: str, alt_text: str = ""):
     return True
 
 
-def _introspect_local(token: str) -> tuple[bool, list[str]] | None:
+def _introspect_local(token: str) -> tuple[bool, list[str], object | None] | None:
+    """(active, scopes, token) for a token this site issued, or None if the
+    local token store isn't available."""
     try:
         from indieauth.models import IndieAuthAccessToken
     except Exception:
@@ -880,17 +781,18 @@ def _introspect_local(token: str) -> tuple[bool, list[str]] | None:
     token_hash = _hash_token(token)
     token_obj = IndieAuthAccessToken.objects.filter(token_hash=token_hash).first()
     if not token_obj:
-        return False, []
+        return False, [], None
     if token_obj.revoked_at:
-        return False, []
+        return False, [], None
     if token_obj.expires_at and token_obj.expires_at <= timezone.now():
-        return False, []
+        return False, [], None
     scopes = _parse_scope(token_obj.scope)
-    return True, scopes
+    return True, scopes, token_obj
 
 
 def _authorized(request):
     request.micropub_auth_error = ""
+    request.micropub_token = None
     auth_header = request.META.get("HTTP_AUTHORIZATION", "")
     if auth_header.startswith("Bearer "):
         token = auth_header[7:].strip()
@@ -903,9 +805,10 @@ def _authorized(request):
 
     local = _introspect_local(token)
     if local is not None:
-        authorized, scopes = local
+        authorized, scopes, token_obj = local
         if not authorized:
             request.micropub_auth_error = "introspect_inactive"
+        request.micropub_token = token_obj
         return authorized, scopes
 
     cache_key = "token_introspect:" + hashlib.sha256(token.encode()).hexdigest()
@@ -1073,7 +976,7 @@ class MicropubMediaView(View):
         return response
 
     def post(self, request):
-        insufficient = _require_scope(request, "create")
+        insufficient = _require_scope(request, "media", "create")
         if insufficient:
             return insufficient
 
@@ -1081,7 +984,7 @@ class MicropubMediaView(View):
         if not upload:
             return HttpResponseBadRequest("No file provided")
 
-        asset = File.objects.create(kind=File.IMAGE, file=upload)
+        asset = create_media(_actor(request), upload, alt=request.POST.get("alt", ""))
         response = HttpResponse(status=201)
         response["Location"] = asset.file.url
         return response

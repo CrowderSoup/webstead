@@ -1146,3 +1146,98 @@ class MastodonScheduledGuardTests(TestCase):
 
         should_syndicate.assert_not_called()
         self.assertFalse(MastodonPost.objects.filter(post=post).exists())
+
+
+@patch("micropub.webmention.queue_webmentions_for_post")
+class ContentServiceTests(TestCase):
+    def setUp(self):
+        from blog.services import Actor
+
+        self.user = get_user_model().objects.create_user(username="author", password="pw")
+        self.actor = Actor(user=self.user, source="mcp", base_url="https://example.com")
+
+    def test_create_defaults_to_draft(self, queue):
+        from blog.services import DRAFT, create_post, post_status
+
+        with self.captureOnCommitCallbacks(execute=True):
+            post = create_post(self.actor, kind=Post.NOTE, content="hi", tags=["a tag"])
+
+        self.assertEqual(post_status(post), DRAFT)
+        self.assertEqual(post.author, self.user)
+        self.assertEqual(list(post.tags.values_list("tag", flat=True)), ["a-tag"])
+        queue.assert_called_once()
+        self.assertFalse(Post.objects.live().filter(pk=post.pk).exists())
+
+    def test_create_published_queues_side_effects_with_source_url(self, queue):
+        from blog.services import PUBLISHED, create_post
+
+        with self.captureOnCommitCallbacks(execute=True):
+            post = create_post(self.actor, kind=Post.LIKE, like_of="https://other.example/x", status=PUBLISHED)
+
+        self.assertTrue(post.is_live())
+        self.assertEqual(post.content, "Liked https://other.example/x")
+        self.assertEqual(queue.call_args.args[1], f"https://example.com{post.get_absolute_url()}")
+
+    def test_create_published_in_future_is_scheduled(self, queue):
+        from blog.services import PUBLISHED, SCHEDULED, create_post, post_status
+
+        at = timezone.now() + timezone.timedelta(days=1)
+        post = create_post(self.actor, kind=Post.NOTE, content="later", status=PUBLISHED, published_on=at)
+
+        self.assertEqual(post_status(post), SCHEDULED)
+        self.assertEqual(post.published_on, at)
+
+    def test_create_rejects_unknown_kind(self, queue):
+        from blog.services import ContentError, create_post
+
+        with self.assertRaises(ContentError):
+            create_post(self.actor, kind="podcast", content="hi")
+        self.assertFalse(Post.objects.exists())
+
+    def test_set_status_publishes_and_unpublishes(self, queue):
+        from blog.services import DRAFT, PUBLISHED, create_post, set_status
+
+        post = create_post(self.actor, kind=Post.NOTE, content="hi")
+        set_status(self.actor, post, PUBLISHED)
+        self.assertTrue(post.is_live())
+
+        set_status(self.actor, post, DRAFT)
+        self.assertIsNone(post.published_on)
+
+    def test_set_status_keeps_date_of_live_post(self, queue):
+        from blog.services import PUBLISHED, set_status
+
+        published_on = timezone.now() - timezone.timedelta(days=3)
+        post = Post.objects.create(title="Old", slug="old", content="hi", published_on=published_on)
+
+        set_status(self.actor, post, PUBLISHED)
+
+        self.assertEqual(post.published_on, published_on)
+
+    def test_update_does_not_replace_existing_author(self, queue):
+        from blog.services import update_post
+
+        other = get_user_model().objects.create_user(username="other", password="pw")
+        post = Post.objects.create(title="T", slug="t", content="old", author=other)
+
+        update_post(self.actor, post, replace={"content": ["new"]})
+
+        post.refresh_from_db()
+        self.assertEqual(post.content, "new")
+        self.assertEqual(post.author, other)
+
+    def test_update_post_status_publishes_draft(self, queue):
+        from blog.services import create_post, update_post
+
+        post = create_post(self.actor, kind=Post.NOTE, content="hi")
+        update_post(self.actor, post, replace={"post-status": ["published"]})
+
+        self.assertTrue(post.is_live())
+
+    def test_update_rejects_location_on_non_checkin(self, queue):
+        from blog.services import ContentError, update_post
+
+        post = Post.objects.create(title="T", slug="t", content="hi", kind=Post.NOTE)
+
+        with self.assertRaises(ContentError):
+            update_post(self.actor, post, replace={"location": ["geo:1,2"]})

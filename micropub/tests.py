@@ -999,3 +999,198 @@ class WmPropertyRetryTests(TestCase):
 
         self.assertEqual(mock_req.call_count, 2)
         self.assertEqual(result.status, Webmention.ACCEPTED)
+
+
+class MicropubDraftTests(TestCase):
+    def _post(self, data, *, json_body=False):
+        if json_body:
+            return self.client.post(
+                MICROPUB_URL,
+                data=json.dumps(data),
+                content_type="application/json",
+                HTTP_AUTHORIZATION="Bearer token",
+            )
+        return self.client.post(MICROPUB_URL, data=data, HTTP_AUTHORIZATION="Bearer token")
+
+    def _live_post(self, slug):
+        from django.utils import timezone
+
+        return Post.objects.create(
+            title="Live", slug=slug, content="hi", published_on=timezone.now() - timezone.timedelta(hours=1)
+        )
+
+    @patch("micropub.views._authorized", return_value=(True, ["create"]))
+    def test_post_status_draft_creates_draft(self, _authorized):
+        response = self._post({"content": "Hello", "post-status": "draft"})
+
+        self.assertEqual(response.status_code, 201)
+        post = Post.objects.get()
+        self.assertIsNone(post.published_on)
+        self.assertTrue(response["Location"].endswith(post.get_absolute_url()))
+
+    @patch("micropub.views._authorized", return_value=(True, ["create"]))
+    def test_create_without_post_status_publishes(self, _authorized):
+        response = self._post({"content": "Hello"})
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(Post.objects.get().is_live())
+
+    @patch("micropub.views._authorized", return_value=(True, ["create"]))
+    def test_unknown_post_status_is_rejected(self, _authorized):
+        response = self._post({"content": "Hello", "post-status": "private"})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(Post.objects.exists())
+
+    @patch("micropub.views._authorized", return_value=(True, ["draft"]))
+    def test_draft_scope_always_creates_drafts(self, _authorized):
+        response = self._post({"content": "Hello", "post-status": "published"})
+
+        self.assertEqual(response.status_code, 201)
+        self.assertIsNone(Post.objects.get().published_on)
+
+    @patch("micropub.views._authorized", return_value=(True, ["draft"]))
+    def test_draft_scope_can_update_draft(self, _authorized):
+        post = Post.objects.create(title="Draft", slug="draft-1", content="old")
+
+        response = self._post(
+            {"action": "update", "url": "https://example.com/blog/post/draft-1/", "replace": {"content": ["new"]}},
+            json_body=True,
+        )
+
+        self.assertEqual(response.status_code, 204)
+        post.refresh_from_db()
+        self.assertEqual(post.content, "new")
+
+    @patch("micropub.views._authorized", return_value=(True, ["draft"]))
+    def test_draft_scope_cannot_update_live_post(self, _authorized):
+        post = self._live_post("live-1")
+
+        response = self._post(
+            {"action": "update", "url": "https://example.com/blog/post/live-1/", "replace": {"content": ["new"]}},
+            json_body=True,
+        )
+
+        self.assertEqual(response.status_code, 403)
+        post.refresh_from_db()
+        self.assertEqual(post.content, "hi")
+
+    @patch("micropub.views._authorized", return_value=(True, ["draft", "update"]))
+    def test_publishing_draft_via_update_needs_create(self, _authorized):
+        post = Post.objects.create(title="Draft", slug="draft-2", content="hi")
+
+        response = self._post(
+            {
+                "action": "update",
+                "url": "https://example.com/blog/post/draft-2/",
+                "replace": {"post-status": ["published"]},
+            },
+            json_body=True,
+        )
+
+        self.assertEqual(response.status_code, 403)
+        post.refresh_from_db()
+        self.assertIsNone(post.published_on)
+
+    @patch("micropub.views._authorized", return_value=(True, ["create", "update"]))
+    def test_create_scope_can_publish_draft_via_update(self, _authorized):
+        post = Post.objects.create(title="Draft", slug="draft-3", content="hi")
+
+        response = self._post(
+            {
+                "action": "update",
+                "url": "https://example.com/blog/post/draft-3/",
+                "replace": {"post-status": ["published"]},
+            },
+            json_body=True,
+        )
+
+        self.assertEqual(response.status_code, 204)
+        post.refresh_from_db()
+        self.assertTrue(post.is_live())
+
+    @patch("micropub.views._authorized", return_value=(True, ["draft"]))
+    def test_draft_scope_can_delete_draft_but_not_live_post(self, _authorized):
+        draft = Post.objects.create(title="Draft", slug="draft-4", content="hi")
+        live = self._live_post("live-2")
+
+        response = self._post({"action": "delete", "url": "https://example.com/blog/post/draft-4/"})
+        self.assertEqual(response.status_code, 204)
+        response = self._post({"action": "delete", "url": "https://example.com/blog/post/live-2/"})
+        self.assertEqual(response.status_code, 403)
+
+        draft.refresh_from_db()
+        live.refresh_from_db()
+        self.assertTrue(draft.deleted)
+        self.assertFalse(live.deleted)
+
+    @patch("micropub.views._authorized", return_value=(True, ["read"]))
+    def test_source_query_reports_draft_status(self, _authorized):
+        Post.objects.create(title="Draft", slug="draft-5", content="hi")
+
+        response = self.client.get(
+            MICROPUB_URL,
+            {"q": "source", "url": "https://example.com/blog/post/draft-5/"},
+            HTTP_AUTHORIZATION="Bearer token",
+        )
+
+        self.assertEqual(response.json()["properties"]["post-status"], ["draft"])
+
+
+class MicropubTokenAuthorTests(TestCase):
+    def test_post_author_is_token_user(self):
+        import hashlib
+        from django.contrib.auth import get_user_model
+        from django.utils import timezone
+        from indieauth.models import IndieAuthAccessToken
+
+        user = get_user_model().objects.create_user(username="owner", password="pw")
+        IndieAuthAccessToken.objects.create(
+            token_hash=hashlib.sha256(b"local-token").hexdigest(),
+            client_id="https://client.example/",
+            me="http://testserver/",
+            scope="create",
+            user=user,
+            expires_at=timezone.now() + timezone.timedelta(hours=1),
+        )
+
+        response = self.client.post(
+            MICROPUB_URL, data={"content": "Hello"}, HTTP_AUTHORIZATION="Bearer local-token"
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Post.objects.get().author, user)
+
+
+class MicropubMediaScopeTests(TestCase):
+    def _upload(self, **extra):
+        upload = SimpleUploadedFile("photo.jpg", b"fake-image-data", content_type="image/jpeg")
+        return self.client.post(
+            reverse("micropub-media"),
+            data={"file": upload, **extra},
+            HTTP_AUTHORIZATION="Bearer token",
+        )
+
+    @patch("micropub.views._authorized", return_value=(True, ["media"]))
+    def test_media_scope_can_upload_with_alt_text(self, _authorized):
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                response = self._upload(alt="A red bike")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(File.objects.get().alt_text, "A red bike")
+
+    @patch("micropub.views._authorized", return_value=(True, ["create"]))
+    def test_create_scope_can_still_upload(self, _authorized):
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                response = self._upload()
+
+        self.assertEqual(response.status_code, 201)
+
+    @patch("micropub.views._authorized", return_value=(True, ["read", "draft"]))
+    def test_upload_requires_media_or_create(self, _authorized):
+        response = self._upload()
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(File.objects.exists())

@@ -386,7 +386,7 @@ def _build_metadata_payload(request) -> dict:
         "revocation_endpoint": request.build_absolute_uri(reverse("indieauth-token")),
         "userinfo_endpoint": request.build_absolute_uri(reverse("indieauth-userinfo")),
         "code_challenge_methods_supported": ["S256"],
-        "scopes_supported": ["create", "update", "delete", "undelete", "read", "media", "channels", "follow", "mute", "block"],
+        "scopes_supported": ["create", "draft", "update", "delete", "undelete", "read", "media", "channels", "follow", "mute", "block"],
     }
 
 
