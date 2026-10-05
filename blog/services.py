@@ -122,7 +122,10 @@ def _remove_categories(post, categories):
     for category in categories:
         tag_slug = slugify(str(category))
         if tag_slug:
-            post.tags.filter(tag=tag_slug).delete()
+            # remove() unlinks the tag from this post only; deleting through
+            # the M2M queryset would delete the Tag row and strip it from
+            # every post that uses it.
+            post.tags.remove(*Tag.objects.filter(tag=tag_slug))
 
 
 def _attach_photo_files(actor, post, photo_files):

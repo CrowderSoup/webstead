@@ -141,6 +141,30 @@ class MicropubViewTests(TestCase):
         self.assertNotIn("existing", tags)
 
     @patch("micropub.views._authorized", return_value=(True, ["update"]))
+    def test_delete_category_leaves_other_posts_tagged(self, _authorized):
+        post = Post.objects.create(title="Tags", slug="page-shared-tag", content="hi")
+        other = Post.objects.create(title="Other", slug="page-other", content="hi")
+        shared = Tag.objects.create(tag="shared")
+        post.tags.add(shared)
+        other.tags.add(shared)
+
+        payload = {
+            "action": "update",
+            "url": "https://example.com/blog/post/page-shared-tag/",
+            "delete": {"category": ["shared"]},
+        }
+        response = self.client.post(
+            MICROPUB_URL,
+            data=json.dumps(payload),
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer token",
+        )
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(post.tags.filter(tag="shared").exists())
+        self.assertTrue(other.tags.filter(tag="shared").exists())
+        self.assertTrue(Tag.objects.filter(tag="shared").exists())
+
+    @patch("micropub.views._authorized", return_value=(True, ["update"]))
     def test_update_replaces_name(self, _authorized):
         post = Post.objects.create(title="Old Name", slug="page-name", content="hi")
         original_slug = post.slug
