@@ -84,7 +84,9 @@ class Post(models.Model):
         timestamp = int(timezone.now().timestamp())
 
         if not self.slug:
-            self.slug = slugify(f"{self.title}-{timestamp}") if self.title else slugify(f"{self.kind}-{timestamp}")
+            # Leave room for the timestamp and a de-dupe suffix under max_length.
+            base = slugify(self.title)[:200].strip("-") or self.kind
+            self.slug = self._unique_slug(f"{base}-{timestamp}")
 
         if not self.title:
             base_titles = {
@@ -102,6 +104,19 @@ class Post(models.Model):
             self.title = f"{base_titles.get(self.kind, 'Article')}: {timestamp}"
 
         super().save(*args, **kwargs)
+
+    def _unique_slug(self, base):
+        """``base``, or ``base-2``, ``base-3``… if another post already has it.
+
+        Untitled posts saved in the same second (a fast Micropub client or an
+        agent) would otherwise share a slug and fail the unique constraint.
+        """
+        slug = base
+        suffix = 2
+        while Post.objects.exclude(pk=self.pk).filter(slug=slug).exists():
+            slug = f"{base}-{suffix}"
+            suffix += 1
+        return slug
 
     def get_absolute_url(self):
         return reverse("post", kwargs={"slug": self.slug})

@@ -33,6 +33,37 @@ class TagModelTests(TestCase):
 
 
 class PostModelTests(TestCase):
+    def test_untitled_posts_in_same_second_get_distinct_slugs(self):
+        frozen = timezone.now()
+        with patch("blog.models.timezone.now", return_value=frozen):
+            first = Post.objects.create(kind=Post.NOTE, content="one")
+            second = Post.objects.create(kind=Post.NOTE, content="two")
+            third = Post.objects.create(kind=Post.NOTE, content="three")
+
+        timestamp = int(frozen.timestamp())
+        self.assertEqual(first.slug, f"note-{timestamp}")
+        self.assertEqual(second.slug, f"note-{timestamp}-2")
+        self.assertEqual(third.slug, f"note-{timestamp}-3")
+
+    def test_titled_posts_in_same_second_get_distinct_slugs(self):
+        frozen = timezone.now()
+        with patch("blog.models.timezone.now", return_value=frozen):
+            first = Post.objects.create(title="Hello", content="one")
+            second = Post.objects.create(title="Hello", content="two")
+
+        self.assertNotEqual(first.slug, second.slug)
+        self.assertTrue(second.slug.startswith(f"hello-{int(frozen.timestamp())}"))
+
+    def test_long_title_slug_fits_max_length(self):
+        post = Post.objects.create(title="word " * 100, content="hi")
+
+        self.assertLessEqual(len(post.slug), Post._meta.get_field("slug").max_length)
+
+    def test_explicit_slug_is_kept(self):
+        post = Post.objects.create(title="T", slug="chosen", content="hi")
+
+        self.assertEqual(post.slug, "chosen")
+
     def test_html_renders_markdown(self):
         post = Post.objects.create(
             title="Markdown post",
