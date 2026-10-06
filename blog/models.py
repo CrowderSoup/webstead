@@ -156,6 +156,54 @@ class Post(models.Model):
         ordering = ['-published_on']
 
 
+class PostRevision(models.Model):
+    """A post as it was just before one change, and who made that change.
+
+    Written by ``blog.services`` for every mutation. The newest revision plus
+    the live row give the latest diff; ``services.revert_to`` restores a
+    revision's snapshot. A ``create`` revision has no snapshot (there was no
+    post before it) and only records who created the post.
+    """
+
+    CREATE = "create"; UPDATE = "update"; STATUS = "status"; DELETE = "delete"; UNDELETE = "undelete"; REVERT = "revert"
+    ACTION_CHOICES = [
+        (CREATE, "Create"),
+        (UPDATE, "Update"),
+        (STATUS, "Status change"),
+        (DELETE, "Delete"),
+        (UNDELETE, "Undelete"),
+        (REVERT, "Revert"),
+    ]
+
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="revisions")
+    created_at = models.DateTimeField(auto_now_add=True)
+    action = models.CharField(max_length=16, choices=ACTION_CHOICES)
+    change_summary = models.CharField(max_length=255, blank=True)
+    snapshot = models.JSONField(null=True, blank=True)
+    actor_source = models.CharField(max_length=16)
+    actor_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    token = models.ForeignKey(
+        "indieauth.IndieAuthAccessToken",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    client_id = models.CharField(max_length=2000, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"{self.post_id} {self.action} @ {self.created_at:%Y-%m-%d %H:%M}"
+
+
 class Comment(models.Model):
     PENDING = "pending"
     APPROVED = "approved"

@@ -308,7 +308,8 @@ class MicropubViewTests(TestCase):
                 )
                 self.assertEqual(response.status_code, 204)
                 self.assertEqual(post.attachments.filter(asset__kind=File.IMAGE).count(), 0)
-                self.assertFalse(File.objects.filter(pk=asset.pk).exists())
+                # detached, not deleted, so reverting the post can restore it
+                self.assertTrue(File.objects.filter(pk=asset.pk).exists())
 
     @patch("micropub.views._authorized", return_value=(True, ["update"]))
     def test_update_delete_photo_keeps_shared_asset(self, _authorized):
@@ -362,7 +363,8 @@ class MicropubViewTests(TestCase):
                     )
                 self.assertEqual(response.status_code, 204)
                 self.assertEqual(post.attachments.filter(asset__kind=File.IMAGE).count(), 0)
-                self.assertFalse(File.objects.filter(pk=asset.pk).exists())
+                # detached, not deleted, so reverting the post can restore it
+                self.assertTrue(File.objects.filter(pk=asset.pk).exists())
                 mock_delay.assert_called_once_with(post.pk, "https://example.com/new.jpg")
 
     @patch("micropub.views._authorized", return_value=(True, ["update"]))
@@ -1218,3 +1220,54 @@ class MicropubMediaScopeTests(TestCase):
 
         self.assertEqual(response.status_code, 403)
         self.assertFalse(File.objects.exists())
+
+
+class MicropubRevisionTests(TestCase):
+    def setUp(self):
+        import hashlib
+        from django.contrib.auth import get_user_model
+        from django.utils import timezone
+        from indieauth.models import IndieAuthAccessToken
+
+        self.user = get_user_model().objects.create_user(username="owner", password="pw")
+        self.token = IndieAuthAccessToken.objects.create(
+            token_hash=hashlib.sha256(b"local-token").hexdigest(),
+            client_id="https://client.example/",
+            me="http://testserver/",
+            scope="create update delete undelete",
+            user=self.user,
+            expires_at=timezone.now() + timezone.timedelta(hours=1),
+        )
+
+    def _micropub(self, payload):
+        return self.client.post(
+            MICROPUB_URL,
+            data=json.dumps(payload),
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer local-token",
+        )
+
+    @patch("micropub.webmention.queue_webmentions_for_post")
+    def test_every_action_writes_a_revision_with_the_token(self, _queue):
+        response = self._micropub({"type": ["h-entry"], "properties": {"content": ["Hello"]}})
+        self.assertEqual(response.status_code, 201)
+        post = Post.objects.get()
+        url = f"http://testserver{post.get_absolute_url()}"
+
+        for payload in (
+            {"action": "update", "url": url, "replace": {"content": ["Edited"]}},
+            {"action": "delete", "url": url},
+            {"action": "undelete", "url": url},
+        ):
+            response = self._micropub(payload)
+            self.assertIn(response.status_code, (200, 201, 204), payload)
+
+        revisions = list(post.revisions.order_by("id"))
+        self.assertEqual([r.action for r in revisions], ["create", "update", "delete", "undelete"])
+        for revision in revisions:
+            self.assertEqual(revision.actor_source, "micropub")
+            self.assertEqual(revision.actor_user, self.user)
+            self.assertEqual(revision.token, self.token)
+            self.assertEqual(revision.client_id, "https://client.example/")
+        self.assertEqual(revisions[1].snapshot["content"], "Hello")
+        self.assertEqual(revisions[2].snapshot["content"], "Edited")

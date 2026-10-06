@@ -6,6 +6,10 @@ take an ``Actor`` and plain data, never a request.
 
 Side effects (webmentions, Bridgy, Mastodon) are queued on commit and only
 fire once a post is live; see ``micropub.webmention.queue_webmentions_for_post``.
+
+Every change writes a ``PostRevision`` holding the post as it was just before
+the change, so ``revert_to`` can undo it. Undo is local only: webmentions and
+toots that already went out stay sent.
 """
 from __future__ import annotations
 
@@ -15,9 +19,10 @@ from typing import TYPE_CHECKING
 
 from django.db import transaction
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.utils.text import slugify
 
-from blog.models import Post, Tag
+from blog.models import Post, PostRevision, Tag
 from files.models import Attachment, File
 
 if TYPE_CHECKING:
@@ -169,11 +174,10 @@ def _remove_photos(post, urls):
 
     attachments = post.attachments.filter(asset__kind=File.IMAGE).select_related("asset")
     for attachment in attachments:
-        asset = attachment.asset
-        if urls == [] or asset.file.url in normalized_urls:
+        # Detach only: revisions still point at the asset, so reverting can
+        # bring the photo back.
+        if urls == [] or attachment.asset.file.url in normalized_urls:
             attachment.delete()
-            if not asset.is_in_use():
-                asset.delete()
 
 
 def _queue_side_effects(actor, post, *, include_bridgy=True):
@@ -191,6 +195,82 @@ def _queue_side_effects(actor, post, *, include_bridgy=True):
             settings_obj=settings_obj,
         )
     )
+
+
+SNAPSHOT_FIELDS = (
+    "title",
+    "slug",
+    "kind",
+    "content",
+    "mf2",
+    "deleted",
+    "like_of",
+    "repost_of",
+    "in_reply_to",
+    "bookmark_of",
+    "mastodon_syndicate",
+)
+
+
+def _snapshot(post: Post) -> dict:
+    """Everything ``_restore`` needs to put the post back the way it is now."""
+    snapshot = {field: getattr(post, field) for field in SNAPSHOT_FIELDS}
+    snapshot["published_on"] = post.published_on.isoformat() if post.published_on else None
+    snapshot["tags"] = sorted(post.tags.values_list("tag", flat=True))
+    snapshot["attachments"] = [
+        {"asset_id": a.asset_id, "role": a.role, "sort_order": a.sort_order}
+        for a in post.attachments.order_by("sort_order", "id")
+    ]
+    return snapshot
+
+
+def _record(actor: Actor, post: Post, action: str, summary: str = "", *, snapshot=True) -> PostRevision:
+    """Write a revision holding the post's current (pre-change) state."""
+    return PostRevision.objects.create(
+        post=post,
+        action=action,
+        change_summary=summary[:255],
+        snapshot=_snapshot(post) if snapshot else None,
+        actor_source=actor.source,
+        actor_user=actor.user,
+        token_id=actor.token_id,
+        client_id=actor.client_id,
+    )
+
+
+def _summarize_update(replace, add, delete) -> str:
+    parts = [
+        f"{op} {', '.join(props)}"
+        for op, props in (("replace", replace), ("add", add), ("delete", delete))
+        if props
+    ]
+    return "; ".join(parts)
+
+
+def _restore(post: Post, snapshot: dict) -> list[int]:
+    """Put a snapshot back onto the post. Returns asset ids that no longer exist."""
+    if Post.objects.exclude(pk=post.pk).filter(slug=snapshot["slug"]).exists():
+        raise ContentError(f"another post now uses the slug {snapshot['slug']!r}")
+
+    for field in SNAPSHOT_FIELDS:
+        setattr(post, field, snapshot[field])
+    post.published_on = parse_datetime(snapshot["published_on"]) if snapshot["published_on"] else None
+    post.save()
+
+    post.tags.set([Tag.objects.get_or_create(tag=slug)[0] for slug in snapshot["tags"]])
+
+    wanted = snapshot["attachments"]
+    existing = set(File.objects.filter(pk__in=[a["asset_id"] for a in wanted]).values_list("pk", flat=True))
+    post.attachments.all().delete()
+    for item in wanted:
+        if item["asset_id"] in existing:
+            Attachment.objects.create(
+                content_object=post,
+                asset_id=item["asset_id"],
+                role=item["role"],
+                sort_order=item["sort_order"],
+            )
+    return [a["asset_id"] for a in wanted if a["asset_id"] not in existing]
 
 
 def _set_author(actor, post):
@@ -260,6 +340,7 @@ def create_post(
         )
         _set_author(actor, post)
         post.save()
+        _record(actor, post, PostRevision.CREATE, f"create {kind} as {status}", snapshot=False)
 
         _apply_categories(post, tags)
         _attach_photo_files(actor, post, photo_files)
@@ -288,6 +369,8 @@ def update_post(actor: Actor, post: Post, *, replace=None, add=None, delete=None
         raise ContentError(f"post-status must be one of: {DRAFT}, {PUBLISHED}")
 
     with transaction.atomic():
+        _record(actor, post, PostRevision.UPDATE, _summarize_update(replace, add, delete))
+
         if "content" in replace:
             new_content = _first(replace["content"])
             if new_content is not None:
@@ -343,6 +426,7 @@ def set_status(actor: Actor, post: Post, status: str, *, at=None) -> Post:
     stay sent, and publishing again won't send them a second time.
     """
     with transaction.atomic():
+        _record(actor, post, PostRevision.STATUS, f"set status to {status}" + (f" at {at.isoformat()}" if at else ""))
         post.published_on = _resolve_published_on(status, at, post.published_on)
         _set_author(actor, post)
         post.save()
@@ -352,8 +436,10 @@ def set_status(actor: Actor, post: Post, status: str, *, at=None) -> Post:
 
 def delete_post(actor: Actor, post: Post) -> Post:
     if not post.deleted:
-        post.deleted = True
-        post.save(update_fields=["deleted"])
+        with transaction.atomic():
+            _record(actor, post, PostRevision.DELETE, "delete")
+            post.deleted = True
+            post.save(update_fields=["deleted"])
     return post
 
 
@@ -364,9 +450,33 @@ def undelete_post(actor: Actor, post: Post) -> Post:
     ``publish_due_posts`` run and sends its webmentions and syndication then.
     """
     if post.deleted:
-        post.deleted = False
-        post.save(update_fields=["deleted"])
+        with transaction.atomic():
+            _record(actor, post, PostRevision.UNDELETE, "undelete")
+            post.deleted = False
+            post.save(update_fields=["deleted"])
     return post
+
+
+def revert_to(actor: Actor, post: Post, revision: PostRevision) -> tuple[Post, list[int]]:
+    """Put the post back the way it was just before ``revision``'s change.
+
+    The revert is itself a revision, so it can be undone too. Returns the post
+    and the ids of any photos that have since been deleted and couldn't come
+    back. Restoring a live state re-sends webmentions as any edit to a live
+    post does; a post that already went live doesn't toot or hit Bridgy again.
+    """
+    if revision.post_id != post.pk:
+        raise ContentError("that revision belongs to a different post")
+    if revision.snapshot is None:
+        raise ContentError("that revision is the post's creation, so there's nothing before it; delete the post instead")
+
+    with transaction.atomic():
+        _record(actor, post, PostRevision.REVERT, f"revert to before revision {revision.pk}")
+        missing_assets = _restore(post, revision.snapshot)
+        _set_author(actor, post)
+        post.save()
+        _queue_side_effects(actor, post)
+    return post, missing_assets
 
 
 def create_media(actor: Actor, upload, *, alt: str = "") -> File:

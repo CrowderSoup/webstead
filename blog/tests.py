@@ -1272,3 +1272,185 @@ class ContentServiceTests(TestCase):
 
         with self.assertRaises(ContentError):
             update_post(self.actor, post, replace={"location": ["geo:1,2"]})
+
+
+@patch("micropub.webmention.queue_webmentions_for_post")
+class PostRevisionTests(TestCase):
+    def setUp(self):
+        from blog.services import Actor
+
+        self.user = get_user_model().objects.create_user(username="author", password="pw")
+        self.actor = Actor(user=self.user, source="mcp", client_id="https://client.example/")
+        media_root = tempfile.TemporaryDirectory()
+        self.addCleanup(media_root.cleanup)
+        media_override = override_settings(MEDIA_ROOT=media_root.name)
+        media_override.enable()
+        self.addCleanup(media_override.disable)
+
+    def _photo(self, post, sort_order=0):
+        upload = SimpleUploadedFile("photo.jpg", b"fake-image-data", content_type="image/jpeg")
+        asset = File.objects.create(kind=File.IMAGE, file=upload)
+        Attachment.objects.create(content_object=post, asset=asset, role="photo", sort_order=sort_order)
+        return asset
+
+    def test_create_records_who_without_snapshot(self, queue):
+        from blog.models import PostRevision
+        from blog.services import create_post
+
+        post = create_post(self.actor, kind=Post.NOTE, content="hi")
+
+        revision = post.revisions.get()
+        self.assertEqual(revision.action, PostRevision.CREATE)
+        self.assertIsNone(revision.snapshot)
+        self.assertEqual(revision.actor_source, "mcp")
+        self.assertEqual(revision.actor_user, self.user)
+        self.assertEqual(revision.client_id, "https://client.example/")
+
+    def test_each_change_records_the_state_before_it(self, queue):
+        from blog.models import PostRevision
+        from blog.services import PUBLISHED, create_post, delete_post, set_status, undelete_post, update_post
+
+        post = create_post(self.actor, kind=Post.NOTE, content="first", tags=["one"])
+        update_post(self.actor, post, replace={"content": ["second"]}, add={"category": ["two"]})
+        set_status(self.actor, post, PUBLISHED)
+        delete_post(self.actor, post)
+        undelete_post(self.actor, post)
+
+        revisions = list(post.revisions.order_by("id"))
+        self.assertEqual(
+            [r.action for r in revisions],
+            [
+                PostRevision.CREATE,
+                PostRevision.UPDATE,
+                PostRevision.STATUS,
+                PostRevision.DELETE,
+                PostRevision.UNDELETE,
+            ],
+        )
+        update, status, delete, undelete = revisions[1:]
+        self.assertEqual(update.snapshot["content"], "first")
+        self.assertEqual(update.snapshot["tags"], ["one"])
+        self.assertEqual(update.change_summary, "replace content; add category")
+        self.assertEqual(status.snapshot["content"], "second")
+        self.assertEqual(status.snapshot["tags"], ["one", "two"])
+        self.assertIsNone(status.snapshot["published_on"])
+        self.assertIsNotNone(delete.snapshot["published_on"])
+        self.assertFalse(delete.snapshot["deleted"])
+        self.assertTrue(undelete.snapshot["deleted"])
+
+    def test_noop_delete_and_undelete_record_nothing(self, queue):
+        from blog.services import create_post, delete_post, undelete_post
+
+        post = create_post(self.actor, kind=Post.NOTE, content="hi")
+        undelete_post(self.actor, post)
+        delete_post(self.actor, post)
+        delete_post(self.actor, post)
+
+        self.assertEqual(post.revisions.count(), 2)
+
+    def test_failed_update_records_nothing(self, queue):
+        from blog.services import ContentError, create_post, update_post
+
+        post = create_post(self.actor, kind=Post.NOTE, content="hi")
+
+        with self.assertRaises(ContentError):
+            update_post(self.actor, post, replace={"post-status": ["archived"]})
+
+        self.assertEqual(post.revisions.count(), 1)
+
+    def test_revert_restores_content_tags_and_photos(self, queue):
+        from blog.services import create_post, revert_to, update_post
+
+        post = create_post(self.actor, kind=Post.ARTICLE, name="Title", content="original", tags=["keep", "drop"])
+        first = self._photo(post, sort_order=0)
+        second = self._photo(post, sort_order=1)
+
+        update_post(
+            self.actor,
+            post,
+            replace={"content": ["rewritten"], "name": ["New title"]},
+            delete={"category": ["drop"], "photo": [first.file.url]},
+        )
+        update_post(self.actor, post, delete={"photo": []}, add={"category": ["extra"]})
+        before_edits = post.revisions.order_by("id")[1]
+
+        post, missing = revert_to(self.actor, post, before_edits)
+
+        post.refresh_from_db()
+        self.assertEqual(missing, [])
+        self.assertEqual(post.title, "Title")
+        self.assertEqual(post.content, "original")
+        self.assertEqual(sorted(post.tags.values_list("tag", flat=True)), ["drop", "keep"])
+        self.assertEqual(
+            list(post.attachments.values_list("asset_id", "sort_order")),
+            [(first.pk, 0), (second.pk, 1)],
+        )
+
+    def test_revert_is_itself_undoable(self, queue):
+        from blog.models import PostRevision
+        from blog.services import create_post, revert_to, update_post
+
+        post = create_post(self.actor, kind=Post.NOTE, content="one")
+        update_post(self.actor, post, replace={"content": ["two"]})
+        revert_to(self.actor, post, post.revisions.get(action=PostRevision.UPDATE))
+        self.assertEqual(post.content, "one")
+
+        revert_to(self.actor, post, post.revisions.get(action=PostRevision.REVERT))
+
+        post.refresh_from_db()
+        self.assertEqual(post.content, "two")
+
+    def test_revert_restores_status(self, queue):
+        from blog.models import PostRevision
+        from blog.services import DRAFT, PUBLISHED, create_post, delete_post, post_status, revert_to, set_status
+
+        post = create_post(self.actor, kind=Post.NOTE, content="hi")
+        set_status(self.actor, post, PUBLISHED)
+        delete_post(self.actor, post)
+
+        revert_to(self.actor, post, post.revisions.get(action=PostRevision.STATUS))
+
+        post.refresh_from_db()
+        self.assertEqual(post_status(post), DRAFT)
+
+    def test_revert_skips_photos_that_were_deleted_since(self, queue):
+        from blog.services import create_post, revert_to, update_post
+
+        post = create_post(self.actor, kind=Post.PHOTO, content="hi")
+        asset = self._photo(post)
+        update_post(self.actor, post, delete={"photo": []})
+        asset_id = asset.pk
+        asset.delete()
+
+        post, missing = revert_to(self.actor, post, post.revisions.order_by("id")[1])
+
+        self.assertEqual(missing, [asset_id])
+        self.assertFalse(post.attachments.exists())
+
+    def test_revert_rejects_create_revision_and_other_posts(self, queue):
+        from blog.services import ContentError, create_post, revert_to, update_post
+
+        post = create_post(self.actor, kind=Post.NOTE, content="hi")
+        other = create_post(self.actor, kind=Post.NOTE, content="other")
+        update_post(self.actor, other, replace={"content": ["changed"]})
+
+        with self.assertRaises(ContentError):
+            revert_to(self.actor, post, post.revisions.get())
+        with self.assertRaises(ContentError):
+            revert_to(self.actor, post, other.revisions.order_by("id")[1])
+        self.assertEqual(post.revisions.count(), 1)
+
+    def test_revert_rejects_slug_taken_by_another_post(self, queue):
+        from blog.services import ContentError, update_post, revert_to
+
+        post = Post.objects.create(title="T", slug="original-slug", content="hi")
+        update_post(self.actor, post, replace={"content": ["changed"]})
+        Post.objects.filter(pk=post.pk).update(slug="renamed")
+        post.refresh_from_db()
+        Post.objects.create(title="Squatter", slug="original-slug", content="x")
+
+        with self.assertRaises(ContentError):
+            revert_to(self.actor, post, post.revisions.get())
+
+        post.refresh_from_db()
+        self.assertEqual(post.content, "changed")
