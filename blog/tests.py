@@ -1454,3 +1454,111 @@ class PostRevisionTests(TestCase):
 
         post.refresh_from_db()
         self.assertEqual(post.content, "changed")
+
+
+class PostPreviewTests(TestCase):
+    def setUp(self):
+        self.draft = Post.objects.create(title="Draft", slug="draft-post", content="secret draft", kind=Post.NOTE)
+
+    def _get(self, post, token=None):
+        from blog.previews import make_token
+
+        token = make_token(post) if token is None else token
+        return self.client.get(reverse("post", kwargs={"slug": post.slug}), {"preview": token})
+
+    @patch("analytics.tasks.record_visit.delay")
+    def test_valid_link_shows_draft_logged_out(self, record_visit):
+        response = self._get(self.draft)
+
+        self.assertContains(response, "secret draft")
+        self.assertContains(response, "Preview: this post is")
+        self.assertContains(response, "a draft")
+        self.assertEqual(response["X-Robots-Tag"], "noindex, nofollow")
+        self.assertEqual(response["Cache-Control"], "private, no-store")
+        self.assertEqual(response["Referrer-Policy"], "no-referrer")
+        record_visit.assert_not_called()
+
+    def test_banner_is_inside_body(self):
+        content = self._get(self.draft).content.decode()
+
+        self.assertLess(content.index("<body"), content.index("Preview: this post is"))
+
+    def test_scheduled_post_banner_says_when(self):
+        scheduled = Post.objects.create(
+            title="Later",
+            slug="later-post",
+            content="soon",
+            published_on=timezone.now() + timezone.timedelta(days=1),
+        )
+
+        self.assertContains(self._get(scheduled), "scheduled for")
+
+    def test_missing_or_tampered_token_is_404(self):
+        from blog.previews import make_token
+
+        self.assertEqual(self.client.get(reverse("post", kwargs={"slug": self.draft.slug})).status_code, 404)
+        self.assertEqual(self._get(self.draft, token="nonsense").status_code, 404)
+        self.assertEqual(self._get(self.draft, token=make_token(self.draft) + "x").status_code, 404)
+
+    def test_token_for_another_post_is_404(self):
+        from blog.previews import make_token
+
+        other = Post.objects.create(title="Other", slug="other-draft", content="x")
+
+        self.assertEqual(self._get(self.draft, token=make_token(other)).status_code, 404)
+
+    def test_expired_token_is_404(self):
+        import time
+
+        from blog.previews import PREVIEW_MAX_AGE, make_token
+
+        token = make_token(self.draft)
+        later = time.time() + PREVIEW_MAX_AGE.total_seconds() + 60
+        with patch("django.core.signing.time.time", return_value=later):
+            response = self._get(self.draft, token=token)
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_deleted_post_is_404(self):
+        from blog.previews import make_token
+
+        token = make_token(self.draft)
+        self.draft.deleted = True
+        self.draft.save()
+
+        self.assertEqual(self._get(self.draft, token=token).status_code, 404)
+
+    @patch("analytics.tasks.record_visit.delay")
+    def test_live_post_ignores_token_and_has_no_banner(self, record_visit):
+        live = Post.objects.create(
+            title="Live",
+            slug="live-post",
+            content="out",
+            published_on=timezone.now() - timezone.timedelta(hours=1),
+        )
+
+        response = self._get(live)
+
+        self.assertContains(response, "out")
+        self.assertNotContains(response, "Preview: this post is")
+        self.assertNotIn("X-Robots-Tag", response)
+        record_visit.assert_called_once()
+
+    def test_logged_in_user_sees_banner_on_draft(self):
+        user = get_user_model().objects.create_user(username="owner", password="pw")
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("post", kwargs={"slug": self.draft.slug}))
+
+        self.assertContains(response, "Preview: this post is")
+        self.assertEqual(response["X-Robots-Tag"], "noindex, nofollow")
+
+    def test_service_preview_url(self):
+        from blog.services import Actor, preview_url
+
+        actor = Actor(base_url="https://example.com")
+        url = preview_url(actor, self.draft)
+
+        self.assertTrue(url.startswith("https://example.com/blog/post/draft-post/?preview="))
+        self.draft.published_on = timezone.now() - timezone.timedelta(minutes=1)
+        self.assertIsNone(preview_url(actor, self.draft))

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from urllib.parse import urlencode
 from typing import TYPE_CHECKING
 
 from django.db import transaction
@@ -72,6 +73,16 @@ def post_url(actor: Actor, post: Post) -> str:
     from mastodon_integration.tasks import _build_canonical_url
 
     return _build_canonical_url(post)
+
+
+def preview_url(actor: Actor, post: Post) -> str | None:
+    """A signed link that shows the post logged-out until it expires, or None
+    if the post is already live (its plain URL works) or deleted."""
+    if post.deleted or post.is_live():
+        return None
+    from blog.previews import make_token
+
+    return f"{post_url(actor, post)}?{urlencode({'preview': make_token(post)})}"
 
 
 def parse_geo_uri(uri: str) -> dict | None:
