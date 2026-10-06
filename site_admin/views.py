@@ -25,6 +25,7 @@ from django.forms.models import BaseInlineFormSet
 from django.views.decorators.http import require_http_methods, require_GET, require_POST
 
 from blog.models import Comment, Post
+from blog.previews import preview_path
 from analytics.bot_detection import evaluate_user_agent_against_pattern, validate_bot_pattern
 from analytics.models import (
     UserAgentBotRule,
@@ -4121,6 +4122,11 @@ def _build_post_form_context(
         "gpx_remove_timestamps": gpx_defaults["gpx_remove_timestamps"],
         "mastodon_connected": MastodonAccount.get_active() is not None,
         "post_list_url": post_list_url,
+        "preview_url": (
+            request.build_absolute_uri(preview_path(post))
+            if post and post.pk and not post.deleted and not post.is_live()
+            else ""
+        ),
         "show_schedule": (
             request.POST.get("publishing_action") == "schedule"
             or bool(post and post.published_on and post.published_on > timezone.now())

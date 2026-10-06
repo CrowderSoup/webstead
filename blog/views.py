@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from urllib.parse import urlencode, urlparse
 
+from . import previews
 from .models import Comment, Post, Tag
 from .forms import CommentForm
 from .mf2 import DEFAULT_AVATAR_URL, fetch_target_from_url
@@ -478,9 +479,13 @@ def post(request, slug):
         slug=slug,
         deleted=False,
     )
-    if not post.is_live() and not request.user.is_authenticated:
+    if post.is_live():
+        return render(request, "blog/post.html", _post_context(request, post))
+    # Not live yet: logged-in users and holders of a valid preview link see it.
+    if not (request.user.is_authenticated or previews.token_is_valid(request.GET.get("preview", ""), post)):
         raise Http404
-    return render(request, "blog/post.html", _post_context(request, post))
+    response = render(request, "blog/post.html", _post_context(request, post))
+    return previews.mark_preview_response(request, response, post)
 
 
 @require_POST

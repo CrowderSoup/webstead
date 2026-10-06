@@ -21,6 +21,9 @@ class AnalyticsMiddleware(MiddlewareMixin):
         try:
             if request.path.startswith(EXCLUDED_PATH_PREFIXES):
                 return response
+            # Views opt out per request, e.g. post preview links.
+            if getattr(request, "_skip_analytics", False):
+                return response
 
             started_ts = getattr(request, "_analytics_start_ts", None)
             if started_ts is None:

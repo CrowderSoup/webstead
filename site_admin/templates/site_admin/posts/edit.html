@@ -82,6 +82,19 @@
         {% if post %}
           <p class="mt-1 text-sm text-(--admin-muted)">Slug: {{ post.slug }}</p>
         {% endif %}
+        {% if preview_url %}
+          <label class="mt-2 block text-sm text-(--admin-muted)">
+            Preview link (works logged out for 7 days):
+            <input
+              type="text"
+              readonly
+              value="{{ preview_url }}"
+              onclick="this.select()"
+              class="mt-1 w-full rounded-lg border border-(--admin-border) bg-(--admin-bg) px-3 py-1.5 font-mono text-xs text-(--admin-ink)"
+              data-preview-url
+            >
+          </label>
+        {% endif %}
       </div>
       <div class="flex flex-wrap items-center gap-3">
         <a

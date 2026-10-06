@@ -846,6 +846,33 @@ class SiteAdminPostTests(TestCase):
             is_staff=True,
         )
 
+    def test_post_edit_shows_working_preview_link_for_drafts_only(self):
+        from html import unescape
+        import re
+
+        self.client.force_login(self.staff)
+        draft = Post.objects.create(title="Draft", slug="draft-preview", content="secret", kind=Post.NOTE)
+        live = Post.objects.create(
+            title="Live",
+            slug="live-preview",
+            content="out",
+            kind=Post.NOTE,
+            published_on=timezone.now() - timezone.timedelta(hours=1),
+        )
+
+        response = self.client.get(reverse("site_admin:post_edit", kwargs={"slug": draft.slug}))
+        match = re.search(r'value="([^"]+)"\s+onclick="this.select\(\)"', response.content.decode())
+        self.assertIsNotNone(match)
+        preview_url = unescape(match.group(1))
+        self.assertIn("/blog/post/draft-preview/?preview=", preview_url)
+
+        self.client.logout()
+        self.assertContains(self.client.get(preview_url), "secret")
+
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse("site_admin:post_edit", kwargs={"slug": live.slug}))
+        self.assertNotContains(response, "data-preview-url")
+
     def test_photo_post_requires_caption_or_photo(self):
         self.client.force_login(self.staff)
         response = self.client.post(
