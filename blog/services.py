@@ -14,6 +14,7 @@ toots that already went out stay sent.
 from __future__ import annotations
 
 import re
+from contextlib import contextmanager
 from dataclasses import dataclass
 from urllib.parse import urlencode
 from typing import TYPE_CHECKING
@@ -428,6 +429,30 @@ def update_post(actor: Actor, post: Post, *, replace=None, add=None, delete=None
         post.save()
         _queue_side_effects(actor, post)
     return post
+
+
+@contextmanager
+def saving(actor: Actor, post: Post, *, summary: str = "", include_bridgy: bool = True):
+    """Run a hand-rolled change to ``post`` (e.g. the admin form) as one
+    service call: a revision of the before-state, author defaulting, one
+    transaction, and go-live side effects on commit.
+
+    ``post`` may be unsaved (a new post) or already modified in memory: the
+    before-state is read from the database, not from ``post``, because a
+    ModelForm writes the submitted values onto its instance during
+    ``is_valid()``. The body may save ``post`` and its tags and attachments
+    as often as it needs. Raising inside the block rolls everything back.
+    """
+    is_new = post.pk is None
+    with transaction.atomic():
+        if not is_new:
+            _record(actor, Post.objects.get(pk=post.pk), PostRevision.UPDATE, summary)
+        yield post
+        _set_author(actor, post)
+        post.save()
+        if is_new:
+            _record(actor, post, PostRevision.CREATE, summary, snapshot=False)
+        _queue_side_effects(actor, post, include_bridgy=include_bridgy)
 
 
 def set_status(actor: Actor, post: Post, status: str, *, at=None) -> Post:

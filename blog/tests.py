@@ -1358,6 +1358,22 @@ class PostRevisionTests(TestCase):
 
         self.assertEqual(post.revisions.count(), 1)
 
+    def test_saving_rolls_back_change_and_revision_on_error(self, queue):
+        from blog.services import saving
+
+        post = Post.objects.create(title="T", slug="t", content="before")
+
+        with self.assertRaises(RuntimeError):
+            with saving(self.actor, post):
+                post.content = "after"
+                post.save()
+                raise RuntimeError("boom")
+
+        post.refresh_from_db()
+        self.assertEqual(post.content, "before")
+        self.assertFalse(post.revisions.exists())
+        queue.assert_not_called()
+
     def test_revert_restores_content_tags_and_photos(self, queue):
         from blog.services import create_post, revert_to, update_post
 
