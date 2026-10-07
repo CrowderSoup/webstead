@@ -19,7 +19,7 @@ from analytics.models import (
     UserAgentIgnore,
     Visit,
 )
-from blog.models import Comment, Post
+from blog.models import Comment, Post, Tag
 from core.models import (
     HCard,
     HCardEmail,
@@ -914,8 +914,8 @@ class SiteAdminPostTests(TestCase):
     def test_post_create_queues_webmentions_on_commit(self):
         self.client.force_login(self.staff)
         with (
-            mock.patch("site_admin.views.queue_webmentions_for_post") as queue_mock,
-            mock.patch("site_admin.views.transaction.on_commit") as on_commit_mock,
+            mock.patch("micropub.webmention.queue_webmentions_for_post") as queue_mock,
+            mock.patch("blog.services.transaction.on_commit") as on_commit_mock,
             mock.patch("micropub.webmention.send_webmentions_for_post") as send_mock,
         ):
             response = self.client.post(
@@ -2363,3 +2363,121 @@ class MicrosubChannelTimelineTests(TestCase):
             reverse("site_admin:microsub_channel_timeline", kwargs={"uid": "does-not-exist"})
         )
         self.assertEqual(response.status_code, 404)
+
+
+@mock.patch("micropub.webmention.queue_webmentions_for_post")
+class SiteAdminPostRevisionTests(TestCase):
+    """The admin saves posts through blog.services, so its edits leave revisions."""
+
+    def setUp(self):
+        super().setUp()
+        self.staff = get_user_model().objects.create_user(
+            username="editor",
+            email="editor@example.com",
+            password="password",
+            is_staff=True,
+        )
+        self.client.force_login(self.staff)
+        media_root = tempfile.TemporaryDirectory()
+        self.addCleanup(media_root.cleanup)
+        media_override = override_settings(MEDIA_ROOT=media_root.name)
+        media_override.enable()
+        self.addCleanup(media_override.disable)
+
+    def _edit(self, post, **data):
+        payload = {
+            "title": post.title,
+            "slug": post.slug,
+            "kind": post.kind,
+            "content": post.content,
+            **data,
+        }
+        return self.client.post(reverse("site_admin:post_edit", kwargs={"slug": post.slug}), payload)
+
+    def test_create_records_admin_actor(self, _queue):
+        response = self.client.post(
+            reverse("site_admin:post_create"),
+            {"kind": Post.NOTE, "content": "Hello", "title": "", "slug": "", "publishing_action": "draft"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        revision = Post.objects.get().revisions.get()
+        self.assertEqual(revision.action, "create")
+        self.assertEqual(revision.actor_source, "admin")
+        self.assertEqual(revision.actor_user, self.staff)
+        self.assertEqual(revision.change_summary, "create in admin (draft)")
+
+    def test_edit_records_the_state_before_the_form_changed_it(self, _queue):
+        post = Post.objects.create(title="T", slug="t", kind=Post.NOTE, content="before")
+        post.tags.add(Tag.objects.create(tag="old"))
+
+        response = self._edit(post, content="after", tags="new")
+
+        self.assertEqual(response.status_code, 302)
+        post.refresh_from_db()
+        self.assertEqual(post.content, "after")
+        revision = post.revisions.get()
+        self.assertEqual(revision.action, "update")
+        self.assertEqual(revision.snapshot["content"], "before")
+        self.assertEqual(revision.snapshot["tags"], ["old"])
+        self.assertEqual(revision.change_summary, "edit in admin")
+
+    def test_validation_error_records_nothing(self, _queue):
+        post = Post.objects.create(title="T", slug="t", kind=Post.NOTE, content="before")
+
+        response = self._edit(post, content="")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(post.revisions.exists())
+
+    def test_removed_photo_is_kept_and_revert_restores_it(self, _queue):
+        from blog.services import Actor, revert_to
+
+        post = Post.objects.create(title="Photo", slug="photo", kind=Post.PHOTO, content="caption")
+        asset = File.objects.create(
+            kind=File.IMAGE,
+            file=SimpleUploadedFile("p.jpg", b"fake-image-data", content_type="image/jpeg"),
+            owner=self.staff,
+        )
+        Attachment.objects.create(content_object=post, asset=asset, role="photo")
+
+        response = self._edit(post, existing_remove_ids=[str(asset.id)])
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(post.attachments.exists())
+        self.assertTrue(File.objects.filter(pk=asset.pk).exists())
+
+        revert_to(Actor(user=self.staff, source="admin"), post, post.revisions.get())
+        self.assertEqual(list(post.attachments.values_list("asset_id", flat=True)), [asset.pk])
+
+    def test_bad_gpx_saves_nothing(self, _queue):
+        post = Post.objects.create(title="Ride", slug="ride", kind=Post.NOTE, content="before")
+        gpx = SimpleUploadedFile("ride.gpx", b"not xml", content_type="application/gpx+xml")
+
+        response = self._edit(post, content="after", gpx_file=gpx)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Invalid GPX XML.")
+        post.refresh_from_db()
+        self.assertEqual(post.content, "before")
+        self.assertFalse(post.revisions.exists())
+        self.assertFalse(File.objects.exists())
+
+    def test_delete_and_bulk_actions_record_revisions(self, _queue):
+        post = Post.objects.create(
+            title="Live", slug="live", kind=Post.NOTE, content="x", published_on=timezone.now()
+        )
+        bulk_url = reverse("site_admin:post_bulk_action")
+
+        self.client.post(bulk_url, {"post_ids": [post.id], "action": "draft"})
+        self.client.post(bulk_url, {"post_ids": [post.id], "action": "remove"})
+        self.client.post(bulk_url, {"post_ids": [post.id], "action": "restore"})
+        self.client.post(reverse("site_admin:post_delete", kwargs={"slug": post.slug}))
+
+        post.refresh_from_db()
+        self.assertTrue(post.deleted)
+        self.assertIsNone(post.published_on)
+        self.assertEqual(
+            list(post.revisions.order_by("id").values_list("action", "actor_source")),
+            [("status", "admin"), ("delete", "admin"), ("undelete", "admin"), ("delete", "admin")],
+        )

@@ -24,6 +24,7 @@ from django.forms import inlineformset_factory
 from django.forms.models import BaseInlineFormSet
 from django.views.decorators.http import require_http_methods, require_GET, require_POST
 
+from blog import services as content_service
 from blog.models import Comment, Post
 from blog.previews import preview_path
 from analytics.bot_detection import evaluate_user_agent_against_pattern, validate_bot_pattern
@@ -1753,14 +1754,23 @@ def post_bulk_action(request):
     if not post_ids:
         messages.warning(request, "Select at least one post.")
     elif action == "draft":
-        count = posts.filter(deleted=False).update(published_on=None)
-        messages.success(request, f"Moved {count} post(s) to drafts.")
+        actor = _admin_actor(request)
+        targets = list(posts.filter(deleted=False))
+        for post in targets:
+            content_service.set_status(actor, post, content_service.DRAFT)
+        messages.success(request, f"Moved {len(targets)} post(s) to drafts.")
     elif action == "remove":
-        count = posts.filter(deleted=False).update(deleted=True)
-        messages.success(request, f"Removed {count} post(s) from the site.")
+        actor = _admin_actor(request)
+        targets = list(posts.filter(deleted=False))
+        for post in targets:
+            content_service.delete_post(actor, post)
+        messages.success(request, f"Removed {len(targets)} post(s) from the site.")
     elif action == "restore":
-        count = posts.filter(deleted=True).update(deleted=False)
-        messages.success(request, f"Restored {count} post(s).")
+        actor = _admin_actor(request)
+        targets = list(posts.filter(deleted=True))
+        for post in targets:
+            content_service.undelete_post(actor, post)
+        messages.success(request, f"Restored {len(targets)} post(s).")
     else:
         messages.error(request, "Choose a valid bulk action.")
 
@@ -2829,6 +2839,139 @@ def file_delete(request, file_id):
     )
 
 
+def _admin_actor(request):
+    return content_service.Actor(
+        user=request.user,
+        source="admin",
+        base_url=request.build_absolute_uri("/").rstrip("/"),
+    )
+
+
+def _admin_save_summary(is_new, publishing_action):
+    summary = "create in admin" if is_new else "edit in admin"
+    return f"{summary} ({publishing_action})" if publishing_action else summary
+
+
+def _save_post_attachments(
+    request,
+    post,
+    *,
+    is_new,
+    existing_meta,
+    existing_remove_ids,
+    uploaded_meta,
+    uploads,
+):
+    """Apply the editor's photo changes. Removed photos are detached, not
+    deleted, so reverting to an earlier revision can bring them back."""
+    if not is_new:
+        for attachment in list(post.attachments.select_related("asset")):
+            asset = attachment.asset
+            if asset.id in existing_remove_ids:
+                attachment.delete()
+                continue
+            meta = existing_meta.get(asset.id)
+            if not meta:
+                continue
+            asset.alt_text = meta.get("alt", "")
+            asset.caption = meta.get("caption", "")
+            asset.save(update_fields=["alt_text", "caption"])
+            attachment.sort_order = meta.get("position", attachment.sort_order)
+            attachment.save(update_fields=["sort_order"])
+
+    if uploaded_meta:
+        uploaded_assets = File.objects.filter(id__in=uploaded_meta.keys(), owner=request.user)
+        for asset in uploaded_assets:
+            meta = uploaded_meta.get(asset.id, {})
+            asset.alt_text = meta.get("alt", "")
+            asset.caption = meta.get("caption", "")
+            asset.save(update_fields=["alt_text", "caption"])
+            Attachment.objects.create(
+                content_object=post,
+                asset=asset,
+                role="photo",
+                sort_order=meta.get("position", 0),
+            )
+
+    for index, upload in enumerate(uploads):
+        asset = File.objects.create(kind=File.IMAGE, file=upload, owner=request.user)
+        Attachment.objects.create(content_object=post, asset=asset, role="photo", sort_order=index)
+
+
+def _save_post_gpx(request, post, *, gpx_upload, anonymized_gpx, gpx_remove):
+    """Replace or remove the post's GPX track, detaching (not deleting) the
+    old one. Returns the post's GPX attachments afterwards."""
+    gpx_attachments = list(post.attachments.select_related("asset").filter(role="gpx"))
+    if gpx_remove or gpx_upload:
+        for attachment in gpx_attachments:
+            attachment.delete()
+        gpx_attachments = []
+
+    if gpx_upload:
+        asset = File.objects.create(
+            kind=File.DOC,
+            file=ContentFile(anonymized_gpx, name=gpx_upload.name),
+            owner=request.user,
+        )
+        gpx_attachments = [Attachment.objects.create(content_object=post, asset=asset, role="gpx")]
+    return gpx_attachments
+
+
+def _post_mf2_from_form(post, form, selected_kind, activity_type, gpx_attachments):
+    """The post's mf2 with the per-kind properties the editor manages."""
+    mf2_payload = post.mf2 if isinstance(post.mf2, dict) else {}
+    if selected_kind == Post.ACTIVITY:
+        activity_props = {}
+        if activity_type:
+            activity_props["activity-type"] = [activity_type]
+            activity_props["name"] = [activity_type]
+        if gpx_attachments:
+            activity_props["track"] = [gpx_attachments[0].asset.file.url]
+        if activity_props:
+            mf2_payload["activity"] = [{"type": ["h-activity"], "properties": activity_props}]
+    else:
+        mf2_payload.pop("activity", None)
+
+    # Event mf2 data — event name comes from the post title
+    if selected_kind == Post.EVENT:
+        event_data = {"name": post.title}
+        for key in ("event_start", "event_end", "event_location", "event_url"):
+            val = form.cleaned_data.get(key)
+            if val:
+                field_key = key.replace("event_", "")
+                if hasattr(val, "isoformat"):
+                    val = val.isoformat()
+                event_data[field_key] = val
+        mf2_payload["event"] = event_data
+    else:
+        mf2_payload.pop("event", None)
+
+    # RSVP mf2 data
+    if selected_kind == Post.RSVP:
+        rsvp_val = form.cleaned_data.get("rsvp_value", "")
+        if rsvp_val:
+            mf2_payload["rsvp"] = rsvp_val
+    else:
+        mf2_payload.pop("rsvp", None)
+
+    # Check-in mf2 data
+    if selected_kind == Post.CHECKIN:
+        checkin_data = {}
+        checkin_name = form.cleaned_data.get("checkin_name", "")
+        if checkin_name:
+            checkin_data["name"] = checkin_name
+        lat = form.cleaned_data.get("checkin_latitude")
+        lng = form.cleaned_data.get("checkin_longitude")
+        if lat is not None:
+            checkin_data["latitude"] = lat
+        if lng is not None:
+            checkin_data["longitude"] = lng
+        mf2_payload["checkin"] = checkin_data
+    else:
+        mf2_payload.pop("checkin", None)
+    return mf2_payload
+
+
 @require_http_methods(["GET", "POST"])
 def post_edit(request, slug=None):
     guard = _staff_guard(request)
@@ -2950,6 +3093,15 @@ def post_edit(request, slug=None):
             ):
                 errors.append("Add a caption or at least one photo for photo posts.")
 
+            # Anonymize before saving anything, so a bad file can't leave a
+            # half-saved post behind.
+            anonymized_gpx = None
+            if gpx_upload and not errors:
+                try:
+                    anonymized_gpx = anonymize_gpx(gpx_upload.read(), gpx_options)
+                except GpxAnonymizeError as exc:
+                    errors.append(str(exc))
+
             if errors:
                 for error in errors:
                     form.add_error(None, error)
@@ -2970,8 +3122,6 @@ def post_edit(request, slug=None):
                 return render(request, template_name, context)
 
             saved_post = form.save(commit=False)
-            if not saved_post.author_id:
-                saved_post.author = request.user
             publishing_action = form.cleaned_data.get("publishing_action")
             if publishing_action == "draft":
                 saved_post.published_on = None
@@ -3004,175 +3154,36 @@ def post_edit(request, slug=None):
                 elif selected_kind == Post.EVENT:
                     content_value = saved_post.title or "Event"
             saved_post.content = content_value
-            saved_post.save()
-            form.save_tags(saved_post)
+            include_bridgy = bool(saved_post.published_on) and (is_new or not was_published)
 
-            if post:
-                for attachment in list(
-                    saved_post.attachments.select_related("asset")
-                ):
-                    asset = attachment.asset
-                    asset_id = asset.id
-                    if asset_id in existing_remove_ids:
-                        attachment.delete()
-                        if not asset.is_in_use():
-                            asset.delete()
-                        continue
-                    meta = existing_meta.get(asset_id)
-                    if not meta:
-                        continue
-                    asset.alt_text = meta.get("alt", "")
-                    asset.caption = meta.get("caption", "")
-                    asset.save(update_fields=["alt_text", "caption"])
-                    attachment.sort_order = meta.get(
-                        "position", attachment.sort_order
-                    )
-                    attachment.save(update_fields=["sort_order"])
-
-            if uploaded_meta:
-                uploaded_assets = File.objects.filter(
-                    id__in=uploaded_meta.keys(), owner=request.user
-                )
-                for asset in uploaded_assets:
-                    meta = uploaded_meta.get(asset.id, {})
-                    asset.alt_text = meta.get("alt", "")
-                    asset.caption = meta.get("caption", "")
-                    asset.save(update_fields=["alt_text", "caption"])
-                    Attachment.objects.create(
-                        content_object=saved_post,
-                        asset=asset,
-                        role="photo",
-                        sort_order=meta.get("position", 0),
-                    )
-
-            for index, upload in enumerate(uploads):
-                asset = File.objects.create(
-                    kind=File.IMAGE,
-                    file=upload,
-                    owner=request.user,
-                )
-                Attachment.objects.create(
-                    content_object=saved_post,
-                    asset=asset,
-                    role="photo",
-                    sort_order=index,
-                )
-            existing_gpx_attachments = list(
-                saved_post.attachments.select_related("asset").filter(role="gpx")
-            )
-            if gpx_remove or gpx_upload:
-                for attachment in existing_gpx_attachments:
-                    asset = attachment.asset
-                    attachment.delete()
-                    if asset and not asset.is_in_use():
-                        asset.delete()
-                existing_gpx_attachments = []
-
-            if gpx_upload:
-                try:
-                    anonymized_gpx = anonymize_gpx(
-                        gpx_upload.read(), gpx_options
-                    )
-                except GpxAnonymizeError as exc:
-                    form.add_error(None, str(exc))
-                    context = _build_post_form_context(
-                        request=request,
-                        form=form,
-                        post=post,
-                        saved=False,
-                        existing_meta=existing_meta,
-                        existing_remove_ids=existing_remove_ids,
-                        uploaded_meta=uploaded_meta,
-                    )
-                    template_name = (
-                        "site_admin/posts/_form_messages.html"
-                        if request.headers.get("HX-Request")
-                        else "site_admin/posts/edit.html"
-                    )
-                    return render(request, template_name, context)
-
-                anonymized_upload = ContentFile(
-                    anonymized_gpx, name=gpx_upload.name
-                )
-                asset = File.objects.create(
-                    kind=File.DOC,
-                    file=anonymized_upload,
-                    owner=request.user,
-                )
-                attachment = Attachment.objects.create(
-                    content_object=saved_post,
-                    asset=asset,
-                    role="gpx",
-                )
-                existing_gpx_attachments = [attachment]
-
-            mf2_payload = saved_post.mf2 if isinstance(saved_post.mf2, dict) else {}
-            if selected_kind == Post.ACTIVITY:
-                activity_props = {}
-                if activity_type:
-                    activity_props["activity-type"] = [activity_type]
-                    activity_props["name"] = [activity_type]
-                if existing_gpx_attachments:
-                    track_url = existing_gpx_attachments[0].asset.file.url
-                    activity_props["track"] = [track_url]
-                if activity_props:
-                    mf2_payload["activity"] = [
-                        {"type": ["h-activity"], "properties": activity_props}
-                    ]
-            else:
-                mf2_payload.pop("activity", None)
-
-            # Event mf2 data — event name comes from the post title
-            if selected_kind == Post.EVENT:
-                event_data = {"name": saved_post.title}
-                for key in ("event_start", "event_end", "event_location", "event_url"):
-                    val = form.cleaned_data.get(key)
-                    if val:
-                        field_key = key.replace("event_", "")
-                        if hasattr(val, "isoformat"):
-                            val = val.isoformat()
-                        event_data[field_key] = val
-                mf2_payload["event"] = event_data
-            else:
-                mf2_payload.pop("event", None)
-
-            # RSVP mf2 data
-            if selected_kind == Post.RSVP:
-                rsvp_val = form.cleaned_data.get("rsvp_value", "")
-                if rsvp_val:
-                    mf2_payload["rsvp"] = rsvp_val
-            else:
-                mf2_payload.pop("rsvp", None)
-
-            # Check-in mf2 data
-            if selected_kind == Post.CHECKIN:
-                checkin_data = {}
-                checkin_name = form.cleaned_data.get("checkin_name", "")
-                if checkin_name:
-                    checkin_data["name"] = checkin_name
-                lat = form.cleaned_data.get("checkin_latitude")
-                lng = form.cleaned_data.get("checkin_longitude")
-                if lat is not None:
-                    checkin_data["latitude"] = lat
-                if lng is not None:
-                    checkin_data["longitude"] = lng
-                mf2_payload["checkin"] = checkin_data
-            else:
-                mf2_payload.pop("checkin", None)
-
-            saved_post.mf2 = mf2_payload
-            saved_post.save(update_fields=["mf2"])
-            source_url = request.build_absolute_uri(saved_post.get_absolute_url())
-            include_bridgy = saved_post.published_on and (is_new or not was_published)
-            settings_obj = SiteConfiguration.get_solo() if include_bridgy else None
-            transaction.on_commit(
-                lambda: queue_webmentions_for_post(
+            with content_service.saving(
+                _admin_actor(request),
+                saved_post,
+                summary=_admin_save_summary(is_new, publishing_action),
+                include_bridgy=include_bridgy,
+            ):
+                saved_post.save()
+                form.save_tags(saved_post)
+                _save_post_attachments(
+                    request,
                     saved_post,
-                    source_url,
-                    include_bridgy=include_bridgy,
-                    settings_obj=settings_obj,
+                    is_new=is_new,
+                    existing_meta=existing_meta,
+                    existing_remove_ids=existing_remove_ids,
+                    uploaded_meta=uploaded_meta,
+                    uploads=uploads,
                 )
-            )
+                gpx_attachments = _save_post_gpx(
+                    request,
+                    saved_post,
+                    gpx_upload=gpx_upload,
+                    anonymized_gpx=anonymized_gpx,
+                    gpx_remove=gpx_remove,
+                )
+                saved_post.mf2 = _post_mf2_from_form(
+                    saved_post, form, selected_kind, activity_type, gpx_attachments
+                )
+
             if request.headers.get("HX-Request"):
                 if is_new:
                     response = HttpResponse(status=204)
@@ -3229,8 +3240,7 @@ def post_delete(request, slug):
         return guard
 
     post = get_object_or_404(Post, slug=slug)
-    post.deleted = True
-    post.save(update_fields=["deleted"])
+    content_service.delete_post(_admin_actor(request), post)
     return redirect("site_admin:post_list")
 
 
