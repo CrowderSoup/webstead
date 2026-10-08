@@ -76,6 +76,7 @@ env:
     AWS_S3_CUSTOM_DOMAIN: crowdersoup-blog.sfo3.cdn.digitaloceanspaces.com
     THEME_STORAGE_PREFIX: themes/
     TURNSTILE_SITE_KEY: 0x4AAAAAACNSDZ_RlYavK12F
+    MCP_ENABLED: "True"
     MICROSUB_BASE_URL: https://crowdersoup.com
     CELERY_TASK_DEFAULT_QUEUE: crowdersoup
     STRAVA_CLIENT_ID: "272008"  # not secret - visible in the OAuth authorize URL anyway
