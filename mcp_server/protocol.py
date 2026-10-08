@@ -46,12 +46,13 @@ NAMED_METHODS = {"tools/call": "name", "resources/read": "uri", "prompts/get": "
 class McpError(Exception):
     """A JSON-RPC error response, with the HTTP status to send it with."""
 
-    def __init__(self, code: int, message: str, *, status: int = 400, data=None):
+    def __init__(self, code: int, message: str, *, status: int = 400, data=None, challenge: str = ""):
         super().__init__(message)
         self.code = code
         self.message = message
         self.status = status
         self.data = data
+        self.challenge = challenge  # WWW-Authenticate value for 401/403
 
     def payload(self, request_id=None) -> dict:
         error = {"code": self.code, "message": self.message}

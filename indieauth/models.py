@@ -22,6 +22,8 @@ class IndieAuthAuthorizationCode(models.Model):
     redirect_uri = models.URLField(max_length=2000)
     me = models.URLField(max_length=2000)
     scope = models.TextField(blank=True, default="")
+    # RFC 8707 resource indicator the token will be bound to (e.g. the MCP endpoint).
+    resource = models.CharField(max_length=2000, blank=True, default="")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
@@ -41,6 +43,9 @@ class IndieAuthAccessToken(models.Model):
     client_id = models.CharField(max_length=2000)
     me = models.URLField(max_length=2000)
     scope = models.TextField(blank=True, default="")
+    # Audience (RFC 8707). Empty for IndieAuth/Micropub tokens; the MCP
+    # endpoint's URL for tokens issued to MCP clients over OAuth.
+    resource = models.CharField(max_length=2000, blank=True, default="")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     name = models.CharField(max_length=255, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -69,10 +74,34 @@ class IndieAuthAccessToken(models.Model):
             self.last_used_at = now
 
 
+class IndieAuthRefreshToken(models.Model):
+    """A rotating refresh token for one connection (an IndieAuthAccessToken row).
+
+    Refreshing swaps the connection's access token hash in place, so a
+    connection stays one row (with its revisions and logs) for its whole
+    life, and revoking it in the admin ends the refresh chain too. Each
+    refresh token works once; presenting a used one again revokes the
+    connection, since it means the token leaked.
+    """
+
+    token_hash = models.CharField(max_length=64, unique=True)
+    access_token = models.ForeignKey(
+        IndieAuthAccessToken, on_delete=models.CASCADE, related_name="refresh_tokens"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"refresh for {self.access_token}"
+
+
 class IndieAuthConsent(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     client_id = models.URLField(max_length=2000)
-    scope = models.TextField(blank=True, default="")
+    scope = models.TextField(blank=True, default="")  # what the client asked for
+    # What the user approved, when they narrowed or widened the request.
+    granted_scope = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     last_used_at = models.DateTimeField(null=True, blank=True)
 
