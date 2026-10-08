@@ -9,6 +9,7 @@ from analytics.bot_detection import validate_bot_pattern
 from analytics.models import UserAgentBotRule
 from blog.models import Comment, Post, Tag
 from indieauth.models import IndieAuthClient
+from indieauth.tokens import PERSONAL_TOKEN_SCOPES
 from core.models import (
     HCard,
     HCardEmail,
@@ -473,6 +474,33 @@ class IndieAuthFilterForm(forms.Form):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs.setdefault(
+                "class",
+                "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
+            )
+
+
+class PersonalTokenForm(forms.Form):
+    """Mint a personal access token (for MCP clients and scripts)."""
+
+    EXPIRY_CHOICES = [("", "Never"), ("30", "30 days"), ("90", "90 days"), ("365", "1 year")]
+
+    name = forms.CharField(
+        max_length=255,
+        label="Name",
+        help_text="What uses it, e.g. \"Claude Code on my laptop\" or \"IRC bridge\".",
+    )
+    scopes = forms.MultipleChoiceField(
+        choices=PERSONAL_TOKEN_SCOPES,
+        widget=forms.CheckboxSelectMultiple,
+        initial=["read", "draft", "media"],
+        label="Scopes",
+    )
+    expires_in_days = forms.ChoiceField(choices=EXPIRY_CHOICES, required=False, label="Expires")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name in ("name", "expires_in_days"):
+            self.fields[name].widget.attrs.setdefault(
                 "class",
                 "mt-1 w-full rounded-2xl border border-(--admin-border) bg-white px-3 py-2 text-sm shadow-xs focus:border-(--admin-accent) focus:ring-(--admin-accent)",
             )

@@ -2481,3 +2481,55 @@ class SiteAdminPostRevisionTests(TestCase):
             list(post.revisions.order_by("id").values_list("action", "actor_source")),
             [("status", "admin"), ("delete", "admin"), ("undelete", "admin"), ("delete", "admin")],
         )
+
+
+class SiteAdminPersonalTokenTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.staff = get_user_model().objects.create_user(
+            username="editor", email="editor@example.com", password="password", is_staff=True
+        )
+        self.client.force_login(self.staff)
+        self.url = reverse("site_admin:indieauth_settings")
+
+    def _create(self, **data):
+        payload = {"action": "create_personal_token", "name": "Claude Code", "scopes": ["read", "draft", "media"]}
+        payload.update(data)
+        return self.client.post(self.url, payload)
+
+    @override_settings(MCP_ENABLED=True)
+    def test_mint_shows_token_once_and_it_works_until_revoked(self):
+        from indieauth.models import IndieAuthAccessToken
+
+        response = self._create(expires_in_days="30")
+
+        self.assertEqual(response.status_code, 200)
+        raw = re.search(r'data-new-token>.*?value="([^"]+)"', response.content.decode(), re.S).group(1)
+        self.assertContains(response, f'claude mcp add --transport http webstead http://testserver/mcp --header "Authorization: Bearer {raw}"')
+        token = IndieAuthAccessToken.objects.get()
+        self.assertTrue(token.is_personal)
+        self.assertEqual((token.name, token.scope, token.user), ("Claude Code", "draft media read", self.staff))
+        self.assertNotEqual(token.token_hash, raw)
+        self.assertIsNotNone(token.expires_at)
+        self.assertNotContains(self.client.get(self.url), raw)
+
+        mcp = lambda: self.client.post(
+            "/mcp",
+            data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}),
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {raw}"},
+        )
+        self.assertEqual(mcp().status_code, 200)
+        self.assertContains(self.client.get(self.url), "Claude Code")
+
+        self.client.post(self.url, {"action": "revoke_token", "token_id": token.pk})
+        self.assertEqual(mcp().status_code, 401)
+
+    def test_mint_requires_scopes(self):
+        from indieauth.models import IndieAuthAccessToken
+
+        response = self._create(scopes=[])
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "data-new-token")
+        self.assertFalse(IndieAuthAccessToken.objects.exists())

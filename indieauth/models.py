@@ -32,17 +32,41 @@ class IndieAuthAuthorizationCode(models.Model):
 
 
 class IndieAuthAccessToken(models.Model):
+    # Personal access tokens are minted in the admin rather than through an
+    # IndieAuth client, so they get this client_id instead of a URL.
+    PERSONAL_CLIENT_ID = "urn:webstead:pat"
+
     token_hash = models.CharField(max_length=64, unique=True)
-    client_id = models.URLField(max_length=2000)
+    # A URL for IndieAuth clients, PERSONAL_CLIENT_ID for personal tokens.
+    client_id = models.CharField(max_length=2000)
     me = models.URLField(max_length=2000)
     scope = models.TextField(blank=True, default="")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    name = models.CharField(max_length=255, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(null=True, blank=True)
     revoked_at = models.DateTimeField(null=True, blank=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
-        return f"{self.client_id} -> {self.me}"
+        return f"{self.name or self.client_id} -> {self.me}"
+
+    @property
+    def is_personal(self):
+        return self.client_id == self.PERSONAL_CLIENT_ID
+
+    @property
+    def scopes(self):
+        return set(self.scope.split())
+
+    def mark_used(self):
+        """Record use, at most once a minute so busy clients don't write on every call."""
+        from django.utils import timezone
+
+        now = timezone.now()
+        if self.last_used_at is None or now - self.last_used_at > timezone.timedelta(minutes=1):
+            type(self).objects.filter(pk=self.pk).update(last_used_at=now)
+            self.last_used_at = now
 
 
 class IndieAuthConsent(models.Model):

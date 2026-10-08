@@ -786,6 +786,7 @@ def _introspect_local(token: str) -> tuple[bool, list[str], object | None] | Non
         return False, [], None
     if token_obj.expires_at and token_obj.expires_at <= timezone.now():
         return False, [], None
+    token_obj.mark_used()
     scopes = _parse_scope(token_obj.scope)
     return True, scopes, token_obj
 
