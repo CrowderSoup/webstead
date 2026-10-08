@@ -8,7 +8,7 @@ from .utils import get_client_ip  # you write these
 # Paths that shouldn't pay for visit tracking: the Django admin, and
 # machine-to-machine endpoints (webhooks) that other services call under a
 # tight response-time budget.
-EXCLUDED_PATH_PREFIXES = ("/admin", "/strava/webhook")
+EXCLUDED_PATH_PREFIXES = ("/admin", "/strava/webhook", "/mcp")
 
 
 class AnalyticsMiddleware(MiddlewareMixin):

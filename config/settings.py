@@ -73,6 +73,11 @@ TURNSTILE_SECRET_KEY = env("TURNSTILE_SECRET_KEY", default="")
 STRAVA_CLIENT_ID = env("STRAVA_CLIENT_ID", default="")
 STRAVA_CLIENT_SECRET = env("STRAVA_CLIENT_SECRET", default="")
 
+# MCP server at /mcp (see mcp_server). Off unless enabled per site.
+MCP_ENABLED = env.bool("MCP_ENABLED", default=False)
+MCP_RATE_LIMIT = env.int("MCP_RATE_LIMIT", default=60)  # tool calls per minute per token
+MCP_MAX_UPLOAD_BYTES = env.int("MCP_MAX_UPLOAD_BYTES", default=10 * 1024 * 1024)
+
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
 
@@ -116,6 +121,7 @@ INSTALLED_APPS = [
     "files.apps.FilesConfig",
     "micropub.apps.MicropubConfig",
     "indieauth.apps.IndieauthConfig",
+    "mcp_server.apps.McpServerConfig",
     "analytics.apps.AnalyticsConfig",
     "site_admin.apps.SiteAdminConfig",
     "widgets.apps.WidgetsConfig",

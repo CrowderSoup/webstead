@@ -4,6 +4,7 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('', include('indieauth.urls')),
+    path('', include('mcp_server.urls')),
     path('', include('core.urls')),
     path('blog/', include('blog.urls')),
     path('admin/', include('site_admin.urls')),

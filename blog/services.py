@@ -16,8 +16,8 @@ from __future__ import annotations
 import re
 from contextlib import contextmanager
 from dataclasses import dataclass
-from urllib.parse import urlencode
 from typing import TYPE_CHECKING
+from urllib.parse import urlencode, urlparse
 
 from django.db import transaction
 from django.utils import timezone
@@ -151,26 +151,53 @@ def _attach_photo_files(actor, post, photo_files):
         Attachment.objects.create(content_object=post, asset=asset, role="photo")
 
 
-def _attach_remote_photos(post, photos):
-    """Queue downloads for photo URLs ({"url", "alt"} dicts or plain strings).
+def _local_file_for_url(url):
+    """The media-library File a URL points at, if it's one of ours.
 
-    A Markdown image string is appended to the content instead.
+    Uploads are stored as ``uploads/<kind>/<yyyy>/<mm>/<uuid>.<ext>``, so the
+    path from ``/uploads/`` on names the file whatever host serves it.
+    """
+    path = urlparse(url).path
+    index = path.find("/uploads/")
+    if index == -1:
+        return None
+    return File.objects.filter(file=path[index + 1 :]).first()
+
+
+def _attach_remote_photos(post, photos):
+    """Attach photo URLs ({"url", "alt"} dicts or plain strings).
+
+    URLs of files already in the media library (e.g. from the media
+    endpoint) are attached directly; others are downloaded after commit. A
+    Markdown image string is appended to the content instead.
     """
     from micropub.tasks import download_post_photo
 
     content_changed = False
+    next_order = post.attachments.count()
     for photo in photos:
+        if isinstance(photo, str) and photo.startswith("!["):
+            post.content += f"\n{photo}\n"
+            content_changed = True
+            continue
         if isinstance(photo, str) and photo and not photo.startswith("<UploadedFile"):
-            if photo.startswith("!["):
-                post.content += f"\n{photo}\n"
-                content_changed = True
-                continue
-            transaction.on_commit(lambda u=photo: download_post_photo.delay(post.pk, u))
-        elif isinstance(photo, dict):
-            url = photo.get("url")
-            alt_text = photo.get("alt") or ""
-            if isinstance(url, str) and url:
-                transaction.on_commit(lambda u=url, a=alt_text: download_post_photo.delay(post.pk, u, a))
+            url, alt_text = photo, ""
+        elif isinstance(photo, dict) and isinstance(photo.get("url"), str) and photo["url"]:
+            url, alt_text = photo["url"], photo.get("alt") or ""
+        else:
+            continue
+
+        local = _local_file_for_url(url)
+        if local is not None:
+            if alt_text and not local.alt_text:
+                local.alt_text = alt_text[:255]
+                local.save(update_fields=["alt_text"])
+            Attachment.objects.create(content_object=post, asset=local, role="photo", sort_order=next_order)
+            next_order += 1
+        elif alt_text:
+            transaction.on_commit(lambda u=url, a=alt_text: download_post_photo.delay(post.pk, u, a))
+        else:
+            transaction.on_commit(lambda u=url: download_post_photo.delay(post.pk, u))
     if content_changed:
         post.save(update_fields=["content"])
 

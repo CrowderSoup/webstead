@@ -45,6 +45,62 @@
         </div>
       </section>
 
+      <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs" id="personal-tokens">
+        <h2 class="text-lg font-semibold">Personal access tokens</h2>
+        <p class="mt-1 text-sm text-(--admin-muted)">
+          For MCP clients like Claude, and scripts. Start with read, draft, and media: the
+          client can then draft anything, and you publish from the preview link.
+          {% if not mcp_enabled %}The MCP endpoint is off on this site (set <code>MCP_ENABLED=True</code>).{% endif %}
+        </p>
+
+        {% if new_token %}
+          <div class="mt-4 rounded-2xl border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-900" data-new-token>
+            <p class="font-semibold">Copy this token now. It won't be shown again.</p>
+            <input
+              type="text"
+              readonly
+              value="{{ new_token }}"
+              onclick="this.select()"
+              class="mt-2 w-full rounded-lg border border-emerald-300 bg-white px-3 py-1.5 font-mono text-xs"
+            >
+            <p class="mt-3">Connect Claude Code:</p>
+            <pre class="mt-1 overflow-x-auto rounded-lg bg-white px-3 py-2 font-mono text-xs">claude mcp add --transport http webstead {{ mcp_url }} --header "Authorization: Bearer {{ new_token }}"</pre>
+          </div>
+        {% endif %}
+
+        <form method="post" class="mt-4 grid gap-4 md:grid-cols-3">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="create_personal_token" />
+          {% if token_form.non_field_errors %}
+            <div class="md:col-span-3 text-sm text-rose-600">{{ token_form.non_field_errors }}</div>
+          {% endif %}
+          <div>
+            <label for="{{ token_form.name.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Name</label>
+            {{ token_form.name }}
+            {% for error in token_form.name.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+            <p class="mt-1 text-xs text-(--admin-muted)">{{ token_form.name.help_text }}</p>
+          </div>
+          <div>
+            <span class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Scopes</span>
+            <div class="mt-1 flex flex-col gap-1 text-sm">
+              {% for choice in token_form.scopes %}
+                <label class="flex items-start gap-2">{{ choice.tag }} <span><code>{{ choice.data.value }}</code>: {{ choice.choice_label }}</span></label>
+              {% endfor %}
+            </div>
+            {% for error in token_form.scopes.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+          </div>
+          <div>
+            <label for="{{ token_form.expires_in_days.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Expires</label>
+            {{ token_form.expires_in_days }}
+          </div>
+          <div class="md:col-span-3">
+            <button type="submit" class="rounded-xl bg-(--admin-accent) px-4 py-2 text-sm font-semibold text-white shadow-xs transition hover:opacity-90">
+              Create token
+            </button>
+          </div>
+        </form>
+      </section>
+
       <section class="rounded-3xl border border-(--admin-border) bg-(--admin-surface) p-6 shadow-xs">
         <h2 class="text-lg font-semibold">Filters</h2>
         <form method="get" class="mt-4 grid gap-4 md:grid-cols-3">
@@ -266,7 +322,7 @@
                 <thead class="bg-(--admin-bg) text-xs uppercase tracking-widest text-(--admin-muted)">
                   <tr>
                     <th class="px-4 py-3">Client</th>
-                    <th class="px-4 py-3">Me</th>
+                    <th class="px-4 py-3 w-32">Last used</th>
                     <th class="px-4 py-3">User</th>
                     <th class="px-4 py-3">Scope</th>
                     <th class="px-4 py-3 w-32">Created</th>
@@ -281,12 +337,11 @@
                     <tr class="border-t border-(--admin-border)">
                       <td class="px-4 py-3">
                         <span class="block max-w-[180px] truncate text-(--admin-ink)">
-                          {{ token.client_id }}
+                          {% if token.is_personal %}{{ token.name|default:"Personal token" }}{% else %}{{ token.client_id }}{% endif %}
                         </span>
+                        {% if token.is_personal %}<span class="text-xs text-(--admin-muted)">Personal token</span>{% endif %}
                       </td>
-                      <td class="px-4 py-3 text-(--admin-muted)">
-                        <span class="block max-w-[160px] truncate">{{ token.me }}</span>
-                      </td>
+                      <td class="px-4 py-3 text-(--admin-muted)">{{ token.last_used_at|date:"M j, Y"|default:"Never" }}</td>
                       <td class="px-4 py-3 text-(--admin-muted)">
                         {{ token.user.get_username }}
                       </td>
@@ -327,7 +382,8 @@
               <div class="rounded-2xl border border-(--admin-border) p-4">
                 <div class="text-base font-semibold">{{ token.user.get_username }}</div>
                 <div class="mt-1 text-sm text-(--admin-muted)">
-                  <div class="truncate">Client: {{ token.client_id }}</div>
+                  <div class="truncate">Client: {% if token.is_personal %}{{ token.name|default:"Personal token" }} (personal){% else %}{{ token.client_id }}{% endif %}</div>
+                  <div>Last used: {{ token.last_used_at|date:"M j, Y"|default:"Never" }}</div>
                   <div class="truncate">Me: {{ token.me }}</div>
                   <div>Scope: {{ token.scope|default:"-" }}</div>
                   <div>Token: {{ token.redacted_hash }}</div>

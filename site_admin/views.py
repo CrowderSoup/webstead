@@ -7,6 +7,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.views import LoginView, LogoutView
 from django.core.files.base import ContentFile
@@ -25,6 +26,7 @@ from django.forms.models import BaseInlineFormSet
 from django.views.decorators.http import require_http_methods, require_GET, require_POST
 
 from blog import services as content_service
+from indieauth.tokens import mint_personal_token
 from blog.models import Comment, Post
 from blog.previews import preview_path
 from analytics.bot_detection import evaluate_user_agent_against_pattern, validate_bot_pattern
@@ -116,6 +118,7 @@ from .forms import (
     ErrorLogFilterForm,
     TaskLogFilterForm,
     IndieAuthFilterForm,
+    PersonalTokenForm,
     IndieAuthClientForm,
 )
 
@@ -2135,8 +2138,23 @@ def indieauth_settings(request):
     if guard:
         return guard
 
+    token_form = PersonalTokenForm()
+    new_token = None
     if request.method == "POST":
         action = request.POST.get("action")
+        if action == "create_personal_token":
+            token_form = PersonalTokenForm(request.POST)
+            if token_form.is_valid():
+                days = token_form.cleaned_data["expires_in_days"]
+                _, new_token = mint_personal_token(
+                    request.user,
+                    name=token_form.cleaned_data["name"],
+                    scopes=token_form.cleaned_data["scopes"],
+                    me=request.build_absolute_uri("/"),
+                    expires_in=timezone.timedelta(days=int(days)) if days else None,
+                )
+                # Shown once in this response and never stored, so no redirect.
+                token_form = PersonalTokenForm()
         if action == "revoke_token":
             token_id = request.POST.get("token_id")
             token = get_object_or_404(IndieAuthAccessToken, pk=token_id)
@@ -2246,6 +2264,10 @@ def indieauth_settings(request):
 
     context = {
         "filter_form": filter_form,
+        "token_form": token_form,
+        "new_token": new_token,
+        "mcp_url": request.build_absolute_uri("/mcp"),
+        "mcp_enabled": getattr(settings, "MCP_ENABLED", False),
         "clients_page_obj": clients_page_obj,
         "clients_paginator": clients_paginator,
         "tokens_page_obj": tokens_page_obj,
