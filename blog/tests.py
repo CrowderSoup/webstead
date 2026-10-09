@@ -1225,6 +1225,54 @@ class ContentServiceTests(TestCase):
             create_post(self.actor, kind="podcast", content="hi")
         self.assertFalse(Post.objects.exists())
 
+    def test_create_uses_normalized_slug(self, queue):
+        from blog.services import create_post
+
+        post = create_post(self.actor, kind=Post.ARTICLE, name="Hello", content="Body", slug="My Cool Post!")
+
+        self.assertEqual(post.slug, "my-cool-post")
+
+    def test_create_dedupes_colliding_slug(self, queue):
+        from blog.services import create_post
+
+        Post.objects.create(title="Existing", slug="my-cool-post", content="x")
+        Post.objects.create(title="Existing 2", slug="my-cool-post-2", content="x")
+
+        post = create_post(self.actor, kind=Post.ARTICLE, name="Hello", content="Body", slug="my-cool-post")
+
+        self.assertEqual(post.slug, "my-cool-post-3")
+
+    def test_create_empty_slug_falls_back_to_title_timestamp(self, queue):
+        from blog.services import create_post
+
+        frozen = timezone.now()
+        with patch("blog.models.timezone.now", return_value=frozen):
+            blank = create_post(self.actor, kind=Post.ARTICLE, name="Hello World", content="Body", slug="")
+            punctuation = create_post(
+                self.actor, kind=Post.ARTICLE, name="Another Title", content="Body", slug="!!!"
+            )
+            omitted = create_post(self.actor, kind=Post.ARTICLE, name="Plain Title", content="Body")
+
+        timestamp = int(frozen.timestamp())
+        self.assertEqual(blank.slug, f"hello-world-{timestamp}")
+        self.assertEqual(punctuation.slug, f"another-title-{timestamp}")
+        self.assertEqual(omitted.slug, f"plain-title-{timestamp}")
+
+    def test_create_slug_respects_max_length(self, queue):
+        from blog.services import create_post
+
+        max_length = Post._meta.get_field("slug").max_length
+        post = create_post(self.actor, kind=Post.NOTE, content="x", slug="a" * 400)
+
+        self.assertEqual(post.slug, "a" * max_length)
+
+        Post.objects.create(title="Full", slug="b" * max_length, content="x")
+        deduped = create_post(self.actor, kind=Post.NOTE, content="x", slug="b" * 400)
+
+        self.assertLessEqual(len(deduped.slug), max_length)
+        self.assertNotEqual(deduped.slug, "b" * max_length)
+        self.assertTrue(deduped.slug.startswith("b"))
+
     def test_set_status_publishes_and_unpublishes(self, queue):
         from blog.services import DRAFT, PUBLISHED, create_post, set_status
 

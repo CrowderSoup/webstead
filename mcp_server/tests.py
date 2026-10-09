@@ -363,6 +363,57 @@ class McpContentToolTests(McpTestCase):
         self.assertEqual((revision.actor_source, revision.token, revision.client_id), ("mcp", self.token, "urn:webstead:pat"))
         self.assertEqual(self.client.get(data["preview_url"]).status_code, 200)
 
+    def test_create_post_uses_custom_slug(self):
+        data = self.ok(
+            "create_post",
+            {"kind": "article", "name": "I connected my blog to Claude", "content": "Body", "slug": "claude-blog"},
+        )
+
+        post = Post.objects.get(pk=data["id"])
+        self.assertEqual(post.slug, "claude-blog")
+        self.assertEqual(data["url"], f"http://testserver{post.get_absolute_url()}")
+        self.assertIn("/blog/post/claude-blog/", data["url"])
+
+    def test_create_post_normalizes_messy_slug(self):
+        data = self.ok(
+            "create_post",
+            {"kind": "article", "name": "Hello", "content": "Body", "slug": "My Cool Post!"},
+        )
+
+        post = Post.objects.get(pk=data["id"])
+        self.assertEqual(post.slug, "my-cool-post")
+        self.assertIn("/blog/post/my-cool-post/", data["url"])
+
+    def test_create_post_dedupes_colliding_slug(self):
+        Post.objects.create(title="Existing", slug="my-cool-post", content="x")
+        Post.objects.create(title="Existing 2", slug="my-cool-post-2", content="x")
+
+        data = self.ok(
+            "create_post",
+            {"kind": "article", "name": "Hello", "content": "Body", "slug": "My Cool Post!"},
+        )
+
+        post = Post.objects.get(pk=data["id"])
+        self.assertEqual(post.slug, "my-cool-post-3")
+        self.assertIn("/blog/post/my-cool-post-3/", data["url"])
+
+    def test_create_post_empty_slug_falls_back_to_title_timestamp(self):
+        for raw in ("", "!!!"):
+            data = self.ok(
+                "create_post",
+                {"kind": "article", "name": "Hello World", "content": "Body", "slug": raw},
+            )
+            post = Post.objects.get(pk=data["id"])
+            self.assertRegex(post.slug, r"^hello-world-\d+(-\d+)?$")
+            self.assertIn(f"/blog/post/{post.slug}/", data["url"])
+
+    def test_create_post_without_slug_keeps_title_timestamp(self):
+        data = self.ok("create_post", {"kind": "article", "name": "Hello World", "content": "Body"})
+
+        post = Post.objects.get(pk=data["id"])
+        self.assertRegex(post.slug, r"^hello-world-\d+$")
+        self.assertIn(f"/blog/post/{post.slug}/", data["url"])
+
     def test_create_post_validates_kind_specific_fields(self):
         self.assertIn("needs like_of", self.error("create_post", {"kind": "like"}))
         self.assertIn("needs content", self.error("create_post", {"kind": "note"}))
