@@ -100,13 +100,14 @@ class IndieAuthConsent(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     client_id = models.URLField(max_length=2000)
     scope = models.TextField(blank=True, default="")  # what the client asked for
-    # What the user approved, when they narrowed or widened the request.
+    resource = models.CharField(max_length=2000, blank=True, default="")
+    # Exactly what the user approved, including an explicitly empty grant.
     granted_scope = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     last_used_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        unique_together = ["user", "client_id", "scope"]
+        unique_together = ["user", "client_id", "scope", "resource"]
 
     def __str__(self):
         return f"{self.user_id} {self.client_id}"

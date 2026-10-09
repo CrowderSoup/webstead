@@ -510,6 +510,7 @@ def _authorize_get(request):
             user=request.user,
             client_id=client_id,
             scope=scope_value,
+            resource=resource,
         ).first()
         if consent:
             consent.last_used_at = timezone.now()
@@ -520,7 +521,7 @@ def _authorize_get(request):
                 client_id=client_id,
                 redirect_uri=redirect_uri,
                 me=normalized_me,
-                scope=consent.granted_scope or scope_value,
+                scope=consent.granted_scope,
                 state=state,
                 code_challenge=code_challenge,
                 code_challenge_method=code_challenge_method,
@@ -662,9 +663,10 @@ def _authorize_post(request):
             user=request.user,
             client_id=client_id,
             scope=scope_value,
+            resource=resource,
             defaults={
                 "last_used_at": timezone.now(),
-                "granted_scope": granted_value if granted_value != scope_value else "",
+                "granted_scope": granted_value,
             },
         )
 
@@ -920,8 +922,8 @@ def _refresh_token_grant(request):
 
         refresh.used_at = now
         refresh.save(update_fields=["used_at"])
-        # Keep the latest used tokens for reuse detection; drop old ones.
-        connection.refresh_tokens.filter(used_at__lt=now - timedelta(days=1)).delete()
+        # Retain used hashes for the connection's lifetime: replay of any
+        # ancestor must still identify and revoke the active refresh chain.
 
         access_token = secrets.token_urlsafe(32)
         ttl = RESOURCE_ACCESS_TOKEN_TTL if connection.resource else ACCESS_TOKEN_TTL

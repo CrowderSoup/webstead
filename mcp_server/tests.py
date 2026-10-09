@@ -813,6 +813,88 @@ class McpOAuthTests(TestCase):
 
         self.assertEqual(tokens["scope"], "read")
 
+    def test_remembered_consent_preserves_empty_grant(self):
+        self.client.force_login(self.user)
+        _, params = self._authorize()
+        first = self._code_from(self._approve(params, scopes=[], remember="1"))
+        self.assertEqual(self._exchange(first["code"]).json()["scope"], "")
+
+        response, _ = self._authorize(verifier="w" * 43)
+        query = self._code_from(response)
+        tokens = self._exchange(query["code"], verifier="w" * 43).json()
+
+        self.assertEqual(tokens["scope"], "")
+        self.assertEqual(self._mcp(tokens["access_token"]).status_code, 403)
+
+    def test_remembered_consent_preserves_unchanged_grant(self):
+        self.client.force_login(self.user)
+        _, params = self._authorize()
+        self._approve(params, scopes=["read", "draft", "media"], remember="1")
+
+        response, _ = self._authorize(verifier="w" * 43)
+        query = self._code_from(response)
+        tokens = self._exchange(query["code"], verifier="w" * 43).json()
+
+        self.assertEqual(tokens["scope"], "read draft media")
+
+    def test_remembered_consents_are_independent_per_resource(self):
+        from indieauth.models import IndieAuthConsent
+
+        self.client.force_login(self.user)
+        for resource, scopes, verifier in (
+            ("http://testserver/mcp", ["read", "create"], "m" * 43),
+            (None, None, "p" * 43),
+            ("http://testserver", ["read"], "o" * 43),
+        ):
+            with self.subTest(resource=resource):
+                response, params = self._authorize(resource=resource, verifier=verifier)
+                self.assertEqual(response.status_code, 200)
+                self._approve(params, scopes=scopes, remember="1")
+
+        self.assertEqual(IndieAuthConsent.objects.count(), 3)
+        for resource, expected_scope in (
+            ("http://testserver/mcp", "read create"),
+            (None, "read draft media"),
+            ("http://testserver", "read"),
+        ):
+            with self.subTest(resource=resource):
+                response, _ = self._authorize(resource=resource, verifier="w" * 43)
+                query = self._code_from(response)
+                tokens = self._exchange(
+                    query["code"], verifier="w" * 43, resource=resource or ""
+                ).json()
+                self.assertEqual(tokens["scope"], expected_scope)
+
+    def test_plain_consent_cannot_skip_mcp_consent(self):
+        self.client.force_login(self.user)
+        _, params = self._authorize(resource=None)
+        self._approve(params, remember="1")
+
+        response, _ = self._authorize(verifier="w" * 43)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "through its MCP server")
+
+    def test_old_refresh_token_replay_revokes_current_connection(self):
+        from indieauth.models import IndieAuthRefreshToken
+        from indieauth.views import _hash_token
+
+        tokens = self._connect()
+        second = self._refresh(tokens["refresh_token"]).json()
+        IndieAuthRefreshToken.objects.filter(
+            token_hash=_hash_token(tokens["refresh_token"])
+        ).update(used_at=timezone.now() - timezone.timedelta(days=2))
+        third = self._refresh(second["refresh_token"]).json()
+        self.assertEqual(self._mcp(third["access_token"]).status_code, 200)
+
+        replay = self._refresh(tokens["refresh_token"])
+
+        self.assertEqual(replay.json()["error"], "invalid_grant")
+        self.assertEqual(self._mcp(third["access_token"]).status_code, 401)
+        self.assertEqual(
+            self._refresh(third["refresh_token"]).json()["error"], "invalid_grant"
+        )
+
     def test_refresh_errors(self):
         tokens = self._connect()
         refresh = tokens["refresh_token"]
