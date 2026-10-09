@@ -18,6 +18,7 @@ from django.http import Http404, HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 from blog.services import Actor, ContentError
+from indieauth import resources
 from indieauth.tokens import active_local_token
 
 from . import protocol as p
@@ -32,6 +33,9 @@ CAPABILITIES = {"tools": {}, "resources": {}}
 SERVER_INFO = {"name": p.SERVER_NAME, "version": p.SERVER_VERSION, "title": "Webstead"}
 # Scopes that mean anything here; a token needs at least one of them.
 MCP_SCOPES = {"read", "draft", "create", "update", "delete", "undelete", "media"}
+# What a new OAuth connection asks for: draft anything, publish from the
+# preview link. The consent screen lets the owner grant more.
+DEFAULT_SCOPE = "read draft media"
 
 
 class _Call:
@@ -85,10 +89,8 @@ def mcp_endpoint(request):
         call.status = McpRequestLog.ERROR
         call.message = exc.message
         response = JsonResponse(exc.payload(call.request_id), status=exc.status)
-        if exc.status == 401:
-            response["WWW-Authenticate"] = 'Bearer realm="webstead"'
-        elif exc.status == 403 and exc.code == p.UNAUTHORIZED:
-            response["WWW-Authenticate"] = 'Bearer realm="webstead", error="insufficient_scope"'
+        if exc.challenge:
+            response["WWW-Authenticate"] = exc.challenge
     except Exception:
         logger.exception("MCP request failed")
         call.status = McpRequestLog.ERROR
@@ -101,16 +103,18 @@ def mcp_endpoint(request):
 
 def _handle(request, call: _Call):
     _check_origin(request)
+    # Authenticate before reading the body: any unauthenticated request gets
+    # the 401 that starts an OAuth client's sign-in.
+    token = _authenticate(request)
+    call.token = token
+    scopes = token.scopes & MCP_SCOPES
+
     message = _parse(request)
     call.request_id = message.get("id")
     call.method = message["method"]
     params = message.get("params") or {}
     if not isinstance(params, dict):
         raise p.McpError(p.INVALID_PARAMS, "params must be an object")
-
-    token = _authenticate(request)
-    call.token = token
-    scopes = token.scopes & MCP_SCOPES
 
     if "id" not in message:
         # A notification (e.g. a legacy client's notifications/initialized).
@@ -185,23 +189,70 @@ def _parse(request) -> dict:
     return message
 
 
+def resource_metadata_url(request) -> str:
+    return f"{resources.site_origin(request)}/.well-known/oauth-protected-resource{resources.MCP_PATH}"
+
+
+def _challenge(request, *, error="", description="", scope=DEFAULT_SCOPE) -> str:
+    """RFC 6750/9728 WWW-Authenticate value that starts (or steps up) OAuth."""
+    parts = [f'resource_metadata="{resource_metadata_url(request)}"', f'scope="{scope}"']
+    if error:
+        parts.append(f'error="{error}"')
+    if description:
+        parts.append(f'error_description="{description}"')
+    return "Bearer " + ", ".join(parts)
+
+
 def _authenticate(request):
     header = request.headers.get("Authorization", "")
     raw = header[7:].strip() if header.startswith("Bearer ") else ""
     if not raw:
-        raise p.McpError(p.UNAUTHORIZED, "Missing bearer token", status=401)
+        raise p.McpError(p.UNAUTHORIZED, "Missing bearer token", status=401, challenge=_challenge(request))
     # Only tokens this site issued: never remote introspection.
     token = active_local_token(raw)
     if token is None:
-        raise p.McpError(p.UNAUTHORIZED, "Invalid, expired, or revoked token", status=401)
-    if not token.scopes & MCP_SCOPES:
+        message = "Invalid, expired, or revoked token"
         raise p.McpError(
-            p.UNAUTHORIZED,
-            f"Token has no MCP scopes (needs one of: {', '.join(sorted(MCP_SCOPES))})",
-            status=403,
+            p.UNAUTHORIZED, message, status=401,
+            challenge=_challenge(request, error="invalid_token", description=message),
+        )
+    # Audience (RFC 8707): OAuth tokens must have been issued for this
+    # endpoint. Personal tokens are minted in the admin for MCP and scripts.
+    if not token.is_personal and token.resource not in resources.mcp_audiences(request):
+        message = "Token wasn't issued for this MCP server"
+        raise p.McpError(
+            p.UNAUTHORIZED, message, status=401,
+            challenge=_challenge(request, error="invalid_token", description=message),
+        )
+    if not token.scopes & MCP_SCOPES:
+        message = f"Token has no MCP scopes (needs one of: {', '.join(sorted(MCP_SCOPES))})"
+        raise p.McpError(
+            p.UNAUTHORIZED, message, status=403,
+            challenge=_challenge(request, error="insufficient_scope", description="No MCP scopes"),
         )
     token.mark_used()
     return token
+
+
+def protected_resource_metadata(request, *, at_root=False):
+    """RFC 9728 metadata naming this site as the MCP endpoint's authorization server."""
+    if not getattr(settings, "MCP_ENABLED", False):
+        raise Http404
+    from core.models import SiteConfiguration
+
+    resource = resources.site_origin(request) if at_root else resources.mcp_resource(request)
+    response = JsonResponse(
+        {
+            "resource": resource,
+            "authorization_servers": [resources.site_origin(request)],
+            "scopes_supported": sorted(MCP_SCOPES),
+            "bearer_methods_supported": ["header"],
+            "resource_name": SiteConfiguration.get_solo().title or "Webstead",
+        }
+    )
+    response["Cache-Control"] = "public, max-age=3600"
+    response["Access-Control-Allow-Origin"] = "*"
+    return response
 
 
 def _unsupported(requested):

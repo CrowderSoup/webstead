@@ -14,7 +14,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from django.conf import settings
 from django.db import transaction
-from django.http import HttpResponseBadRequest, JsonResponse
+from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -23,11 +23,13 @@ from django.views.decorators.csrf import csrf_exempt
 from core.models import SiteConfiguration, RequestErrorLog
 from core.request_logs import log_request_error
 
+from . import resources
 from .models import (
     IndieAuthAccessToken,
     IndieAuthAuthorizationCode,
     IndieAuthClient,
     IndieAuthConsent,
+    IndieAuthRefreshToken,
 )
 
 logger = logging.getLogger(__name__)
@@ -44,6 +46,12 @@ INDIEAUTH_REDACT_FIELDS = {
 
 AUTH_CODE_TTL = timedelta(minutes=10)
 ACCESS_TOKEN_TTL = timedelta(days=30)
+# Tokens bound to the MCP endpoint are short-lived and come with a rotating
+# refresh token instead.
+RESOURCE_ACCESS_TOKEN_TTL = timedelta(hours=1)
+REFRESH_TOKEN_TTL = timedelta(days=90)
+OFFLINE_ACCESS = "offline_access"
+LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
 CLIENT_CACHE_TTL = timedelta(hours=12)
 MAX_METADATA_BYTES = 1_000_000
 
@@ -197,9 +205,25 @@ def _is_allowed_me(request, me_url: str) -> bool:
 
 
 def _normalize_scopes(scope_value: str) -> list[str]:
+    """Requested scopes, deduplicated in order. ``offline_access`` only asks
+    for a refresh token, which resource-bound grants always get, so it's
+    dropped rather than stored."""
     if not scope_value:
         return []
-    return [item for item in scope_value.split() if item]
+    seen = []
+    for item in scope_value.split():
+        if item and item != OFFLINE_ACCESS and item not in seen:
+            seen.append(item)
+    return seen
+
+
+def _default_me(request, me: str) -> str:
+    """OAuth clients (e.g. MCP clients) don't send IndieAuth's ``me``; it's the site."""
+    return me or request.build_absolute_uri("/")
+
+
+def _pending_key(code_challenge: str) -> str:
+    return f"indieauth:pending:{code_challenge}"
 
 
 def _redirect_with_params(base_url: str, params: dict) -> str:
@@ -276,6 +300,11 @@ def _fetch_client_metadata(client_id: str) -> dict:
             except json.JSONDecodeError:
                 payload = {}
             if isinstance(payload, dict):
+                # Client ID Metadata Documents must name themselves. Older
+                # IndieAuth JSON documents may omit client_id, so only a
+                # mismatch is rejected.
+                if "client_id" in payload and payload["client_id"] != client_id:
+                    raise ValueError("client_id in the metadata document doesn't match its URL")
                 redirect_value = payload.get("redirect_uris")
                 if isinstance(redirect_value, list):
                     redirect_uris.extend(redirect_value)
@@ -355,7 +384,9 @@ def _redirect_uri_allowed(client_id: str, redirect_uri: str, client: IndieAuthCl
         return False
 
     if client and client.redirect_uris:
-        return redirect_uri in client.redirect_uris
+        if redirect_uri in client.redirect_uris:
+            return True
+        return any(_loopback_match(redirect_uri, registered) for registered in client.redirect_uris)
 
     client_parsed = urlparse(client_id)
     if client_parsed.scheme != parsed.scheme or client_parsed.netloc != parsed.netloc:
@@ -376,6 +407,17 @@ def _redirect_uri_allowed(client_id: str, redirect_uri: str, client: IndieAuthCl
     return True
 
 
+def _loopback_match(redirect_uri: str, registered: str) -> bool:
+    """Native apps (e.g. Claude Code) listen on an ephemeral port, so a
+    registered http loopback redirect matches on any port (RFC 8252 7.3)."""
+    actual, expected = urlparse(redirect_uri), urlparse(registered)
+    if actual.scheme != "http" or expected.scheme != "http":
+        return False
+    if actual.hostname not in LOOPBACK_HOSTS or actual.hostname != expected.hostname:
+        return False
+    return (actual.path, actual.query) == (expected.path, expected.query)
+
+
 def _build_metadata_payload(request) -> dict:
     issuer = _issuer(request)
     return {
@@ -383,10 +425,19 @@ def _build_metadata_payload(request) -> dict:
         "authorization_endpoint": request.build_absolute_uri(reverse("indieauth-authorize")),
         "token_endpoint": request.build_absolute_uri(reverse("indieauth-token")),
         "introspection_endpoint": request.build_absolute_uri(reverse("indieauth-introspect")),
-        "revocation_endpoint": request.build_absolute_uri(reverse("indieauth-token")),
+        "revocation_endpoint": request.build_absolute_uri(reverse("indieauth-revoke")),
         "userinfo_endpoint": request.build_absolute_uri(reverse("indieauth-userinfo")),
+        "response_types_supported": ["code"],
+        "grant_types_supported": ["authorization_code", "refresh_token"],
+        "token_endpoint_auth_methods_supported": ["none"],
+        "revocation_endpoint_auth_methods_supported": ["none"],
         "code_challenge_methods_supported": ["S256"],
-        "scopes_supported": ["create", "draft", "update", "delete", "undelete", "read", "media", "channels", "follow", "mute", "block"],
+        "authorization_response_iss_parameter_supported": True,
+        "client_id_metadata_document_supported": True,
+        "scopes_supported": [
+            "create", "draft", "update", "delete", "undelete", "read", "media",
+            "channels", "follow", "mute", "block", OFFLINE_ACCESS,
+        ],
     }
 
 
@@ -423,12 +474,29 @@ def _authorize_get(request):
     if not _redirect_uri_allowed(client_id, redirect_uri, client):
         return _render_error(request, "Invalid redirect_uri", status=400)
 
-    normalized_me = _normalize_url(me)
+    normalized_me = _normalize_url(_default_me(request, me))
     if not normalized_me or not _is_allowed_me(request, normalized_me):
         return _render_error(request, "Invalid or unauthorized me URL", status=400)
 
     if not code_challenge or code_challenge_method != "S256":
         return _render_error(request, "PKCE code challenge required", status=400)
+
+    requested_resources = params.getlist("resource")
+    resource = ""
+    if requested_resources:
+        if len(requested_resources) > 1 or not resources.is_mcp_resource(request, requested_resources[0]):
+            return redirect(
+                _redirect_with_params(
+                    redirect_uri,
+                    {
+                        "error": "invalid_target",
+                        "error_description": "Unknown resource",
+                        "state": state,
+                        "iss": _issuer(request),
+                    },
+                )
+            )
+        resource = resources.canonical(requested_resources[0])
 
     if not request.user.is_authenticated:
         login_url = reverse("site_admin:login")
@@ -442,6 +510,7 @@ def _authorize_get(request):
             user=request.user,
             client_id=client_id,
             scope=scope_value,
+            resource=resource,
         ).first()
         if consent:
             consent.last_used_at = timezone.now()
@@ -452,13 +521,24 @@ def _authorize_get(request):
                 client_id=client_id,
                 redirect_uri=redirect_uri,
                 me=normalized_me,
-                scope=scope_value,
+                scope=consent.granted_scope,
                 state=state,
                 code_challenge=code_challenge,
                 code_challenge_method=code_challenge_method,
+                resource=resource,
             )
 
+    # The consent form comes from the theme and may not carry the resource,
+    # so keep it server-side until the user decides.
+    request.session[_pending_key(code_challenge)] = {"client_id": client_id, "resource": resource}
+
+    redirect_host = urlparse(redirect_uri).hostname or ""
     context = {
+        "is_mcp": bool(resource),
+        "resource": resource,
+        "redirect_host": redirect_host,
+        "redirect_is_loopback": redirect_host in LOOPBACK_HOSTS,
+        "scope_options": _mcp_scope_options(scopes) if resource else [],
         "client": client,
         "client_id": client_id,
         "redirect_uri": redirect_uri,
@@ -552,30 +632,42 @@ def _authorize_post(request):
     if not client or not _redirect_uri_allowed(client_id, redirect_uri, client):
         return _render_error(request, "Invalid client_id or redirect_uri", status=400)
 
-    normalized_me = _normalize_url(me)
+    normalized_me = _normalize_url(_default_me(request, me))
     if not normalized_me or not _is_allowed_me(request, normalized_me):
         return _render_error(request, "Invalid or unauthorized me URL", status=400)
 
     if not code_challenge or code_challenge_method != "S256":
         return _render_error(request, "PKCE code challenge required", status=400)
 
+    pending = request.session.pop(_pending_key(code_challenge), None) or {}
+    resource = pending.get("resource", "") if pending.get("client_id") == client_id else ""
+
     if decision != "approve":
         return redirect(
             _redirect_with_params(
                 redirect_uri,
-                {"error": "access_denied", "state": state},
+                {"error": "access_denied", "state": state, "iss": _issuer(request)},
             )
         )
 
     scopes = _normalize_scopes(scope)
     scope_value = " ".join(scopes)
+    granted_value = scope_value
+    if resource and request.POST.get("scope_choice_present"):
+        # The user picked scopes on the consent screen; only MCP scopes count.
+        allowed = {name for name, _ in _mcp_scope_choices()}
+        granted_value = " ".join(s for s in request.POST.getlist("scope_choice") if s in allowed)
 
     if remember:
         IndieAuthConsent.objects.update_or_create(
             user=request.user,
             client_id=client_id,
             scope=scope_value,
-            defaults={"last_used_at": timezone.now()},
+            resource=resource,
+            defaults={
+                "last_used_at": timezone.now(),
+                "granted_scope": granted_value,
+            },
         )
 
     return _issue_authorization_code(
@@ -584,11 +676,26 @@ def _authorize_post(request):
         client_id=client_id,
         redirect_uri=redirect_uri,
         me=normalized_me,
-        scope=scope_value,
+        scope=granted_value,
         state=state,
         code_challenge=code_challenge,
         code_challenge_method=code_challenge_method,
+        resource=resource,
     )
+
+
+def _mcp_scope_choices():
+    from .tokens import PERSONAL_TOKEN_SCOPES
+
+    return PERSONAL_TOKEN_SCOPES
+
+
+def _mcp_scope_options(requested: list[str]) -> list[dict]:
+    """Checkboxes for the consent screen, pre-ticked with what was asked for."""
+    return [
+        {"name": name, "description": description, "checked": name in requested}
+        for name, description in _mcp_scope_choices()
+    ]
 
 
 def _issue_authorization_code(
@@ -602,6 +709,7 @@ def _issue_authorization_code(
     state: str,
     code_challenge: str,
     code_challenge_method: str,
+    resource: str = "",
 ):
     code = secrets.token_urlsafe(32)
     code_hash = _hash_token(code)
@@ -613,6 +721,7 @@ def _issue_authorization_code(
         redirect_uri=redirect_uri,
         me=me,
         scope=scope,
+        resource=resource,
         user=user,
         expires_at=timezone.now() + AUTH_CODE_TTL,
     )
@@ -634,6 +743,9 @@ def token(request):
         response = HttpResponseBadRequest("Invalid request")
         _log_indieauth_error(request, response)
         return response
+
+    if request.POST.get("grant_type") == "refresh_token":
+        return _refresh_token_grant(request)
 
     action = request.POST.get("action", "")
     if action == "revoke":
@@ -707,20 +819,27 @@ def token(request):
             _log_indieauth_error(request, response)
             return response
 
+        requested_resource = request.POST.get("resource", "")
+        if requested_resource and resources.canonical(requested_resource) != auth_code.resource:
+            return _oauth_error(request, "invalid_target", "resource doesn't match the authorization request")
+
         auth_code.used_at = timezone.now()
         auth_code.save(update_fields=["used_at"])
 
         access_token = secrets.token_urlsafe(32)
         token_hash = _hash_token(access_token)
-        expires_at = timezone.now() + ACCESS_TOKEN_TTL if ACCESS_TOKEN_TTL else None
-        IndieAuthAccessToken.objects.create(
+        ttl = RESOURCE_ACCESS_TOKEN_TTL if auth_code.resource else ACCESS_TOKEN_TTL
+        expires_at = timezone.now() + ttl if ttl else None
+        connection = IndieAuthAccessToken.objects.create(
             token_hash=token_hash,
             client_id=auth_code.client_id,
             me=auth_code.me,
             scope=auth_code.scope,
+            resource=auth_code.resource,
             user=auth_code.user,
             expires_at=expires_at,
         )
+        refresh_token = _issue_refresh_token(connection) if auth_code.resource else None
 
     payload = {
         "access_token": access_token,
@@ -730,7 +849,122 @@ def token(request):
     }
     if expires_at:
         payload["expires_in"] = int((expires_at - timezone.now()).total_seconds())
-    return JsonResponse(payload)
+    if refresh_token:
+        payload["refresh_token"] = refresh_token
+    return _token_response(payload)
+
+
+def _token_response(payload: dict):
+    response = JsonResponse(payload)
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+def _oauth_error(request, error: str, description: str = "", status: int = 400):
+    body = {"error": error}
+    if description:
+        body["error_description"] = description
+    response = JsonResponse(body, status=status)
+    response["Cache-Control"] = "no-store"
+    _log_indieauth_error(request, response)
+    return response
+
+
+def _issue_refresh_token(connection: IndieAuthAccessToken) -> str:
+    raw = secrets.token_urlsafe(32)
+    IndieAuthRefreshToken.objects.create(
+        token_hash=_hash_token(raw),
+        access_token=connection,
+        expires_at=timezone.now() + REFRESH_TOKEN_TTL,
+    )
+    return raw
+
+
+def _refresh_token_grant(request):
+    """Rotate: each refresh token works once and comes back replaced.
+
+    The connection (an IndieAuthAccessToken row) keeps its identity: its
+    hash and expiry are swapped in place. A refresh token presented twice
+    means it leaked, so the whole connection is revoked.
+    """
+    raw = request.POST.get("refresh_token", "")
+    client_id = request.POST.get("client_id", "")
+    if not raw or not client_id:
+        return _oauth_error(request, "invalid_request", "refresh_token and client_id are required")
+
+    now = timezone.now()
+    with transaction.atomic():
+        refresh = (
+            IndieAuthRefreshToken.objects.select_for_update()
+            .select_related("access_token")
+            .filter(token_hash=_hash_token(raw))
+            .first()
+        )
+        if refresh is None:
+            return _oauth_error(request, "invalid_grant", "unknown refresh token")
+        connection = refresh.access_token
+        if refresh.used_at is not None:
+            if connection.revoked_at is None:
+                connection.revoked_at = now
+                connection.save(update_fields=["revoked_at"])
+            logger.warning("Refresh token reuse for token %s; connection revoked", connection.pk)
+            return _oauth_error(request, "invalid_grant", "refresh token already used")
+        if refresh.expires_at <= now or connection.revoked_at is not None:
+            return _oauth_error(request, "invalid_grant", "refresh token expired or revoked")
+        if connection.client_id != client_id:
+            return _oauth_error(request, "invalid_grant", "refresh token was issued to another client")
+        requested_resource = request.POST.get("resource", "")
+        if requested_resource and resources.canonical(requested_resource) != connection.resource:
+            return _oauth_error(request, "invalid_target", "resource doesn't match the grant")
+        requested_scope = set(_normalize_scopes(request.POST.get("scope", "")))
+        if requested_scope - set(connection.scope.split()):
+            return _oauth_error(request, "invalid_scope", "can't widen scope on refresh")
+
+        refresh.used_at = now
+        refresh.save(update_fields=["used_at"])
+        # Retain used hashes for the connection's lifetime: replay of any
+        # ancestor must still identify and revoke the active refresh chain.
+
+        access_token = secrets.token_urlsafe(32)
+        ttl = RESOURCE_ACCESS_TOKEN_TTL if connection.resource else ACCESS_TOKEN_TTL
+        connection.token_hash = _hash_token(access_token)
+        connection.expires_at = now + ttl
+        connection.save(update_fields=["token_hash", "expires_at"])
+        new_refresh = _issue_refresh_token(connection)
+
+    return _token_response(
+        {
+            "access_token": access_token,
+            "token_type": "Bearer",
+            "expires_in": int(ttl.total_seconds()),
+            "refresh_token": new_refresh,
+            "scope": connection.scope,
+            "me": connection.me,
+        }
+    )
+
+
+@csrf_exempt
+def revoke(request):
+    """RFC 7009 token revocation, for access and refresh tokens alike.
+
+    Revoking either ends the whole connection. Unknown tokens still get a
+    200, as the RFC requires.
+    """
+    if request.method != "POST":
+        return _oauth_error(request, "invalid_request", "use POST", status=405)
+    raw = request.POST.get("token", "")
+    if not raw:
+        return _oauth_error(request, "invalid_request", "token is required")
+    token_hash = _hash_token(raw)
+    now = timezone.now()
+    revoked = IndieAuthAccessToken.objects.filter(token_hash=token_hash, revoked_at__isnull=True).update(revoked_at=now)
+    if not revoked:
+        refresh = IndieAuthRefreshToken.objects.select_related("access_token").filter(token_hash=token_hash).first()
+        if refresh and refresh.access_token.revoked_at is None:
+            refresh.access_token.revoked_at = now
+            refresh.access_token.save(update_fields=["revoked_at"])
+    return HttpResponse(status=200)
 
 
 @csrf_exempt
@@ -761,6 +995,10 @@ def introspect(request):
     if token.expires_at and token.expires_at <= timezone.now():
         return JsonResponse({"active": False})
 
+    return JsonResponse(_introspection_payload(token))
+
+
+def _introspection_payload(token) -> dict:
     payload = {
         "active": True,
         "scope": token.scope,
@@ -771,7 +1009,9 @@ def introspect(request):
     }
     if token.expires_at:
         payload["exp"] = int(token.expires_at.timestamp())
-    return JsonResponse(payload)
+    if token.resource:
+        payload["aud"] = token.resource
+    return payload
 
 
 @csrf_exempt
@@ -818,17 +1058,8 @@ def _verify_access_token(request, token_value: str):
     if token.expires_at and token.expires_at <= timezone.now():
         return JsonResponse({"active": False})
 
-    payload = {
-        "active": True,
-        "scope": token.scope,
-        "client_id": token.client_id,
-        "me": token.me,
-        "token_type": "Bearer",
-        "iat": int(token.created_at.timestamp()),
-    }
-    if token.expires_at:
-        payload["exp"] = int(token.expires_at.timestamp())
-    return JsonResponse(payload)
+    return JsonResponse(_introspection_payload(token))
+
 
 
 def _render_error(request, message: str, status: int = 400):

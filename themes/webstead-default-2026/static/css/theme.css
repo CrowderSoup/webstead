@@ -389,6 +389,35 @@ a:focus {
   gap: 1rem;
 }
 
+.indieauth-redirect {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.indieauth-warning {
+  margin: 0;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent-deep);
+  border-radius: 0.5rem;
+  background: var(--surface-accent-soft);
+  font-size: 0.9rem;
+}
+
+fieldset.indieauth-scopes {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.indieauth-scope-option {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+}
+
 .indieauth-remember {
   display: inline-flex;
   align-items: center;

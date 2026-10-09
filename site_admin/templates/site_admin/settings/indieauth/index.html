@@ -339,7 +339,7 @@
                         <span class="block max-w-[180px] truncate text-(--admin-ink)">
                           {% if token.is_personal %}{{ token.name|default:"Personal token" }}{% else %}{{ token.client_id }}{% endif %}
                         </span>
-                        {% if token.is_personal %}<span class="text-xs text-(--admin-muted)">Personal token</span>{% endif %}
+                        {% if token.is_personal %}<span class="text-xs text-(--admin-muted)">Personal token</span>{% elif token.resource %}<span class="text-xs text-(--admin-muted)">MCP connection (OAuth)</span>{% endif %}
                       </td>
                       <td class="px-4 py-3 text-(--admin-muted)">{{ token.last_used_at|date:"M j, Y"|default:"Never" }}</td>
                       <td class="px-4 py-3 text-(--admin-muted)">
@@ -382,7 +382,7 @@
               <div class="rounded-2xl border border-(--admin-border) p-4">
                 <div class="text-base font-semibold">{{ token.user.get_username }}</div>
                 <div class="mt-1 text-sm text-(--admin-muted)">
-                  <div class="truncate">Client: {% if token.is_personal %}{{ token.name|default:"Personal token" }} (personal){% else %}{{ token.client_id }}{% endif %}</div>
+                  <div class="truncate">Client: {% if token.is_personal %}{{ token.name|default:"Personal token" }} (personal){% else %}{{ token.client_id }}{% if token.resource %} (MCP connection){% endif %}{% endif %}</div>
                   <div>Last used: {{ token.last_used_at|date:"M j, Y"|default:"Never" }}</div>
                   <div class="truncate">Me: {{ token.me }}</div>
                   <div>Scope: {{ token.scope|default:"-" }}</div>

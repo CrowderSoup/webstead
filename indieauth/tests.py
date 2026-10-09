@@ -4,7 +4,9 @@ from urllib.parse import parse_qs, urlparse
 from unittest import mock
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.db import connection
+from django.db.migrations.executor import MigrationExecutor
+from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -15,6 +17,51 @@ from . import views
 def _code_challenge(verifier: str) -> str:
     digest = hashlib.sha256(verifier.encode("utf-8")).digest()
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+
+
+class IndieAuthConsentMigrationTests(TransactionTestCase):
+    def test_ambiguous_approvals_are_cleared_without_revoking_tokens(self):
+        previous = [("indieauth", "0004_oauth_resource_and_refresh_tokens")]
+        current = [("indieauth", "0005_bind_remembered_consent_to_resource")]
+        executor = MigrationExecutor(connection)
+        executor.migrate(previous)
+        try:
+            old_apps = executor.loader.project_state(previous).apps
+            User = old_apps.get_model("auth", "User")
+            Consent = old_apps.get_model("indieauth", "IndieAuthConsent")
+            Token = old_apps.get_model("indieauth", "IndieAuthAccessToken")
+            user = User.objects.create(username="migration-owner")
+            for client_id, granted_scope in (
+                ("https://mcp.example/", "read create"),
+                ("https://plain.example/", ""),
+            ):
+                Consent.objects.create(
+                    user=user,
+                    client_id=client_id,
+                    scope="read",
+                    granted_scope=granted_scope,
+                )
+            token = Token.objects.create(
+                token_hash=views._hash_token("existing-token"),
+                client_id="https://mcp.example/",
+                me="https://site.example/",
+                scope="read",
+                resource="https://site.example/mcp",
+                user=user,
+            )
+
+            executor = MigrationExecutor(connection)
+            executor.migrate(current)
+            new_apps = executor.loader.project_state(current).apps
+
+            NewConsent = new_apps.get_model("indieauth", "IndieAuthConsent")
+            NewToken = new_apps.get_model("indieauth", "IndieAuthAccessToken")
+            self.assertFalse(NewConsent.objects.exists())
+            migrated_token = NewToken.objects.get(pk=token.pk)
+            self.assertIsNone(migrated_token.revoked_at)
+            self.assertEqual(migrated_token.resource, "https://site.example/mcp")
+        finally:
+            MigrationExecutor(connection).migrate(current)
 
 
 class IndieAuthMetadataTests(TestCase):

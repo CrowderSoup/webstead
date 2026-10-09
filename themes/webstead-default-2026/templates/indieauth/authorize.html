@@ -19,9 +19,24 @@
       </div>
     </div>
 
-    <p class="indieauth-request">This application is requesting access to <strong>{{ me }}</strong>.</p>
+    <p class="indieauth-request">
+      {% if is_mcp %}
+        This app wants to work on <strong>{{ me }}</strong> through its MCP server.
+      {% else %}
+        This application is requesting access to <strong>{{ me }}</strong>.
+      {% endif %}
+    </p>
+    <p class="indieauth-redirect">After you decide, you'll be sent to <strong>{{ redirect_host }}</strong>.</p>
+    {% if redirect_is_loopback %}
+    <p class="indieauth-warning">
+      This app runs on your own computer (it redirects to {{ redirect_host }}). Only approve if you
+      started this connection yourself, from an app you trust.
+    </p>
+    {% endif %}
 
-    {% if scopes %}
+    {% if is_mcp %}
+    {# Scope checkboxes live inside the form below. #}
+    {% elif scopes %}
     <div class="indieauth-scopes">
       <p class="indieauth-scopes-label">Requested scopes:</p>
       <ul>
@@ -41,6 +56,19 @@
       <input type="hidden" name="state" value="{{ state }}" />
       <input type="hidden" name="code_challenge" value="{{ code_challenge }}" />
       <input type="hidden" name="code_challenge_method" value="{{ code_challenge_method }}" />
+
+      {% if is_mcp %}
+      <fieldset class="indieauth-scopes">
+        <legend class="indieauth-scopes-label">Allow it to:</legend>
+        <input type="hidden" name="scope_choice_present" value="1" />
+        {% for option in scope_options %}
+        <label class="indieauth-scope-option">
+          <input type="checkbox" name="scope_choice" value="{{ option.name }}" {% if option.checked %}checked{% endif %} />
+          <span><code>{{ option.name }}</code>: {{ option.description }}</span>
+        </label>
+        {% endfor %}
+      </fieldset>
+      {% endif %}
 
       <label class="indieauth-remember">
         <input type="checkbox" name="remember" value="1" />

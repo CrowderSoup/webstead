@@ -576,3 +576,457 @@ class McpUrlFetchTests(McpTestCase):
         self.assertTrue(data["url"].endswith(".png"))
         self.assertTrue(data["url"].startswith("http://testserver/"))
         self.assertEqual(data["bytes"], len(PNG))
+
+
+CLAUDE_CODE_CLIENT_ID = "https://claude.ai/oauth/claude-code-client-metadata"
+CLAUDE_CODE_METADATA = {
+    "redirect_uris": ["http://localhost/callback", "http://127.0.0.1/callback"],
+    "client_name": "Claude Code",
+    "logo_url": "",
+}
+
+
+def _challenge_for(verifier):
+    import hashlib
+
+    digest = hashlib.sha256(verifier.encode()).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
+
+
+@override_settings(MCP_ENABLED=True)
+class McpOAuthTests(TestCase):
+    """Connecting an MCP client with OAuth instead of a personal token."""
+
+    def setUp(self):
+        cache.clear()
+        self.user = get_user_model().objects.create_user(username="owner", password="pw")
+        fetch = patch("indieauth.views._fetch_client_metadata", return_value=CLAUDE_CODE_METADATA)
+        self.fetch = fetch.start()
+        self.addCleanup(fetch.stop)
+
+    def _parse_challenge(self, header):
+        import re
+
+        return dict(re.findall(r'(\w+)="([^"]*)"', header))
+
+    def _mcp(self, token, method="tools/list"):
+        return self.client.post(
+            "/mcp",
+            data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": method}),
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {token}", "MCP-Protocol-Version": "2025-11-25"},
+        )
+
+    def _authorize(self, *, verifier="v" * 43, redirect_uri="http://localhost:53682/callback", **extra):
+        params = {
+            "response_type": "code",
+            "client_id": CLAUDE_CODE_CLIENT_ID,
+            "redirect_uri": redirect_uri,
+            "state": "xyz",
+            "code_challenge": _challenge_for(verifier),
+            "code_challenge_method": "S256",
+            "scope": "read draft media offline_access",
+            "resource": "http://testserver/mcp",
+        }
+        params.update(extra)
+        return self.client.get("/indieauth/authorize", {k: v for k, v in params.items() if v is not None}), params
+
+    def _approve(self, params, scopes=None, **extra):
+        data = {
+            "client_id": params["client_id"],
+            "redirect_uri": params["redirect_uri"],
+            "me": "http://testserver/",
+            "scope": "read draft media",
+            "state": params["state"],
+            "code_challenge": params["code_challenge"],
+            "code_challenge_method": "S256",
+            "decision": "approve",
+            **extra,
+        }
+        if scopes is not None:
+            data["scope_choice_present"] = "1"
+            data["scope_choice"] = scopes
+        return self.client.post("/indieauth/authorize", data)
+
+    def _code_from(self, response):
+        from urllib.parse import parse_qs, urlparse
+
+        self.assertEqual(response.status_code, 302, getattr(response, "content", b"")[:500])
+        query = parse_qs(urlparse(response["Location"]).query)
+        return {k: v[0] for k, v in query.items()}
+
+    def _exchange(self, code, verifier="v" * 43, redirect_uri="http://localhost:53682/callback", **extra):
+        return self.client.post(
+            "/indieauth/token",
+            {
+                "grant_type": "authorization_code",
+                "code": code,
+                "client_id": CLAUDE_CODE_CLIENT_ID,
+                "redirect_uri": redirect_uri,
+                "code_verifier": verifier,
+                "resource": "http://testserver/mcp",
+                **extra,
+            },
+        )
+
+    def _refresh(self, refresh_token, **extra):
+        return self.client.post(
+            "/indieauth/token",
+            {"grant_type": "refresh_token", "refresh_token": refresh_token, "client_id": CLAUDE_CODE_CLIENT_ID, **extra},
+        )
+
+    def _connect(self, scopes=None):
+        self.client.force_login(self.user)
+        _, params = self._authorize()
+        query = self._code_from(self._approve(params, scopes=scopes))
+        self.client.logout()
+        response = self._exchange(query["code"])
+        self.assertEqual(response.status_code, 200, response.content)
+        return response.json()
+
+    def test_claude_code_connects_end_to_end(self):
+        from indieauth.models import IndieAuthAccessToken
+
+        # 1. No token: 401 pointing at the protected resource metadata.
+        unauthorized = self.client.post("/mcp", data="{}", content_type="application/json")
+        self.assertEqual(unauthorized.status_code, 401)
+        challenge = self._parse_challenge(unauthorized["WWW-Authenticate"])
+        self.assertEqual(challenge["resource_metadata"], "http://testserver/.well-known/oauth-protected-resource/mcp")
+        self.assertEqual(challenge["scope"], "read draft media")
+
+        # 2. Protected resource metadata names this site as the authorization server.
+        prm = self.client.get(challenge["resource_metadata"]).json()
+        self.assertEqual(prm["resource"], "http://testserver/mcp")
+        self.assertEqual(prm["authorization_servers"], ["http://testserver"])
+
+        # 3. Authorization server metadata advertises what Claude needs for CIMD.
+        asm = self.client.get("/.well-known/oauth-authorization-server").json()
+        self.assertEqual(asm["issuer"], "http://testserver")
+        self.assertTrue(asm["client_id_metadata_document_supported"])
+        self.assertIn("none", asm["token_endpoint_auth_methods_supported"])
+        self.assertIn("refresh_token", asm["grant_types_supported"])
+        self.assertIn("offline_access", asm["scopes_supported"])
+        self.assertTrue(asm["authorization_response_iss_parameter_supported"])
+
+        # 4. Authorize: no `me`, ephemeral loopback port, resource + offline_access.
+        self.client.force_login(self.user)
+        consent, params = self._authorize()
+        self.assertEqual(consent.status_code, 200)
+        self.assertContains(consent, "through its MCP server")
+        self.assertContains(consent, "runs on your own computer")
+        self.assertContains(consent, 'name="scope_choice" value="create"')
+        self.assertContains(consent, 'value="read" checked')
+
+        # 5. Approve, widening to `create` on the consent screen.
+        query = self._code_from(self._approve(params, scopes=["read", "draft", "media", "create"]))
+        self.assertEqual((query["state"], query["iss"]), ("xyz", "http://testserver"))
+        self.client.logout()
+
+        # 6. Code for tokens, bound to /mcp, with a refresh token.
+        tokens = self._exchange(query["code"])
+        self.assertEqual(tokens["Cache-Control"], "no-store")
+        tokens = tokens.json()
+        self.assertEqual(tokens["scope"], "read draft media create")
+        self.assertLessEqual(tokens["expires_in"], 3600)
+        self.assertIn("refresh_token", tokens)
+        connection = IndieAuthAccessToken.objects.get()
+        self.assertEqual(connection.resource, "http://testserver/mcp")
+        self.assertEqual(connection.client_id, CLAUDE_CODE_CLIENT_ID)
+
+        # 7. Use it.
+        names = {t["name"] for t in self._mcp(tokens["access_token"]).json()["result"]["tools"]}
+        self.assertIn("publish_post", names)
+
+        # 8. Refresh rotates both tokens; the connection stays one row.
+        refreshed = self._refresh(tokens["refresh_token"]).json()
+        self.assertNotEqual(refreshed["refresh_token"], tokens["refresh_token"])
+        self.assertEqual(self._mcp(tokens["access_token"]).status_code, 401)
+        self.assertEqual(self._mcp(refreshed["access_token"]).status_code, 200)
+        self.assertEqual(IndieAuthAccessToken.objects.count(), 1)
+
+        # 9. Replaying a used refresh token revokes the connection.
+        replay = self._refresh(tokens["refresh_token"])
+        self.assertEqual(replay.json()["error"], "invalid_grant")
+        self.assertEqual(self._mcp(refreshed["access_token"]).status_code, 401)
+        self.assertEqual(self._refresh(refreshed["refresh_token"]).json()["error"], "invalid_grant")
+
+    def test_loopback_redirect_matches_any_port_only(self):
+        self.client.force_login(self.user)
+        for uri in ("http://localhost:1234/callback", "http://127.0.0.1:65000/callback", "http://localhost/callback"):
+            response, _ = self._authorize(redirect_uri=uri)
+            self.assertEqual(response.status_code, 200, uri)
+        for uri in (
+            "http://localhost:1234/other",
+            "https://localhost:1234/callback",
+            "http://evil.example:1234/callback",
+            "http://127.0.0.1.evil.example/callback",
+        ):
+            response, _ = self._authorize(redirect_uri=uri)
+            self.assertEqual(response.status_code, 400, uri)
+
+    def test_unknown_resource_is_invalid_target(self):
+        self.client.force_login(self.user)
+        response, _ = self._authorize(resource="https://elsewhere.example/mcp")
+
+        query = self._code_from(response)
+        self.assertEqual(query["error"], "invalid_target")
+        self.assertEqual(query["iss"], "http://testserver")
+
+    def test_resource_must_match_at_token_endpoint(self):
+        self.client.force_login(self.user)
+        _, params = self._authorize()
+        query = self._code_from(self._approve(params))
+
+        response = self._exchange(query["code"], resource="http://testserver/other")
+
+        self.assertEqual(response.json()["error"], "invalid_target")
+
+    def test_resource_disabled_when_mcp_off(self):
+        self.client.force_login(self.user)
+        with override_settings(MCP_ENABLED=False):
+            response, _ = self._authorize()
+            self.assertEqual(self._code_from(response)["error"], "invalid_target")
+            self.assertEqual(self.client.get("/.well-known/oauth-protected-resource/mcp").status_code, 404)
+
+    def test_deny_redirects_with_access_denied(self):
+        self.client.force_login(self.user)
+        _, params = self._authorize()
+
+        query = self._code_from(self._approve(params, decision="deny"))
+
+        self.assertEqual((query["error"], query["iss"]), ("access_denied", "http://testserver"))
+
+    def test_default_consent_keeps_requested_scopes(self):
+        tokens = self._connect()
+
+        self.assertEqual(tokens["scope"], "read draft media")
+
+    def test_remembered_consent_reissues_granted_scopes(self):
+        self.client.force_login(self.user)
+        _, params = self._authorize()
+        self._approve(params, scopes=["read"], remember="1")
+
+        response, _ = self._authorize(verifier="w" * 43)
+        query = self._code_from(response)
+        self.client.logout()
+        tokens = self._exchange(query["code"], verifier="w" * 43).json()
+
+        self.assertEqual(tokens["scope"], "read")
+
+    def test_remembered_consent_preserves_empty_grant(self):
+        self.client.force_login(self.user)
+        _, params = self._authorize()
+        first = self._code_from(self._approve(params, scopes=[], remember="1"))
+        self.assertEqual(self._exchange(first["code"]).json()["scope"], "")
+
+        response, _ = self._authorize(verifier="w" * 43)
+        query = self._code_from(response)
+        tokens = self._exchange(query["code"], verifier="w" * 43).json()
+
+        self.assertEqual(tokens["scope"], "")
+        self.assertEqual(self._mcp(tokens["access_token"]).status_code, 403)
+
+    def test_remembered_consent_preserves_unchanged_grant(self):
+        self.client.force_login(self.user)
+        _, params = self._authorize()
+        self._approve(params, scopes=["read", "draft", "media"], remember="1")
+
+        response, _ = self._authorize(verifier="w" * 43)
+        query = self._code_from(response)
+        tokens = self._exchange(query["code"], verifier="w" * 43).json()
+
+        self.assertEqual(tokens["scope"], "read draft media")
+
+    def test_remembered_consents_are_independent_per_resource(self):
+        from indieauth.models import IndieAuthConsent
+
+        self.client.force_login(self.user)
+        for resource, scopes, verifier in (
+            ("http://testserver/mcp", ["read", "create"], "m" * 43),
+            (None, None, "p" * 43),
+            ("http://testserver", ["read"], "o" * 43),
+        ):
+            with self.subTest(resource=resource):
+                response, params = self._authorize(resource=resource, verifier=verifier)
+                self.assertEqual(response.status_code, 200)
+                self._approve(params, scopes=scopes, remember="1")
+
+        self.assertEqual(IndieAuthConsent.objects.count(), 3)
+        for resource, expected_scope in (
+            ("http://testserver/mcp", "read create"),
+            (None, "read draft media"),
+            ("http://testserver", "read"),
+        ):
+            with self.subTest(resource=resource):
+                response, _ = self._authorize(resource=resource, verifier="w" * 43)
+                query = self._code_from(response)
+                tokens = self._exchange(
+                    query["code"], verifier="w" * 43, resource=resource or ""
+                ).json()
+                self.assertEqual(tokens["scope"], expected_scope)
+
+    def test_plain_consent_cannot_skip_mcp_consent(self):
+        self.client.force_login(self.user)
+        _, params = self._authorize(resource=None)
+        self._approve(params, remember="1")
+
+        response, _ = self._authorize(verifier="w" * 43)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "through its MCP server")
+
+    def test_old_refresh_token_replay_revokes_current_connection(self):
+        from indieauth.models import IndieAuthRefreshToken
+        from indieauth.views import _hash_token
+
+        tokens = self._connect()
+        second = self._refresh(tokens["refresh_token"]).json()
+        IndieAuthRefreshToken.objects.filter(
+            token_hash=_hash_token(tokens["refresh_token"])
+        ).update(used_at=timezone.now() - timezone.timedelta(days=2))
+        third = self._refresh(second["refresh_token"]).json()
+        self.assertEqual(self._mcp(third["access_token"]).status_code, 200)
+
+        replay = self._refresh(tokens["refresh_token"])
+
+        self.assertEqual(replay.json()["error"], "invalid_grant")
+        self.assertEqual(self._mcp(third["access_token"]).status_code, 401)
+        self.assertEqual(
+            self._refresh(third["refresh_token"]).json()["error"], "invalid_grant"
+        )
+
+    def test_refresh_errors(self):
+        tokens = self._connect()
+        refresh = tokens["refresh_token"]
+
+        self.assertEqual(self._refresh(refresh, client_id="https://other.example/client").json()["error"], "invalid_grant")
+        self.assertEqual(self._refresh(refresh, scope="read delete").json()["error"], "invalid_scope")
+        self.assertEqual(self._refresh(refresh, resource="http://testserver/x").json()["error"], "invalid_target")
+        missing = self.client.post("/indieauth/token", {"grant_type": "refresh_token", "refresh_token": refresh})
+        self.assertEqual(missing.json()["error"], "invalid_request")
+        self.assertEqual(self._refresh("nope").json()["error"], "invalid_grant")
+        # None of those used it up.
+        self.assertIn("access_token", self._refresh(refresh).json())
+
+    def test_expired_refresh_token(self):
+        from indieauth.models import IndieAuthRefreshToken
+
+        tokens = self._connect()
+        IndieAuthRefreshToken.objects.update(expires_at=timezone.now() - timezone.timedelta(seconds=1))
+
+        self.assertEqual(self._refresh(tokens["refresh_token"]).json()["error"], "invalid_grant")
+
+    def test_revoking_refresh_token_ends_connection(self):
+        tokens = self._connect()
+
+        response = self.client.post("/indieauth/revoke", {"token": tokens["refresh_token"]})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self._mcp(tokens["access_token"]).status_code, 401)
+        self.assertEqual(self.client.post("/indieauth/revoke", {"token": "unknown"}).status_code, 200)
+
+    def test_admin_revoke_ends_refresh_chain(self):
+        from indieauth.models import IndieAuthAccessToken
+
+        tokens = self._connect()
+        IndieAuthAccessToken.objects.update(revoked_at=timezone.now())
+
+        self.assertEqual(self._refresh(tokens["refresh_token"]).json()["error"], "invalid_grant")
+
+    def test_audience_is_enforced_both_ways(self):
+        from indieauth.models import IndieAuthAccessToken
+        from indieauth.views import _hash_token
+
+        tokens = self._connect()
+        # An MCP-bound token isn't accepted by Micropub.
+        micropub = self.client.get("/micropub", {"q": "config"}, headers={"Authorization": f"Bearer {tokens['access_token']}"})
+        self.assertIn(micropub.status_code, (401, 403))
+
+        # A Micropub client's token (no resource) isn't accepted by /mcp.
+        IndieAuthAccessToken.objects.create(
+            token_hash=_hash_token("padd-token"), client_id="https://padd.example/", me="http://testserver/",
+            scope="create update media read", user=self.user,
+        )
+        response = self._mcp("padd-token")
+        self.assertEqual(response.status_code, 401)
+        self.assertIn('error="invalid_token"', response["WWW-Authenticate"])
+
+    def test_root_metadata_and_origin_audience(self):
+        from indieauth.models import IndieAuthAccessToken
+        from indieauth.views import _hash_token
+
+        root = self.client.get("/.well-known/oauth-protected-resource").json()
+        self.assertEqual(root["resource"], "http://testserver")
+        IndieAuthAccessToken.objects.create(
+            token_hash=_hash_token("origin-token"), client_id=CLAUDE_CODE_CLIENT_ID, me="http://testserver/",
+            scope="read", user=self.user, resource="http://testserver",
+        )
+        self.assertEqual(self._mcp("origin-token").status_code, 200)
+
+    def test_plain_indieauth_flow_unchanged(self):
+        """No resource: no refresh token, 30-day token, and `me` may be omitted."""
+        from indieauth.models import IndieAuthClient
+
+        IndieAuthClient.objects.create(client_id="https://padd.example/", name="PADD", redirect_uris=["https://padd.example/cb"])
+        self.client.force_login(self.user)
+        verifier = "p" * 43
+        consent = self.client.get(
+            "/indieauth/authorize",
+            {
+                "response_type": "code", "client_id": "https://padd.example/", "redirect_uri": "https://padd.example/cb",
+                "state": "s", "code_challenge": _challenge_for(verifier), "code_challenge_method": "S256", "scope": "create",
+            },
+        )
+        self.assertEqual(consent.status_code, 200)
+        self.assertNotContains(consent, "scope_choice")
+        approve = self.client.post(
+            "/indieauth/authorize",
+            {
+                "client_id": "https://padd.example/", "redirect_uri": "https://padd.example/cb", "me": "",
+                "scope": "create", "state": "s", "code_challenge": _challenge_for(verifier),
+                "code_challenge_method": "S256", "decision": "approve",
+            },
+        )
+        code = self._code_from(approve)["code"]
+        tokens = self.client.post(
+            "/indieauth/token",
+            {"grant_type": "authorization_code", "code": code, "client_id": "https://padd.example/",
+             "redirect_uri": "https://padd.example/cb", "code_verifier": verifier},
+        ).json()
+
+        self.assertNotIn("refresh_token", tokens)
+        self.assertGreater(tokens["expires_in"], 29 * 24 * 3600)
+        self.assertEqual(tokens["me"], "http://testserver/")
+
+
+class ClientMetadataDocumentTests(TestCase):
+    def _fetch(self, body):
+        from indieauth.views import _fetch_client_metadata
+
+        class Response:
+            headers = {"Content-Type": "application/json"}
+
+            def read(self, n):
+                return json.dumps(body).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        opener = type("Opener", (), {"open": lambda self, req, timeout: Response()})()
+        with patch("indieauth.views._is_public_host", return_value=True), patch("indieauth.views.build_opener", return_value=opener):
+            return _fetch_client_metadata(CLAUDE_CODE_CLIENT_ID)
+
+    def test_matching_document_parses(self):
+        data = self._fetch(
+            {"client_id": CLAUDE_CODE_CLIENT_ID, "client_name": "Claude Code", "redirect_uris": ["http://localhost/callback"]}
+        )
+
+        self.assertEqual(data["redirect_uris"], ["http://localhost/callback"])
+        self.assertEqual(data["client_name"], "Claude Code")
+
+    def test_mismatched_client_id_is_rejected(self):
+        with self.assertRaises(ValueError):
+            self._fetch({"client_id": "https://evil.example/client", "redirect_uris": ["http://localhost/callback"]})
