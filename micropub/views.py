@@ -267,7 +267,7 @@ def _normalize_payload(request):
         if isinstance(raw, dict) and isinstance(raw.get("properties"), dict):
             properties = raw["properties"]
             raw_data.update({key: value if isinstance(value, list) else [value] for key, value in properties.items()})
-            for key in ("action", "url", "replace", "add", "delete", "type"):
+            for key in ("action", "url", "replace", "add", "delete", "type", "mp-slug"):
                 if key in raw and key not in raw_data:
                     value = raw[key]
                     raw_data[key] = value if isinstance(value, list) else [value]
@@ -703,6 +703,8 @@ def _handle_create_action(request, data):
     location = _first_value(data, "location")
     categories = data.get("category", [])
     published = _first_value(data, "published")
+    # mp-slug is a create command, not an h-entry property, so it stays out of mf2.
+    slug = _first_value(data, "mp-slug")
     mf2_objects = _extract_mf2_objects(data)
 
     kind = _determine_kind(request, data, name, like_of, repost_of, in_reply_to, bookmark_of)
@@ -732,6 +734,7 @@ def _handle_create_action(request, data):
             in_reply_to=in_reply_to or "",
             bookmark_of=bookmark_of or "",
             mf2=mf2_objects,
+            slug=slug,
         )
     except ContentError as exc:
         return HttpResponseBadRequest(str(exc))
