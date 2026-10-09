@@ -1163,6 +1163,56 @@ class MicropubDraftTests(TestCase):
         self.assertEqual(response.json()["properties"]["post-status"], ["draft"])
 
 
+class MicropubSlugTests(TestCase):
+    def _post(self, data, *, json_body=False):
+        if json_body:
+            return self.client.post(
+                MICROPUB_URL,
+                data=json.dumps(data),
+                content_type="application/json",
+                HTTP_AUTHORIZATION="Bearer token",
+            )
+        return self.client.post(MICROPUB_URL, data=data, HTTP_AUTHORIZATION="Bearer token")
+
+    @patch("micropub.views._authorized", return_value=(True, ["create"]))
+    def test_form_encoded_mp_slug_is_used(self, _authorized):
+        response = self._post({"content": "Hello", "mp-slug": "My Cool Post!"})
+
+        self.assertEqual(response.status_code, 201)
+        post = Post.objects.get()
+        self.assertEqual(post.slug, "my-cool-post")
+        self.assertTrue(response["Location"].endswith(post.get_absolute_url()))
+        self.assertNotIn("mp-slug", post.mf2 or {})
+
+    @patch("micropub.views._authorized", return_value=(True, ["create"]))
+    def test_json_mp_slug_at_top_level_and_under_properties(self, _authorized):
+        top = self._post(
+            {"type": ["h-entry"], "properties": {"content": ["Hello"]}, "mp-slug": ["top-level-slug"]},
+            json_body=True,
+        )
+        nested = self._post(
+            {"type": ["h-entry"], "properties": {"content": ["Hello"], "mp-slug": ["nested-slug"]}},
+            json_body=True,
+        )
+
+        self.assertEqual(top.status_code, 201)
+        self.assertEqual(nested.status_code, 201)
+        self.assertTrue(Post.objects.filter(slug="top-level-slug").exists())
+        self.assertTrue(Post.objects.filter(slug="nested-slug").exists())
+        top_post = Post.objects.get(slug="top-level-slug")
+        self.assertTrue(top["Location"].endswith(top_post.get_absolute_url()))
+        self.assertNotIn("mp-slug", top_post.mf2 or {})
+
+    @patch("micropub.views._authorized", return_value=(True, ["create"]))
+    def test_omitted_mp_slug_keeps_title_timestamp_slug(self, _authorized):
+        response = self._post({"name": "Hello World", "content": "Body"})
+
+        self.assertEqual(response.status_code, 201)
+        post = Post.objects.get()
+        self.assertTrue(post.slug.startswith("hello-world-"))
+        self.assertTrue(response["Location"].endswith(post.get_absolute_url()))
+
+
 class MicropubTokenAuthorTests(TestCase):
     def test_post_author_is_token_user(self):
         import hashlib
