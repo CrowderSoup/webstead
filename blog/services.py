@@ -330,6 +330,32 @@ def _resolve_published_on(status, published_on, current=None):
     return timezone.now()
 
 
+def _requested_slug(post: Post, raw: str | None) -> str:
+    """Normalize a caller-chosen slug so it fits ``Post.slug``.
+
+    Returns "" when there is nothing usable (missing, blank, or all
+    punctuation). ``Post.save`` then keeps the title-plus-timestamp slug.
+    A value that is already taken becomes unique via ``Post._unique_slug``.
+    """
+    base = slugify(raw or "")
+    if not base:
+        return ""
+    max_length = Post._meta.get_field("slug").max_length
+    base = base[:max_length].strip("-")
+    if not base:
+        return ""
+    slug = post._unique_slug(base)
+    # ``_unique_slug`` appends ``-2``, ``-3``, … and does not know the column
+    # width. Shorten the base until the de-duped value fits.
+    while len(slug) > max_length:
+        overflow = len(slug) - max_length
+        base = base[:-overflow].strip("-")
+        if not base:
+            return ""
+        slug = post._unique_slug(base)
+    return slug
+
+
 def create_post(
     actor: Actor,
     *,
@@ -347,12 +373,14 @@ def create_post(
     bookmark_of: str = "",
     mf2: dict | None = None,
     mastodon_syndicate: bool | None = None,
+    slug: str | None = None,
 ) -> Post:
     """Create a post. A draft unless ``status="published"``.
 
     With ``status="published"``, ``published_on`` in the future schedules it.
     ``photos`` are URLs (or {"url", "alt"} dicts) to download; ``photo_files``
-    are uploaded files.
+    are uploaded files. ``slug`` is optional; blank or all-punctuation input
+    leaves the usual title-and-timestamp slug.
     """
     if kind not in dict(Post.KIND_CHOICES):
         raise ContentError(f"kind must be one of: {', '.join(dict(Post.KIND_CHOICES))}")
@@ -378,6 +406,9 @@ def create_post(
             mastodon_syndicate=mastodon_syndicate,
         )
         _set_author(actor, post)
+        chosen = _requested_slug(post, slug)
+        if chosen:
+            post.slug = chosen
         post.save()
         _record(actor, post, PostRevision.CREATE, f"create {kind} as {status}", snapshot=False)
 

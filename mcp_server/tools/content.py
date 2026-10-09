@@ -266,6 +266,10 @@ def get_post(ctx, arguments):
             "kind": {"type": "string", "enum": CREATABLE_KINDS},
             "content": {"type": "string", "description": "Markdown body."},
             "name": {"type": "string", "description": "Title (articles) or place name (check-ins)."},
+            "slug": {
+                "type": "string",
+                "description": "URL slug. Optional; defaults to the title plus a timestamp.",
+            },
             "tags": {"type": "array", "items": {"type": "string"}},
             "photos": PHOTOS,
             "in_reply_to": {"type": "string"},
@@ -323,6 +327,7 @@ def create_post(ctx, arguments):
             kind=kind,
             content=arguments.get("content", ""),
             name=arguments.get("name"),
+            slug=arguments.get("slug"),
             tags=arguments.get("tags", ()),
             photos=arguments.get("photos", ()),
             status=status,
