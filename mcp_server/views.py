@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 CAPABILITIES = {"tools": {}, "resources": {}}
 SERVER_INFO = {"name": p.SERVER_NAME, "version": p.SERVER_VERSION, "title": "Webstead"}
 # Scopes that mean anything here; a token needs at least one of them.
-MCP_SCOPES = {"read", "draft", "create", "update", "delete", "undelete", "media"}
+MCP_SCOPES = {"read", "draft", "create", "update", "delete", "undelete", "media", "themes"}
 # What a new OAuth connection asks for: draft anything, publish from the
 # preview link. The consent screen lets the owner grant more.
 DEFAULT_SCOPE = "read draft media"

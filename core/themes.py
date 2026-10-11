@@ -1099,6 +1099,14 @@ def get_theme_static_dirs(base_dir: Optional[Path] = None, *, sync: bool = False
 
 def get_active_theme_slug() -> str:
     try:
+        from core.theme_preview import current_preview_slug
+
+        preview = current_preview_slug()
+    except Exception:
+        preview = None
+    if preview:
+        return preview
+    try:
         from core.models import SiteConfiguration
 
         return SiteConfiguration.get_solo().active_theme or DEFAULT_THEME_SLUG

@@ -1,6 +1,7 @@
 import base64
 import json
 import tempfile
+from pathlib import Path
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -766,6 +767,8 @@ class McpOAuthTests(TestCase):
         self.assertContains(consent, "through its MCP server")
         self.assertContains(consent, "runs on your own computer")
         self.assertContains(consent, 'name="scope_choice" value="create"')
+        self.assertContains(consent, 'name="scope_choice" value="themes"')
+        self.assertIn("themes", asm["scopes_supported"])
         self.assertContains(consent, 'value="read" checked')
 
         # 5. Approve, widening to `create` on the consent screen.
@@ -1081,3 +1084,203 @@ class ClientMetadataDocumentTests(TestCase):
     def test_mismatched_client_id_is_rejected(self):
         with self.assertRaises(ValueError):
             self._fetch({"client_id": "https://evil.example/client", "redirect_uris": ["http://localhost/callback"]})
+
+
+class McpThemeToolTests(McpTestCase):
+    scopes = ("read", "themes")
+
+    def setUp(self):
+        super().setUp()
+        from core.models import SiteConfiguration
+        from core.test_utils import build_test_theme
+
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        override = override_settings(THEMES_ROOT=self.tmp.name)
+        override.enable()
+        self.addCleanup(override.disable)
+        build_test_theme(
+            "live",
+            self.tmp.name,
+            extra_files=[
+                ("templates/core/index.html", "<!doctype html><html><body><p>LIVE-MARKER</p></body></html>"),
+            ],
+        )
+        build_test_theme(
+            "next",
+            self.tmp.name,
+            metadata={"settings": {"fields": {"accent": {"type": "color", "default": "#000000"}}}},
+            extra_files=[
+                ("templates/core/index.html", "<!doctype html><html><body><p>NEXT-MARKER</p></body></html>"),
+            ],
+        )
+        self.config = SiteConfiguration.get_solo()
+        self.config.active_theme = "live"
+        self.config.theme_settings = {"live": {"accent": "#111111"}, "next": {"accent": "#222222"}}
+        self.config.save()
+
+    def _text(self, slug, relative):
+        return (Path(self.tmp.name) / slug / relative).read_text()
+
+    def test_list_and_get_theme(self):
+        listed = self.ok("list_themes")
+        active = {row["slug"]: row["active"] for row in listed["themes"]}
+
+        self.assertEqual(active, {"live": True, "next": False})
+        self.assertIn("live is active", listed["message"])
+
+        theme = self.ok("get_theme", {"slug": "next", "files": True})
+        self.assertFalse(theme["active"])
+        self.assertIn("templates/base.html", theme["files"])
+        self.assertIn("preview_url", theme)
+        self.assertNotIn("content", theme)
+        self.assertTrue(theme["valid"])
+
+    def test_read_theme_file_includes_the_live_theme(self):
+        live = self.ok("read_theme_file", {"slug": "live", "path": "templates/base.html"})
+        other = self.ok("read_theme_file", {"slug": "next", "path": "templates/core/index.html"})
+
+        self.assertIn("<!doctype html>", live["content"])
+        self.assertIn("NEXT-MARKER", other["content"])
+        self.assertIn("isn't in next", self.error("read_theme_file", {"slug": "next", "path": "templates/missing.html"}))
+
+    def test_read_token_can_list_but_not_write(self):
+        _, raw = self.mint(["read"])
+        names = [item["name"] for item in self.modern("tools/list", raw_token=raw).json()["result"]["tools"]]
+
+        self.assertIn("list_themes", names)
+        self.assertNotIn("write_theme_files", names)
+        self.assertNotIn("activate_theme", names)
+        message = self.error(
+            "write_theme_files",
+            {"slug": "next", "files": {"static/theme.css": "body{}"}},
+            raw_token=raw,
+        )
+        self.assertIn("`themes`", message)
+
+    def test_write_updates_an_inactive_theme_and_refuses_the_live_one(self):
+        from urllib.parse import urlsplit
+
+        written = self.ok(
+            "write_theme_files",
+            {"slug": "next", "files": {"templates/base.html": "<p>EDITED</p>"}},
+        )
+        preview = urlsplit(written["preview_url"])
+        response = self.client.get(f"{preview.path}?{preview.query}")
+
+        self.assertTrue(written["changed"])
+        self.assertEqual(self._text("next", "templates/base.html"), "<p>EDITED</p>")
+        self.assertNotIn("EDITED", self._text("live", "templates/base.html"))
+        self.config.refresh_from_db()
+        self.assertEqual(self.config.active_theme, "live")
+        self.assertContains(response, "NEXT-MARKER")
+        self.assertContains(response, "Theme preview")
+        self.assertIn("active theme", self.error(
+            "write_theme_files",
+            {"slug": "live", "files": {"templates/base.html": "<p>PWNED</p>"}},
+        ))
+        self.assertNotIn("PWNED", self._text("live", "templates/base.html"))
+
+    def test_write_rejects_unsafe_paths_loads_and_invalid_results(self):
+        original = self._text("next", "theme.json")
+
+        self.assertIn("Unsafe", self.error(
+            "write_theme_files",
+            {"slug": "next", "files": {"../live/templates/base.html": "pwned"}},
+        ))
+        self.assertIn("debug", self.error(
+            "write_theme_files",
+            {"slug": "next", "files": {"templates/base.html": "{% load debug %}<p>nope</p>"}},
+        ))
+        invalid = self.ok("write_theme_files", {"slug": "next", "files": {"theme.json": "{"}})
+
+        self.assertFalse(invalid["changed"])
+        self.assertFalse(invalid["valid"])
+        self.assertEqual(self._text("next", "theme.json"), original)
+        self.assertNotIn("nope", self._text("next", "templates/base.html"))
+        self.assertNotIn("pwned", self._text("live", "templates/base.html"))
+
+    def test_write_refuses_a_git_installed_theme(self):
+        from core.models import ThemeInstall
+
+        ThemeInstall.objects.create(
+            slug="next",
+            source_type=ThemeInstall.SOURCE_GIT,
+            source_url="https://example.com/themes.git",
+        )
+
+        message = self.error(
+            "write_theme_files",
+            {"slug": "next", "files": {"templates/base.html": "<p>EDITED</p>"}},
+        )
+
+        self.assertIn("git", message)
+        self.assertNotIn("EDITED", self._text("next", "templates/base.html"))
+
+    def test_create_theme_stays_inactive_until_activate_is_confirmed(self):
+        from urllib.parse import urlsplit
+
+        created = self.ok(
+            "create_theme",
+            {
+                "slug": "fresh",
+                "name": "Fresh\nTheme",
+                "files": {
+                    "templates/core/index.html": (
+                        "<!doctype html><html><body><p>FRESH-MARKER</p></body></html>"
+                    ),
+                },
+            },
+        )
+        preview = urlsplit(created["preview_url"])
+        response = self.client.get(f"{preview.path}?{preview.query}")
+        self.config.refresh_from_db()
+
+        self.assertFalse(created["active"])
+        self.assertEqual(self.config.active_theme, "live")
+        self.assertTrue((Path(self.tmp.name) / "fresh" / "theme.json").exists())
+        self.assertContains(response, "FRESH-MARKER")
+        self.assertIn("already exists", self.error("create_theme", {"slug": "fresh", "name": "Again"}))
+
+        plan = self.ok("activate_theme", {"slug": "fresh"})
+        self.config.refresh_from_db()
+        self.assertEqual(self.config.active_theme, "live")
+        self.assertIn("confirm_token", plan)
+        self.assertIn("theme_preview=", plan["preview_url"])
+        self.assertIn("Preview it first", plan["message"])
+
+        self.assertIn("confirm_token", self.error(
+            "activate_theme",
+            {"slug": "fresh", "confirm_token": "not-the-token"},
+        ))
+        self.config.refresh_from_db()
+        self.assertEqual(self.config.active_theme, "live")
+
+        done = self.ok("activate_theme", {"slug": "fresh", "confirm_token": plan["confirm_token"]})
+        self.config.refresh_from_db()
+        self.assertEqual(self.config.active_theme, "fresh")
+        self.assertIn("now the live theme", done["message"])
+        self.assertIn("already the active theme", self.ok("activate_theme", {"slug": "fresh"})["message"])
+
+    def test_activate_reports_settings_and_refuses_an_invalid_theme(self):
+        plan = self.ok("activate_theme", {"slug": "next"})
+
+        self.assertEqual(plan["plan"]["from"], "live")
+        self.assertEqual(plan["plan"]["to"], "next")
+        self.assertEqual(plan["plan"]["settings_that_stop_applying"], ["accent"])
+        self.assertEqual(plan["plan"]["settings_that_will_apply"]["accent"], "#222222")
+        self.config.refresh_from_db()
+        self.assertEqual(self.config.active_theme, "live")
+
+        (Path(self.tmp.name) / "next" / "templates").rename(Path(self.tmp.name) / "next" / "pages")
+        self.assertIn("can't be activated", self.error("activate_theme", {"slug": "next"}))
+        self.config.refresh_from_db()
+        self.assertEqual(self.config.active_theme, "live")
+
+    def test_agent_guide_mentions_the_theme_rules(self):
+        guide = self.modern("resources/read", {"uri": "webstead://docs/agent-guide"}).json()["result"]
+        text = guide["contents"][0]["text"]
+
+        self.assertIn("inactive", text)
+        self.assertIn("does not install", text)
+        self.assertIn("themes:", text)

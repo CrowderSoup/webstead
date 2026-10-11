@@ -31,6 +31,7 @@ reply to, like, repost, or bookmark.
 - update: edit any post and revert revisions.
 - delete / undelete: delete and restore.
 - media: upload images.
+- themes: edit inactive theme files, and activate a theme after a dry run.
 
 ## Rules
 1. Draft first. create_post makes a draft unless you ask for status=published
@@ -52,6 +53,13 @@ reply to, like, repost, or bookmark.
 ## Preview links
 A draft's or scheduled post's preview_url shows it logged out for 7 days. It's
 marked noindex and isn't counted in analytics.
+
+## Themes
+Write tools change inactive themes only. activate_theme takes two calls: the
+first returns a preview_url and a confirm_token and changes nothing; call again
+with confirm_token to make it the live theme. This server does not install
+themes from git. In templates you write, {% load %} may only name static,
+i18n, l10n, tz, humanize, cache, author, widgets, or theme.
 """
 
 RESOURCES = {
@@ -68,6 +76,7 @@ RESOURCES = {
 INSTRUCTIONS = (
     "This server edits a Webstead (IndieWeb) site. Call get_site first. Posts are drafts "
     "unless you're told to publish: share the preview_url and let the user decide. "
-    "delete_post and revert_post need a second call with the confirm_token from the first. "
+    "delete_post, revert_post, and activate_theme need a second call with the confirm_token "
+    "from the first. Theme writes stay on an inactive theme. "
     f"Read {AGENT_GUIDE_URI} for the full rules."
 )

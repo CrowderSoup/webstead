@@ -991,3 +991,75 @@ class ThemeStaticTemplateTagTests(TestCase):
                 rendered = template.render(Context({}))
 
         self.assertEqual(rendered, static("themes/sample/static/css/theme.css"))
+
+
+class ThemePreviewTests(TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        override = override_settings(THEMES_ROOT=self.tmp.name)
+        override.enable()
+        self.addCleanup(override.disable)
+        page = "<!doctype html><html><body><p>{marker}</p></body></html>"
+        build_test_theme(
+            "live",
+            self.tmp.name,
+            extra_files=[("templates/core/index.html", page.format(marker="LIVE-MARKER"))],
+        )
+        build_test_theme(
+            "draft-theme",
+            self.tmp.name,
+            extra_files=[("templates/core/index.html", page.format(marker="PREVIEW-MARKER"))],
+        )
+        config = SiteConfiguration.get_solo()
+        config.active_theme = "live"
+        config.save()
+
+    def test_preview_renders_the_inactive_theme_and_not_the_admin(self):
+        from core.theme_preview import current_preview_slug, make_token
+
+        token = make_token("draft-theme")
+        live = self.client.get("/")
+        preview = self.client.get("/", {"theme_preview": token})
+        admin = self.client.get("/admin/login/", {"theme_preview": token})
+
+        self.assertContains(live, "LIVE-MARKER")
+        self.assertNotContains(live, "Theme preview")
+        self.assertContains(preview, "PREVIEW-MARKER")
+        self.assertContains(preview, "Theme preview")
+        self.assertEqual(preview["X-Robots-Tag"], "noindex, nofollow")
+        self.assertNotContains(admin, "PREVIEW-MARKER")
+        self.assertNotContains(admin, "Theme preview")
+        self.assertIsNone(current_preview_slug())
+
+    def test_bad_or_expired_token_keeps_the_live_theme(self):
+        from unittest.mock import patch
+
+        from core.theme_preview import make_token
+
+        with patch("django.core.signing.time.time", return_value=1):
+            expired = make_token("draft-theme")
+        expired_response = self.client.get("/", {"theme_preview": expired})
+        forged = self.client.get("/", {"theme_preview": "draft-theme"})
+
+        self.assertContains(expired_response, "LIVE-MARKER")
+        self.assertNotContains(expired_response, "PREVIEW-MARKER")
+        self.assertContains(forged, "LIVE-MARKER")
+        self.assertNotIn("noindex", forged.get("X-Robots-Tag", ""))
+
+    def test_template_cache_key_includes_the_preview_theme(self):
+        from django.template.engine import Engine
+
+        from core.template_loaders import ThemeAwareCachedLoader
+        from core.theme_preview import reset_preview_slug, set_preview_slug
+
+        loader = ThemeAwareCachedLoader(Engine(), [])
+        plain = loader.cache_key("core/index.html")
+        token = set_preview_slug("other-theme")
+        try:
+            preview = loader.cache_key("core/index.html")
+        finally:
+            reset_preview_slug(token)
+
+        self.assertNotEqual(plain, preview)
+        self.assertTrue(preview.startswith("other-theme:"))

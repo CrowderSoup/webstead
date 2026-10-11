@@ -435,7 +435,7 @@ def _build_metadata_payload(request) -> dict:
         "authorization_response_iss_parameter_supported": True,
         "client_id_metadata_document_supported": True,
         "scopes_supported": [
-            "create", "draft", "update", "delete", "undelete", "read", "media",
+            "create", "draft", "update", "delete", "undelete", "read", "media", "themes",
             "channels", "follow", "mute", "block", OFFLINE_ACCESS,
         ],
     }

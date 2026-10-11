@@ -18,6 +18,7 @@ PERSONAL_TOKEN_SCOPES = (
     ("delete", "Delete posts"),
     ("undelete", "Restore deleted posts"),
     ("media", "Upload images"),
+    ("themes", "Edit inactive themes and activate one after a dry run"),
 )
 
 

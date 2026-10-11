@@ -158,6 +158,7 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "analytics.middleware.AnalyticsMiddleware",
+    "core.middleware.ThemePreviewMiddleware",
     "django.middleware.common.CommonMiddleware",
     "core.middleware.RedirectMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -192,7 +193,7 @@ TEMPLATES = [
                 if DEBUG or RUNNING_TESTS
                 else [
                     (
-                        "django.template.loaders.cached.Loader",
+                        "core.template_loaders.ThemeAwareCachedLoader",
                         [
                             "core.template_loaders.ThemeTemplateLoader",
                             "django.template.loaders.filesystem.Loader",
