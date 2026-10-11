@@ -766,7 +766,9 @@ class McpOAuthTests(TestCase):
         self.assertContains(consent, "through its MCP server")
         self.assertContains(consent, "runs on your own computer")
         self.assertContains(consent, 'name="scope_choice" value="create"')
+        self.assertContains(consent, 'name="scope_choice" value="analytics"')
         self.assertContains(consent, 'value="read" checked')
+        self.assertIn("analytics", asm["scopes_supported"])
 
         # 5. Approve, widening to `create` on the consent screen.
         query = self._code_from(self._approve(params, scopes=["read", "draft", "media", "create"]))
@@ -1081,3 +1083,128 @@ class ClientMetadataDocumentTests(TestCase):
     def test_mismatched_client_id_is_rejected(self):
         with self.assertRaises(ValueError):
             self._fetch({"client_id": "https://evil.example/client", "redirect_uris": ["http://localhost/callback"]})
+
+
+class McpInsightsToolTests(McpTestCase):
+    scopes = ("read", "analytics")
+
+    def _visit(self, path, when=None, **kwargs):
+        from analytics.models import Visit
+
+        visit = Visit.objects.create(path=path, **kwargs)
+        if when is not None:
+            Visit.objects.filter(pk=visit.pk).update(started_at=when)
+        return visit
+
+    def _post(self, slug, **kwargs):
+        fields = {
+            "title": slug,
+            "slug": slug,
+            "content": "Body",
+            "kind": "activity",
+            "published_on": timezone.now(),
+        }
+        fields.update(kwargs)
+        return Post.objects.create(**fields)
+
+    def test_analytics_groups_and_excludes_bots_and_staff(self):
+        now = timezone.now()
+        old = now - timezone.timedelta(days=40)
+        self._visit("/blog/", now, referrer="https://news.example", country="US", ip_address="203.0.113.5")
+        self._visit("/blog/", now, user_agent="SecretAgent/1.0")
+        self._visit("/about/", now, referrer="https://news.example", country="US")
+        self._visit("/secret", now, is_suspected_bot=True)
+        self._visit("/admin/posts", now)
+        self._visit("/analytics/dashboard", now)
+        self._visit("/old", old)
+
+        listed = self.ok("analytics", {"group_by": "path"})
+        self.assertEqual(listed["total"], 3)
+        self.assertEqual(listed["groups"], [
+            {"path": "/blog/", "count": 2},
+            {"path": "/about/", "count": 1},
+        ])
+        self.assertFalse(listed["include_bots"])
+        self.assertIn("Bots excluded.", listed["message"])
+        self.assertNotIn("203.0.113.5", json.dumps(listed))
+        self.assertNotIn("SecretAgent", json.dumps(listed))
+        span = timezone.datetime.fromisoformat(listed["until"]) - timezone.datetime.fromisoformat(listed["since"])
+        self.assertEqual(span.days, 29)
+
+        referrers = self.ok("analytics", {"group_by": "referrer"})
+        self.assertEqual(referrers["groups"][0], {"referrer": "https://news.example", "count": 2})
+        countries = self.ok("analytics", {"group_by": "country"})
+        self.assertEqual(countries["groups"][0], {"country": "US", "count": 2})
+
+        today = timezone.localdate().isoformat()
+        by_day = self.ok("analytics", {"group_by": "day", "since": today, "until": today})
+        self.assertEqual(by_day["groups"], [{"day": today, "count": 3}])
+        self.assertFalse(by_day["truncated"])
+
+        with_bots = self.ok("analytics", {"group_by": "path", "include_bots": True})
+        self.assertEqual(with_bots["total"], 4)
+        capped = self.ok("analytics", {"group_by": "path", "limit": 1})
+        self.assertEqual(len(capped["groups"]), 1)
+        self.assertTrue(capped["truncated"])
+
+    def test_analytics_clamps_the_range(self):
+        today = timezone.localdate()
+        wide = self.ok("analytics", {"since": "2000-01-01"})
+        self.assertEqual(wide["until"], today.isoformat())
+        self.assertEqual(wide["since"], (today - timezone.timedelta(days=89)).isoformat())
+        self.assertIn("clamped to 90 days", wide["message"])
+
+        future = self.ok("analytics", {"until": "2999-01-01"})
+        self.assertEqual(future["until"], today.isoformat())
+        self.assertIn("Future dates were moved to today.", future["message"])
+
+        both = self.ok("analytics", {"since": "2999-01-01", "until": "2999-06-01"})
+        self.assertEqual((both["since"], both["until"]), (today.isoformat(), today.isoformat()))
+
+        self.assertIn("since is after until", self.error("analytics", {"since": "2020-02-01", "until": "2020-01-01"}))
+        self.assertIn("since must be an ISO date", self.error("analytics", {"since": "yesterday"}))
+
+    def test_analytics_needs_the_analytics_scope(self):
+        _, raw = self.mint(["read"])
+        names = {tool["name"] for tool in self.modern("tools/list", raw_token=raw).json()["result"]["tools"]}
+        self.assertIn("strava_recent", names)
+        self.assertNotIn("analytics", names)
+        self.assertIn("`analytics` scope", self.error("analytics", raw_token=raw))
+        self.assertEqual(self.ok("strava_recent", raw_token=raw)["activities"], [])
+
+    def test_strava_recent_reports_linked_posts(self):
+        from strava_integration.models import StravaAccount, StravaActivity
+
+        older = self._post("morning-run")
+        newer = self._post("evening-ride")
+        newer.deleted = True
+        newer.save(update_fields=["deleted"])
+        StravaActivity.objects.create(post=older, strava_activity_id="100")
+        StravaActivity.objects.create(post=newer, strava_activity_id="200")
+
+        listed = self.ok("strava_recent")
+        self.assertFalse(listed["connected"])
+        self.assertEqual([row["strava_activity_id"] for row in listed["activities"]], ["200", "100"])
+        self.assertTrue(all(row["has_post"] for row in listed["activities"]))
+        self.assertEqual(listed["activities"][0]["post_status"], "deleted")
+        self.assertEqual(listed["activities"][1]["post_status"], "published")
+        self.assertIn("/blog/post/morning-run/", listed["activities"][1]["post_url"])
+        self.assertIn("2 already have a post", listed["message"])
+        self.assertIn("Strava is not connected.", listed["message"])
+
+        one = self.ok("strava_recent", {"limit": 1})
+        self.assertEqual([row["strava_activity_id"] for row in one["activities"]], ["200"])
+
+        StravaAccount.objects.create(
+            athlete_id="42",
+            access_token="access-token-secret",
+            refresh_token="refresh-token-secret",
+            expires_at=timezone.now() + timezone.timedelta(hours=6),
+            webhook_verify_token="verify-token-secret",
+        )
+        connected = self.ok("strava_recent", {"limit": 1})
+        self.assertTrue(connected["connected"])
+        dumped = json.dumps(connected)
+        self.assertNotIn("access-token-secret", dumped)
+        self.assertNotIn("refresh-token-secret", dumped)
+        self.assertNotIn("verify-token-secret", dumped)

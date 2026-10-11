@@ -18,6 +18,7 @@ PERSONAL_TOKEN_SCOPES = (
     ("delete", "Delete posts"),
     ("undelete", "Restore deleted posts"),
     ("media", "Upload images"),
+    ("analytics", "Read visit counts"),
 )
 
 
