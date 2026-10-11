@@ -13,6 +13,7 @@ from files.models import File
 from indieauth.tokens import mint_personal_token
 from mcp_server import protocol as p
 from mcp_server.models import McpRequestLog
+from mcp_server.resources import _DOCS
 
 MODERN = p.MODERN_VERSION
 # 1x1 transparent PNG
@@ -270,11 +271,22 @@ class McpTransportTests(McpTestCase):
 
     def test_resources(self):
         listed = self.modern("resources/list").json()["result"]["resources"]
-        self.assertEqual([r["uri"] for r in listed], ["webstead://docs/agent-guide"])
+        self.assertEqual(
+            [r["uri"] for r in listed],
+            [
+                "webstead://docs/agent-guide",
+                "webstead://docs/theme-spec",
+                "webstead://docs/theme-author-guide",
+            ],
+        )
         self.assertNotIn("text", listed[0])
 
         read = self.modern("resources/read", {"uri": "webstead://docs/agent-guide"}).json()["result"]
         self.assertIn("Draft first", read["contents"][0]["text"])
+        spec = self.modern("resources/read", {"uri": "webstead://docs/theme-spec"}).json()["result"]
+        guide = self.modern("resources/read", {"uri": "webstead://docs/theme-author-guide"}).json()["result"]
+        self.assertEqual(spec["contents"][0]["text"], (_DOCS / "ThemeSpec.md").read_text(encoding="utf-8"))
+        self.assertIn("presentation only", guide["contents"][0]["text"])
 
         missing = self.modern("resources/read", {"uri": "webstead://nope"})
         self.assertEqual(missing.json()["error"]["code"], p.INVALID_PARAMS)
@@ -1081,3 +1093,38 @@ class ClientMetadataDocumentTests(TestCase):
     def test_mismatched_client_id_is_rejected(self):
         with self.assertRaises(ValueError):
             self._fetch({"client_id": "https://evil.example/client", "redirect_uris": ["http://localhost/callback"]})
+
+
+class LlmsTxtTests(TestCase):
+    def test_public_guide_omits_the_operator_manual(self):
+        from core.models import SiteConfiguration
+
+        config = SiteConfiguration.get_solo()
+        config.title = "Soup\nSite"
+        config.tagline = "Hello   there"
+        config.save()
+
+        response = self.client.get("/llms.txt")
+        body = response.content.decode()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response["Content-Type"].startswith("text/plain"))
+        self.assertIn("# Soup Site", body)
+        self.assertIn("> Hello there", body)
+        self.assertNotIn("confirm_token", body)
+        self.assertNotIn("delete_post", body)
+        self.assertNotIn("/mcp", body)
+        self.assertNotIn("webstead://", body)
+        self.assertEqual(self.client.post("/mcp", data="{}", content_type="application/json").status_code, 404)
+
+    @override_settings(MCP_ENABLED=True)
+    def test_mentions_mcp_only_when_it_is_enabled(self):
+        response = self.client.get("/llms.txt")
+        body = response.content.decode()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("/mcp", body)
+        self.assertIn("owner's approval", body)
+        self.assertNotIn("confirm_token", body)
+        self.assertNotIn("delete_post", body)
+        self.assertNotIn("webstead://", body)
