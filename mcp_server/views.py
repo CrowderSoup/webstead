@@ -24,12 +24,13 @@ from indieauth.tokens import active_local_token
 from . import protocol as p
 from .models import McpRequestLog
 from .resources import INSTRUCTIONS, RESOURCES
+from .prompts import load_prompts
 from .schema import validate
 from .tools import ToolContext, ToolError, load_tools
 
 logger = logging.getLogger(__name__)
 
-CAPABILITIES = {"tools": {}, "resources": {}}
+CAPABILITIES = {"tools": {}, "resources": {}, "prompts": {}}
 SERVER_INFO = {"name": p.SERVER_NAME, "version": p.SERVER_VERSION, "title": "Webstead"}
 # Scopes that mean anything here; a token needs at least one of them.
 MCP_SCOPES = {"read", "draft", "create", "update", "delete", "undelete", "media"}
@@ -349,6 +350,11 @@ def _dispatch(call: _Call, ctx: ToolContext, params: dict) -> dict:
         if resource is None:
             raise p.McpError(p.INVALID_PARAMS, "Resource not found", data={"uri": uri})
         return {"contents": [{"uri": uri, "mimeType": resource["mimeType"], "text": resource["text"]}]}
+    if method == "prompts/list":
+        prompts = load_prompts()
+        return {"prompts": [item.definition() for item in prompts.values() if item.visible_to(ctx.scopes)]}
+    if method == "prompts/get":
+        return _get_prompt(call, ctx, params)
     raise p.McpError(p.METHOD_NOT_FOUND, f"Method not found: {method}", status=404)
 
 
@@ -362,6 +368,29 @@ def _tool_result(call: _Call, data: dict, *, error=False) -> dict:
         "structuredContent": data,
         "isError": False,
     }
+
+
+def _get_prompt(call: _Call, ctx: ToolContext, params: dict) -> dict:
+    name = params.get("name")
+    arguments = params.get("arguments") or {}
+    prompts = load_prompts()
+    item = prompts.get(name)
+    if item is None:
+        raise p.McpError(p.INVALID_PARAMS, f"Unknown prompt: {name}")
+    if not item.visible_to(ctx.scopes):
+        needed = " or ".join(f"`{scope}`" for scope in item.scopes)
+        raise p.McpError(p.INVALID_PARAMS, f"This token can't use {name}: it needs the {needed} scope.")
+    if not isinstance(arguments, dict):
+        raise p.McpError(p.INVALID_PARAMS, "arguments must be an object")
+    call.tool = name or ""
+    call.arguments = _redact(arguments)
+    errors = validate(arguments, item.input_schema)
+    if errors:
+        raise p.McpError(p.INVALID_PARAMS, "Invalid arguments: " + "; ".join(errors))
+    try:
+        return item.handler(ctx, arguments)
+    except ToolError as exc:
+        raise p.McpError(p.INVALID_PARAMS, str(exc)) from exc
 
 
 def _call_tool(call: _Call, ctx: ToolContext, params: dict) -> dict:
