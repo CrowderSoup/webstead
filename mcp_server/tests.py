@@ -766,7 +766,9 @@ class McpOAuthTests(TestCase):
         self.assertContains(consent, "through its MCP server")
         self.assertContains(consent, "runs on your own computer")
         self.assertContains(consent, 'name="scope_choice" value="create"')
+        self.assertContains(consent, 'name="scope_choice" value="site"')
         self.assertContains(consent, 'value="read" checked')
+        self.assertIn("site", asm["scopes_supported"])
 
         # 5. Approve, widening to `create` on the consent screen.
         query = self._code_from(self._approve(params, scopes=["read", "draft", "media", "create"]))
@@ -1081,3 +1083,237 @@ class ClientMetadataDocumentTests(TestCase):
     def test_mismatched_client_id_is_rejected(self):
         with self.assertRaises(ValueError):
             self._fetch({"client_id": "https://evil.example/client", "redirect_uris": ["http://localhost/callback"]})
+
+
+class McpSiteToolTests(McpTestCase):
+    scopes = ("read", "site")
+
+    def test_get_site_includes_menus_theme_and_integrations(self):
+        from core.models import Menu, MenuItem, SiteConfiguration
+
+        menu = Menu.objects.create(title="Main")
+        MenuItem.objects.create(menu=menu, text="About", url="/page/about/", weight=0)
+        config = SiteConfiguration.get_solo()
+        config.main_menu = menu
+        config.save()
+
+        site = self.ok("get_site")
+
+        self.assertIn("site", site["scopes"])
+        self.assertEqual(site["menus"][0]["title"], "Main")
+        self.assertEqual(site["menus"][0]["roles"], ["main"])
+        self.assertEqual(site["menus"][0]["items"][0]["text"], "About")
+        self.assertIn("fields", site["theme"]["settings_schema"])
+        self.assertIn("accent_color", site["theme"]["settings_schema"]["fields"])
+        self.assertIn("accent_color", site["theme"]["settings"])
+        self.assertIn("mastodon", site["integrations"])
+        self.assertIn("strava", site["integrations"])
+        self.assertIn("plugins", site["integrations"])
+        self.assertFalse(site["integrations"]["strava"]["connected"])
+        self.assertIn("title", site["settings"])
+        self.assertIsNone(site["author_hcard"])
+
+    def test_site_tools_need_the_site_scope(self):
+        _, raw = self.mint(["read", "draft"])
+
+        names = {tool["name"] for tool in self.modern("tools/list", raw_token=raw).json()["result"]["tools"]}
+
+        self.assertIn("get_site", names)
+        self.assertNotIn("list_pages", names)
+        self.assertNotIn("upsert_page", names)
+        self.assertNotIn("update_settings", names)
+        self.assertIn("`site` scope", self.error("list_pages", raw_token=raw))
+        self.assertIn("`site` scope", self.error("upsert_redirect", {"from": "/a", "to": "/b"}, raw_token=raw))
+
+    def test_upsert_page_publishes_only_after_confirm(self):
+        from core.models import Page
+
+        arguments = {"slug": "about", "title": "About", "content": "Hello *there*", "is_gallery": False}
+        plan = self.ok("upsert_page", arguments)
+
+        self.assertIn("confirm_token", plan)
+        self.assertIn("Nothing changed yet", plan["message"])
+        self.assertFalse(Page.objects.exists())
+        self.assertIn("doesn't match", self.error("upsert_page", {**arguments, "title": "Other", "confirm_token": plan["confirm_token"]}))
+        self.assertFalse(Page.objects.exists())
+
+        done = self.ok("upsert_page", {**arguments, "confirm_token": plan["confirm_token"]})
+
+        self.assertIn("/page/about/", done["page"]["url"])
+        self.assertEqual(done["page"]["content"], "Hello *there*")
+        page = Page.objects.get()
+        self.assertEqual(page.author, self.user)
+        self.assertIsNotNone(page.published_on)
+        response = self.client.get("/page/about/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Hello")
+        self.assertContains(response, "there")
+
+        again = self.ok("upsert_page", arguments)
+        self.assertNotIn("confirm_token", again)
+        self.assertIn("Nothing would change", again["message"])
+
+        listed = self.ok("list_pages")
+        self.assertEqual(listed["pages"][0]["slug"], "about")
+
+    def test_upsert_page_updates_an_existing_page(self):
+        from core.models import Page
+
+        created = self.ok("upsert_page", {"slug": "about", "title": "About", "content": "First"})
+        self.ok("upsert_page", {"slug": "about", "title": "About", "content": "First", "confirm_token": created["confirm_token"]})
+        plan = self.ok("upsert_page", {"slug": "about", "content": "Second"})
+        self.assertEqual(plan["plan"]["changed"], ["content"])
+        self.assertEqual(Page.objects.get().content, "First")
+
+        self.ok("upsert_page", {"slug": "about", "content": "Second", "confirm_token": plan["confirm_token"]})
+
+        self.assertEqual(Page.objects.get().content, "Second")
+        self.assertEqual(Page.objects.get().title, "About")
+
+    def test_confirm_token_is_bound_to_the_access_token(self):
+        _, other_raw = self.mint(["site"])
+        arguments = {"slug": "about", "title": "About", "content": "Hi"}
+        plan = self.ok("upsert_page", arguments)
+
+        self.assertIn(
+            "doesn't match",
+            self.error("upsert_page", {**arguments, "confirm_token": plan["confirm_token"]}, raw_token=other_raw),
+        )
+
+    def test_update_menu_replaces_items_after_confirm(self):
+        from core.models import Menu
+
+        arguments = {"title": "Main", "items": [{"text": "About", "url": "/page/about/"}, {"text": "Blog", "url": "/blog/", "weight": 5}]}
+        plan = self.ok("update_menu", arguments)
+
+        self.assertEqual(plan["plan"]["action"], "create")
+        self.assertFalse(Menu.objects.exists())
+
+        done = self.ok("update_menu", {**arguments, "confirm_token": plan["confirm_token"]})
+
+        self.assertEqual([item["text"] for item in done["menu"]["items"]], ["About", "Blog"])
+        self.assertEqual(done["menu"]["items"][0]["weight"], 0)
+        replace = {"title": "Main", "items": [{"text": "Notes", "url": "/notes/"}]}
+        plan = self.ok("update_menu", replace)
+        self.assertEqual(plan["plan"]["action"], "replace_items")
+        self.ok("update_menu", {**replace, "confirm_token": plan["confirm_token"]})
+        self.assertEqual(list(Menu.objects.get().menuitem_set.values_list("text", flat=True)), ["Notes"])
+
+        same = self.ok("update_menu", replace)
+        self.assertIn("Nothing would change", same["message"])
+
+    def test_update_menu_rejects_an_ambiguous_title(self):
+        from core.models import Menu
+
+        Menu.objects.create(title="Main")
+        Menu.objects.create(title="Main")
+
+        message = self.error("update_menu", {"title": "Main", "items": [{"text": "A", "url": "/a"}]})
+
+        self.assertIn("More than one menu", message)
+
+    def test_upsert_redirect_applies_immediately(self):
+        from core.models import Redirect
+
+        created = self.ok("upsert_redirect", {"from": "/old-post", "to": "/page/about/", "type": "permanently"})
+
+        self.assertEqual(created["redirect"]["type"], "permanently")
+        self.assertEqual(Redirect.objects.count(), 1)
+        response = self.client.get("/old-post")
+        self.assertEqual(response.status_code, 301)
+        self.assertEqual(response["Location"], "/page/about/")
+
+        updated = self.ok("upsert_redirect", {"from": "/old-post", "to": "https://example.com/next"})
+        self.assertEqual(updated["redirect"]["type"], "temporary")
+        response = self.client.get("/old-post")
+        self.assertEqual(response.status_code, 307)
+        self.assertEqual(response["Location"], "https://example.com/next")
+
+        same = self.ok("upsert_redirect", {"from": "/old-post", "to": "https://example.com/next"})
+        self.assertIn("already points", same["message"])
+        listed = self.ok("list_redirects")
+        self.assertEqual(len(listed["redirects"]), 1)
+
+    def test_upsert_redirect_rejects_reserved_and_looping_paths(self):
+        from core.models import Redirect
+
+        self.assertIn("reserved", self.error("upsert_redirect", {"from": "/mcp", "to": "/"}))
+        self.assertIn("reserved", self.error("upsert_redirect", {"from": "/admin/posts/", "to": "/"}))
+        self.assertIn("loop", self.error("upsert_redirect", {"from": "/a", "to": "/a"}))
+        self.assertIn("from must be a site path", self.error("upsert_redirect", {"from": "old", "to": "/new"}))
+        self.assertIn("http(s)", self.error("upsert_redirect", {"from": "/old", "to": "javascript:alert(1)"}))
+        self.assertFalse(Redirect.objects.exists())
+
+    def test_update_settings_confirms_allowlisted_fields_and_theme_settings(self):
+        from core.models import Page, SiteConfiguration
+
+        Page.objects.create(title="About", slug="about", content="Hi", published_on=timezone.now())
+        menu_plan = self.ok("update_menu", {"title": "Main", "items": [{"text": "About", "url": "/page/about/"}]})
+        self.ok("update_menu", {"title": "Main", "items": [{"text": "About", "url": "/page/about/"}], "confirm_token": menu_plan["confirm_token"]})
+
+        changes = {
+            "title": "Crowder Soup",
+            "home_page": "about",
+            "main_menu": "Main",
+            "activity_units": "metric",
+            "default_feed_kinds": ["article", "note"],
+            "comments_enabled": True,
+            "theme_settings": {"accent_color": "#112233", "show_background_pattern": False, "home_feed_mode": "home"},
+        }
+        plan = self.ok("update_settings", {"changes": changes})
+
+        self.assertIn("confirm_token", plan)
+        config = SiteConfiguration.get_solo()
+        self.assertNotEqual(config.title, "Crowder Soup")
+        self.assertIsNone(config.home_page_id)
+        self.assertEqual(plan["plan"]["changes"]["theme_settings"]["accent_color"]["to"], "#112233")
+
+        done = self.ok("update_settings", {"changes": changes, "confirm_token": plan["confirm_token"]})
+
+        config.refresh_from_db()
+        self.assertEqual(config.title, "Crowder Soup")
+        self.assertEqual(config.home_page.slug, "about")
+        self.assertEqual(config.main_menu.title, "Main")
+        self.assertEqual(config.activity_units, "metric")
+        self.assertEqual(config.default_feed_kinds, "article,note")
+        self.assertTrue(config.comments_enabled)
+        stored = config.theme_settings["webstead-default-2026"]
+        self.assertEqual(stored["accent_color"], "#112233")
+        self.assertFalse(stored["show_background_pattern"])
+        self.assertEqual(stored["home_feed_mode"], "home")
+        self.assertEqual(done["settings"]["title"], "Crowder Soup")
+
+        same = self.ok("update_settings", {"changes": {"theme_settings": {"accent_color": "#112233"}}})
+        self.assertIn("Nothing would change", same["message"])
+
+    def test_update_settings_rejects_unknown_and_invalid_values(self):
+        from core.models import SiteConfiguration
+
+        self.assertIn("active_theme", self.error("update_settings", {"changes": {"active_theme": "other"}}))
+        self.assertIn("site_url", self.error("update_settings", {"changes": {"site_url": "not a url"}}))
+        self.assertIn("Unknown post kind", self.error("update_settings", {"changes": {"default_feed_kinds": ["nope"]}}))
+        self.assertIn("No page", self.error("update_settings", {"changes": {"home_page": "missing"}}))
+        self.assertIn("No menu", self.error("update_settings", {"changes": {"footer_menu": "Missing"}}))
+        self.assertIn("accent_color", self.error("update_settings", {"changes": {"theme_settings": {"accent_color": "blue"}}}))
+        self.assertIn("not_a_field", self.error("update_settings", {"changes": {"theme_settings": {"not_a_field": "x"}}}))
+        self.assertIn("home_feed_mode", self.error("update_settings", {"changes": {"theme_settings": {"home_feed_mode": "nope"}}}))
+        self.assertEqual(SiteConfiguration.get_solo().title, "")
+
+    def test_clearing_home_page_and_menu(self):
+        from core.models import Menu, Page, SiteConfiguration
+
+        page = Page.objects.create(title="About", slug="about", content="Hi", published_on=timezone.now())
+        menu = Menu.objects.create(title="Main")
+        config = SiteConfiguration.get_solo()
+        config.home_page = page
+        config.main_menu = menu
+        config.title = "Kept"
+        config.save()
+        changes = {"home_page": None, "main_menu": None}
+        plan = self.ok("update_settings", {"changes": changes})
+        self.ok("update_settings", {"changes": changes, "confirm_token": plan["confirm_token"]})
+
+        config.refresh_from_db()
+        self.assertIsNone(config.home_page_id)
+        self.assertIsNone(config.main_menu_id)
+        self.assertEqual(config.title, "Kept")
