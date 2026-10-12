@@ -1063,3 +1063,12 @@ class ThemePreviewTests(TestCase):
 
         self.assertNotEqual(plain, preview)
         self.assertTrue(preview.startswith("other-theme:"))
+
+
+class MigrationsInSyncTests(TestCase):
+    def test_no_missing_migrations(self):
+        out = io.StringIO()
+        try:
+            call_command("makemigrations", "--check", "--dry-run", stdout=out, stderr=out)
+        except SystemExit:
+            self.fail(f"Models have changes without migrations:\n{out.getvalue()}")
