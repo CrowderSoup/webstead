@@ -1032,6 +1032,19 @@ class ThemePreviewTests(TestCase):
         self.assertNotContains(admin, "Theme preview")
         self.assertIsNone(current_preview_slug())
 
+    def test_banner_updates_a_content_length_set_earlier(self):
+        from django.http import HttpResponse
+
+        from core.theme_preview import mark_preview_response
+
+        response = HttpResponse("<html><body><p>page</p><script src=x></script></body></html>")
+        response["Content-Length"] = str(len(response.content))
+
+        mark_preview_response(response, "draft-theme")
+
+        self.assertIn(b"Theme preview", response.content)
+        self.assertEqual(response["Content-Length"], str(len(response.content)))
+
     def test_bad_or_expired_token_keeps_the_live_theme(self):
         from unittest.mock import patch
 
