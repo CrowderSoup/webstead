@@ -3,6 +3,7 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    path("llms.txt", views.llms_txt, name="llms-txt"),
     path("mcp", views.mcp_endpoint, name="mcp"),
     path("mcp/", views.mcp_endpoint),
     path(

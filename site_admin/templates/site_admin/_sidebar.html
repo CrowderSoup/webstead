@@ -58,6 +58,7 @@
         <div class="mt-1 space-y-1">
           <a href="{% url 'site_admin:plugin_list' %}" class="site-admin-side-link {% nav_active 'plugins' %}">Plugins & integrations</a>
           <a href="{% url 'site_admin:error_log_list' %}" class="site-admin-side-link {% nav_active 'diagnostics' %}">Diagnostics</a>
+          <a href="{% url 'site_admin:mcp_activity_list' %}" class="site-admin-side-link {% nav_active 'agent' %}">Agent activity</a>
           <a href="{% url 'site_admin:indieauth_settings' %}" class="site-admin-side-link {% nav_active 'indieauth' %}">IndieAuth</a>
         </div>
       </details>

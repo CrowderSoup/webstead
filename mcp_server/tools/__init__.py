@@ -131,6 +131,6 @@ def check_confirm_token(ctx: ToolContext, tool_name: str, arguments: dict) -> bo
 
 def load_tools():
     """Import the tool modules so they register themselves (in a fixed order)."""
-    from . import site, content, media, themes  # noqa: F401
+    from . import site, content, media, community, insights, themes  # noqa: F401
 
     return REGISTRY

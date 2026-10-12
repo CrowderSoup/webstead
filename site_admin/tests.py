@@ -2533,3 +2533,64 @@ class SiteAdminPersonalTokenTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "data-new-token")
         self.assertFalse(IndieAuthAccessToken.objects.exists())
+
+
+class SiteAdminAgentActivityTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.staff = get_user_model().objects.create_user(
+            username="editor", email="editor@example.com", password="password", is_staff=True
+        )
+        self.other = get_user_model().objects.create_user(
+            username="reader", email="reader@example.com", password="password", is_staff=False
+        )
+
+    def _log(self, **kwargs):
+        from mcp_server.models import McpRequestLog
+
+        fields = {
+            "method": "tools/call",
+            "tool": "get_site",
+            "arguments": {"confirm_token": "[redacted]"},
+            "status": McpRequestLog.OK,
+            "http_status": 200,
+            "message": "listed the site",
+            "client_name": "Claude",
+        }
+        fields.update(kwargs)
+        return McpRequestLog.objects.create(**fields)
+
+    def test_staff_sees_newest_calls_and_can_filter(self):
+        from mcp_server.models import McpRequestLog
+
+        self.client.force_login(self.staff)
+        older = self._log()
+        newer = self._log(tool="create_post", status=McpRequestLog.TOOL_ERROR, message="needs confirm")
+        McpRequestLog.objects.filter(pk=older.pk).update(created_at=timezone.now() - timedelta(days=1))
+
+        response = self.client.get(reverse("site_admin:mcp_activity_list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(response.context["page_obj"].object_list), [newer, older])
+        self.assertContains(response, "Agent activity")
+        self.assertContains(response, "does not undo it")
+        self.assertNotContains(response, "Revert")
+
+        filtered = self.client.get(reverse("site_admin:mcp_activity_list"), {"status": "tool_error", "tool": "create_post"})
+        self.assertEqual(list(filtered.context["page_obj"].object_list), [newer])
+
+        detail = self.client.get(reverse("site_admin:mcp_activity_detail", kwargs={"log_id": newer.pk}))
+        self.assertContains(detail, "needs confirm")
+        self.assertContains(detail, "[redacted]")
+        self.assertNotContains(detail, "Revert")
+
+    def test_anonymous_and_non_staff_cannot_open_the_log(self):
+        log = self._log()
+        url = reverse("site_admin:mcp_activity_list")
+        login = self.client.get(url)
+        self.assertEqual(login.status_code, 302)
+        self.assertIn("/admin/login/", login["Location"])
+
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        detail = reverse("site_admin:mcp_activity_detail", kwargs={"log_id": log.pk})
+        self.assertEqual(self.client.get(detail).status_code, 403)

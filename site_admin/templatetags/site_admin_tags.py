@@ -89,6 +89,7 @@ _NAV_SECTIONS = {
         "mastodon_settings", "mastodon_disconnect", "mastodon_manual_sync",
         "error_log_list", "error_log_detail",
         "task_log_list", "task_log_detail",
+        "mcp_activity_list", "mcp_activity_detail",
         "micropub_error_list", "micropub_error_detail",
         "indieauth_error_list", "indieauth_error_detail",
     },
@@ -106,6 +107,9 @@ _NAV_SECTIONS = {
         "error_log_list", "error_log_detail", "task_log_list", "task_log_detail",
         "micropub_error_list", "micropub_error_detail", "indieauth_error_list",
         "indieauth_error_detail",
+    },
+    "agent": {
+        "mcp_activity_list", "mcp_activity_detail",
     },
     "indieauth": {
         "indieauth_settings", "indieauth_client_create", "indieauth_client_detail",
