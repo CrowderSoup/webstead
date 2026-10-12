@@ -57,7 +57,9 @@ def mark_preview_response(response, slug: str):
     """Keep a theme preview out of search engines, caches, and referrers."""
     response["X-Robots-Tag"] = "noindex, nofollow"
     response["Cache-Control"] = "private, no-store"
-    response["Referrer-Policy"] = "no-referrer"
+    # Not "no-referrer": OSM's tile policy requires a Referer, so maps would
+    # break. Cross-origin requests still only get the origin, never the token.
+    response["Referrer-Policy"] = "strict-origin-when-cross-origin"
     content_type = response.get("Content-Type", "")
     if "text/html" not in content_type or not hasattr(response, "content"):
         return response

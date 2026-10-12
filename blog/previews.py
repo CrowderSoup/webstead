@@ -42,7 +42,9 @@ def mark_preview_response(request, response, post):
     request._skip_analytics = True
     response["X-Robots-Tag"] = "noindex, nofollow"
     response["Cache-Control"] = "private, no-store"
-    response["Referrer-Policy"] = "no-referrer"
+    # Not "no-referrer": OSM's tile policy requires a Referer, so maps would
+    # break. Cross-origin requests still only get the origin, never the token.
+    response["Referrer-Policy"] = "strict-origin-when-cross-origin"
 
     banner = render_to_string("blog/_preview_banner.html", {"post": post}).encode(response.charset)
     content = response.content
