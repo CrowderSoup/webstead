@@ -270,6 +270,11 @@ class SiteConfiguration(SingletonModel):
         default=ACTIVITY_UNITS_IMPERIAL,
         help_text="Units used when generating activity post content summaries (e.g. from Strava imports). Structured mf2 properties always stay in the source's native units.",
     )
+    analytics_retention_days = models.PositiveIntegerField(
+        "Analytics retention (days)",
+        default=90,
+        help_text="Analytics visit records older than this many days are deleted automatically. Set to 0 to keep visits forever.",
+    )
 
     def __str__(self):
         return "Site Configuration"

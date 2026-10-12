@@ -20,6 +20,29 @@ def lookup_user_agent(visit_id: int, user_agent: str) -> None:
 
 
 @shared_task
+def purge_old_visits() -> int:
+    """Delete visits older than SiteConfiguration.analytics_retention_days.
+
+    Scheduled daily by Celery Beat. A retention of 0 keeps visits forever.
+    Returns the number of rows deleted.
+    """
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from analytics.models import Visit
+    from core.models import SiteConfiguration
+
+    days = SiteConfiguration.get_solo().analytics_retention_days
+    if days == 0:
+        return 0
+
+    cutoff = timezone.now() - timedelta(days=days)
+    deleted, _ = Visit.objects.filter(started_at__lt=cutoff).delete()
+    return deleted
+
+
+@shared_task
 def record_visit(
     session_key: Optional[str],
     user_id: Optional[int],

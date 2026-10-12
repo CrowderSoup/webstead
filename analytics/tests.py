@@ -1,11 +1,16 @@
 import json
+from datetime import timedelta
 from unittest.mock import patch
 
+from django.conf import settings
 from django.db import IntegrityError
 from django.test import TestCase
+from django.utils import timezone
 
 from blog.models import Post, Tag
 from analytics.models import UserAgentBotRule, UserAgentFalsePositive, UserAgentIgnore, Visit
+from analytics.tasks import purge_old_visits
+from core.models import SiteConfiguration
 
 
 MICROPUB_URL = "/micropub"
@@ -92,3 +97,52 @@ class AnalyticsMiddlewareTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertFalse(Visit.objects.filter(user_agent="AuditBot/1.0").exists())
+
+
+class PurgeOldVisitsTests(TestCase):
+    def _visit(self, path, age):
+        visit = Visit.objects.create(path=path)
+        Visit.objects.filter(pk=visit.pk).update(started_at=timezone.now() - age)
+        return visit
+
+    def _set_retention(self, days):
+        config = SiteConfiguration.get_solo()
+        config.analytics_retention_days = days
+        config.save()
+
+    def test_default_retention_is_90_days(self):
+        self.assertEqual(SiteConfiguration.get_solo().analytics_retention_days, 90)
+
+    def test_old_visits_deleted_and_recent_kept(self):
+        self._set_retention(30)
+        self._visit("/old/", timedelta(days=31))
+        recent = self._visit("/recent/", timedelta(days=29))
+
+        deleted = purge_old_visits()
+
+        self.assertEqual(deleted, 1)
+        self.assertEqual(list(Visit.objects.values_list("pk", flat=True)), [recent.pk])
+
+    def test_zero_retention_keeps_everything(self):
+        self._set_retention(0)
+        self._visit("/ancient/", timedelta(days=3650))
+        self._visit("/recent/", timedelta(days=1))
+
+        deleted = purge_old_visits()
+
+        self.assertEqual(deleted, 0)
+        self.assertEqual(Visit.objects.count(), 2)
+
+    def test_boundary_visit_just_inside_window_is_kept(self):
+        self._set_retention(30)
+        self._visit("/inside/", timedelta(days=30) - timedelta(minutes=1))
+        self._visit("/outside/", timedelta(days=30) + timedelta(minutes=1))
+
+        purge_old_visits()
+
+        self.assertEqual(list(Visit.objects.values_list("path", flat=True)), ["/inside/"])
+
+    def test_task_is_scheduled_daily(self):
+        scheduled = settings.CELERY_BEAT_SCHEDULE["purge-old-visits"]
+        self.assertEqual(scheduled["task"], "analytics.tasks.purge_old_visits")
+        self.assertEqual(scheduled["schedule"], 86400)

@@ -656,6 +656,7 @@ class SiteConfigurationForm(forms.ModelForm):
             "activity_units",
             "comments_enabled",
             "developer_tools_enabled",
+            "analytics_retention_days",
             "bridgy_publish_bluesky",
             "bridgy_publish_flickr",
             "bridgy_publish_github",

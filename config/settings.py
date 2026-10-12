@@ -345,6 +345,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "mcp_server.tasks.prune_mcp_request_logs",
         "schedule": 86400,  # daily; keeps the agent activity log to 90 days
     },
+    "purge-old-visits": {
+        "task": "analytics.tasks.purge_old_visits",
+        "schedule": 86400,  # daily; honors SiteConfiguration.analytics_retention_days
+    },
     "reconcile-strava-activities": {
         "task": "strava_integration.tasks.reconcile_strava_activities",
         "schedule": 3600,  # hourly safety net; the webhook does the real-time work
