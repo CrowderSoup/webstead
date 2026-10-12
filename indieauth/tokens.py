@@ -19,6 +19,7 @@ PERSONAL_TOKEN_SCOPES = (
     ("undelete", "Restore deleted posts"),
     ("media", "Upload images"),
     ("site", "Edit pages, menus, redirects, and site settings"),
+    ("moderate", "Approve, reject, spam, or delete comments, and accept or reject webmentions"),
 )
 
 
