@@ -34,7 +34,7 @@ SERVER_INFO = {"name": p.SERVER_NAME, "version": p.SERVER_VERSION, "title": "Web
 # Scopes that mean anything here; a token needs at least one of them.
 MCP_SCOPES = {
     "read", "draft", "create", "update", "delete", "undelete", "media",
-    "analytics", "site", "moderate",
+    "analytics", "site", "moderate", "themes",
 }
 # What a new OAuth connection asks for: draft anything, publish from the
 # preview link. The consent screen lets the owner grant more.

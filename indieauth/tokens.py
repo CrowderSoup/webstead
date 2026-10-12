@@ -21,6 +21,7 @@ PERSONAL_TOKEN_SCOPES = (
     ("analytics", "Read visit counts"),
     ("site", "Edit pages, menus, redirects, and site settings"),
     ("moderate", "Approve, reject, spam, or delete comments, and accept or reject webmentions"),
+    ("themes", "Edit inactive themes and activate one after a dry run"),
 )
 
 
