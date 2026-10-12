@@ -1136,6 +1136,38 @@ class LlmsTxtTests(TestCase):
         self.assertNotIn("webstead://", body)
 
 
+class McpRequestLogRetentionTests(TestCase):
+    def test_prune_deletes_logs_older_than_the_window(self):
+        from django.conf import settings
+
+        from mcp_server.tasks import RETENTION_DAYS, prune_mcp_request_logs
+
+        fresh = McpRequestLog.objects.create(
+            method="tools/call", tool="get_site", status=McpRequestLog.OK, http_status=200
+        )
+        old = McpRequestLog.objects.create(
+            method="tools/call", tool="get_site", status=McpRequestLog.OK, http_status=200
+        )
+        kept = McpRequestLog.objects.create(
+            method="tools/call", tool="get_site", status=McpRequestLog.OK, http_status=200
+        )
+        McpRequestLog.objects.filter(pk=old.pk).update(
+            created_at=timezone.now() - timezone.timedelta(days=RETENTION_DAYS + 1)
+        )
+        McpRequestLog.objects.filter(pk=kept.pk).update(
+            created_at=timezone.now() - timezone.timedelta(days=RETENTION_DAYS - 1)
+        )
+
+        self.assertEqual(prune_mcp_request_logs(), 1)
+        self.assertEqual(
+            set(McpRequestLog.objects.values_list("pk", flat=True)),
+            {fresh.pk, kept.pk},
+        )
+        scheduled = settings.CELERY_BEAT_SCHEDULE["prune-mcp-request-logs"]
+        self.assertEqual(scheduled["task"], "mcp_server.tasks.prune_mcp_request_logs")
+        self.assertEqual(scheduled["schedule"], 86400)
+
+
 class McpInsightsToolTests(McpTestCase):
     scopes = ("read", "analytics")
 

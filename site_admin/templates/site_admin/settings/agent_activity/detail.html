@@ -1,0 +1,67 @@
+{% extends "site_admin/base.html" %}
+
+{% block title %}MCP request{% endblock %}
+
+{% block content %}
+  <div class="flex flex-col gap-6">
+    {% include "site_admin/_section_subnav.html" with section="settings" %}
+    <section class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <div class="text-xs font-semibold uppercase tracking-[0.24em] text-(--admin-muted)">Agent activity</div>
+        <h1 class="mt-2 text-2xl font-semibold">{{ log.tool|default:log.method }}</h1>
+        <p class="mt-1 text-sm text-(--admin-muted)">
+          {{ log.created_at|date:"M j, Y H:i" }}. Rows older than {{ retention_days }} days are deleted.
+          This page records the call. It does not undo it.
+        </p>
+      </div>
+      <a
+        href="{% url 'site_admin:mcp_activity_list' %}"
+        class="rounded-xl border border-(--admin-border) px-4 py-2 text-sm font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
+      >
+        Back to activity
+      </a>
+    </section>
+
+    <section class="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <div class="space-y-4">
+        <div class="rounded-2xl border border-(--admin-border) bg-white p-4">
+          <div class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Message</div>
+          <div class="mt-2 whitespace-pre-wrap text-sm text-(--admin-ink)">{{ log.message|default:"—" }}</div>
+        </div>
+        <div class="rounded-2xl border border-(--admin-border) bg-white p-4">
+          <div class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Arguments</div>
+          <pre class="mt-3 max-h-96 overflow-auto rounded-xl bg-(--admin-bg) p-3 text-xs text-(--admin-ink)">{{ arguments_text }}</pre>
+        </div>
+      </div>
+      <div class="rounded-2xl border border-(--admin-border) bg-white p-4 text-sm">
+        <dl class="space-y-3">
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Status</dt>
+            <dd class="mt-1">{{ log.get_status_display }} (HTTP {{ log.http_status }})</dd>
+          </div>
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Method</dt>
+            <dd class="mt-1">{{ log.method|default:"—" }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Duration</dt>
+            <dd class="mt-1">{{ log.duration_ms }} ms</dd>
+          </div>
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Client</dt>
+            <dd class="mt-1 break-all">{{ log.client_name|default:"—" }}</dd>
+            <dd class="mt-1 break-all text-(--admin-muted)">{{ log.client_id|default:"" }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Token</dt>
+            <dd class="mt-1">{% if log.token %}{{ log.token.name|default:"—" }}{% else %}—{% endif %}</dd>
+          </div>
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Protocol</dt>
+            <dd class="mt-1">{{ log.protocol_version|default:"—" }}</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+  </div>
+{% endblock %}

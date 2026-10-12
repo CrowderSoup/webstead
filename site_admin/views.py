@@ -39,6 +39,8 @@ from analytics.models import (
 
 from files.models import Attachment, File
 from files.gpx import GpxAnonymizeError, GpxAnonymizeOptions, anonymize_gpx
+from mcp_server.models import McpRequestLog
+from mcp_server.tasks import RETENTION_DAYS
 from mastodon_integration.models import MastodonAccount, MastodonSyndicationDefault
 from mastodon_integration.tasks import poll_mastodon_timeline, poll_mastodon_notifications
 from strava_integration.models import StravaAccount, StravaActivity
@@ -2052,6 +2054,64 @@ def task_log_detail(request, task_id):
 
     task = get_object_or_404(TaskResult, task_id=task_id)
     return render(request, "site_admin/settings/tasks/detail.html", {"task": task})
+
+
+@require_http_methods(["GET"])
+def mcp_activity_list(request):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    logs = McpRequestLog.objects.select_related("token").order_by("-created_at", "-id")
+    status = request.GET.get("status", "")
+    tool = (request.GET.get("tool") or "").strip()
+    valid_status = {choice for choice, _label in McpRequestLog.STATUS_CHOICES}
+    if status in valid_status:
+        logs = logs.filter(status=status)
+    else:
+        status = ""
+    if tool:
+        logs = logs.filter(tool=tool)
+
+    paginator = Paginator(logs, 20)
+    page_number = request.GET.get("page")
+    try:
+        page_obj = paginator.page(page_number)
+    except PageNotAnInteger:
+        page_obj = paginator.page(1)
+    except EmptyPage:
+        page_obj = paginator.page(paginator.num_pages)
+
+    context = {
+        "page_obj": page_obj,
+        "paginator": paginator,
+        "base_query": _strip_page_query(request),
+        "status": status,
+        "tool": tool,
+        "statuses": McpRequestLog.STATUS_CHOICES,
+        "retention_days": RETENTION_DAYS,
+    }
+    if request.headers.get("HX-Request"):
+        return render(request, "site_admin/settings/agent_activity/_list.html", context)
+    return render(request, "site_admin/settings/agent_activity/index.html", context)
+
+
+@require_http_methods(["GET"])
+def mcp_activity_detail(request, log_id):
+    guard = _staff_guard(request)
+    if guard:
+        return guard
+
+    log = get_object_or_404(McpRequestLog.objects.select_related("token"), pk=log_id)
+    return render(
+        request,
+        "site_admin/settings/agent_activity/detail.html",
+        {
+            "log": log,
+            "arguments_text": json.dumps(log.arguments or {}, indent=2, sort_keys=True),
+            "retention_days": RETENTION_DAYS,
+        },
+    )
 
 
 @require_http_methods(["GET"])
