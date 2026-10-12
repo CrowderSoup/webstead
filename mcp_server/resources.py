@@ -31,6 +31,16 @@ reply to, like, repost, or bookmark.
 - update: edit any post and revert revisions.
 - delete / undelete: delete and restore.
 - media: upload images.
+- site: pages, menus, redirects, and site settings.
+
+## Site
+- Pages have no drafts. upsert_page publishes immediately, so it, update_menu,
+  and update_settings show a plan first. Call again with the same arguments
+  plus confirm_token to apply.
+- upsert_redirect applies on the first call. `from` must match the request
+  path exactly, including any trailing slash.
+- update_settings changes an allowlisted set of fields, plus theme_settings
+  checked against the active theme's schema. It does not change the active theme.
 
 ## Rules
 1. Draft first. create_post makes a draft unless you ask for status=published
@@ -68,6 +78,7 @@ RESOURCES = {
 INSTRUCTIONS = (
     "This server edits a Webstead (IndieWeb) site. Call get_site first. Posts are drafts "
     "unless you're told to publish: share the preview_url and let the user decide. "
-    "delete_post and revert_post need a second call with the confirm_token from the first. "
+    "upsert_page, update_menu, update_settings, delete_post, and revert_post need a second "
+    "call with the confirm_token from the first. "
     f"Read {AGENT_GUIDE_URI} for the full rules."
 )
