@@ -23,8 +23,8 @@ from indieauth.tokens import active_local_token
 
 from . import protocol as p
 from .models import McpRequestLog
-from .resources import INSTRUCTIONS, RESOURCES
 from .prompts import load_prompts
+from .resources import INSTRUCTIONS, RESOURCES, public_agent_guide
 from .schema import validate
 from .tools import ToolContext, ToolError, load_tools
 
@@ -33,7 +33,10 @@ logger = logging.getLogger(__name__)
 CAPABILITIES = {"tools": {}, "resources": {}, "prompts": {}}
 SERVER_INFO = {"name": p.SERVER_NAME, "version": p.SERVER_VERSION, "title": "Webstead"}
 # Scopes that mean anything here; a token needs at least one of them.
-MCP_SCOPES = {"read", "draft", "create", "update", "delete", "undelete", "media"}
+MCP_SCOPES = {
+    "read", "draft", "create", "update", "delete", "undelete", "media",
+    "analytics", "site", "moderate", "themes",
+}
 # What a new OAuth connection asks for: draft anything, publish from the
 # preview link. The consent screen lets the owner grant more.
 DEFAULT_SCOPE = "read draft media"
@@ -71,6 +74,19 @@ class _Call:
             )
         except Exception:  # logging must never break the response
             logger.exception("Failed to write McpRequestLog")
+
+
+def llms_txt(request):
+    """Public agent guide. Sanitized: no scopes, tools, or confirm tokens."""
+    from core.models import SiteConfiguration
+
+    config = SiteConfiguration.get_solo()
+    body = public_agent_guide(
+        title=config.title,
+        tagline=config.tagline,
+        mcp_enabled=getattr(settings, "MCP_ENABLED", False),
+    )
+    return HttpResponse(body, content_type="text/plain; charset=utf-8")
 
 
 @csrf_exempt

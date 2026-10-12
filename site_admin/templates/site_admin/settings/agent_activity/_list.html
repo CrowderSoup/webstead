@@ -1,0 +1,91 @@
+{% if page_obj.object_list %}
+  <div class="mb-3 flex items-center justify-between gap-3 text-xs">
+    <div class="font-semibold uppercase tracking-wide text-(--admin-muted)">{{ paginator.count }} matching calls</div>
+    <div class="text-(--admin-muted)">Showing page {{ page_obj.number }}</div>
+  </div>
+  <div class="hidden md:block">
+    <div class="overflow-hidden rounded-2xl border border-(--admin-border)">
+      <table class="w-full table-fixed text-left text-sm">
+        <thead class="bg-(--admin-bg) text-xs uppercase tracking-widest text-(--admin-muted)">
+          <tr>
+            <th class="w-28 px-4 py-3">Status</th>
+            <th class="w-40 px-4 py-3">Tool</th>
+            <th class="px-4 py-3">Message</th>
+            <th class="w-40 px-4 py-3">Client</th>
+            <th class="w-36 px-4 py-3">When</th>
+            <th class="w-20 px-4 py-3"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in page_obj.object_list %}
+            <tr class="border-t border-(--admin-border) hover:bg-(--admin-bg)/40">
+              <td class="px-4 py-3">
+                {% if log.status == "ok" %}
+                  <span class="rounded-xl bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">OK</span>
+                {% elif log.status == "tool_error" %}
+                  <span class="rounded-xl bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">Tool error</span>
+                {% else %}
+                  <span class="rounded-xl bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">Error</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 font-semibold">
+                <span class="block truncate">{{ log.tool|default:log.method }}</span>
+              </td>
+              <td class="px-4 py-3 text-(--admin-muted)">
+                <span class="block truncate">{{ log.message|default:"—" }}</span>
+              </td>
+              <td class="px-4 py-3 text-(--admin-muted)">
+                <span class="block truncate">{{ log.client_name|default:"—" }}</span>
+              </td>
+              <td class="px-4 py-3 text-(--admin-muted)">{{ log.created_at|date:"M j, Y H:i" }}</td>
+              <td class="px-4 py-3 text-right">
+                <a href="{% url 'site_admin:mcp_activity_detail' log_id=log.id %}" class="text-sm font-semibold text-(--admin-accent)">View</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="flex flex-col gap-3 md:hidden">
+    {% for log in page_obj.object_list %}
+      <a href="{% url 'site_admin:mcp_activity_detail' log_id=log.id %}" class="rounded-2xl border border-(--admin-border) p-4">
+        <div class="flex items-center justify-between gap-2">
+          <div class="font-semibold">{{ log.tool|default:log.method }}</div>
+          <div class="text-xs text-(--admin-muted)">{{ log.get_status_display }}</div>
+        </div>
+        <div class="mt-2 text-sm text-(--admin-muted)">{{ log.message|default:"—"|truncatechars:120 }}</div>
+        <div class="mt-1 text-xs text-(--admin-muted)">{{ log.created_at|date:"M j, Y H:i" }}</div>
+      </a>
+    {% endfor %}
+  </div>
+
+  <div class="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm">
+    <div class="text-(--admin-muted)">Page {{ page_obj.number }} of {{ paginator.num_pages }}</div>
+    <div class="flex items-center gap-2">
+      {% if page_obj.has_previous %}
+        <a
+          href="?page={{ page_obj.previous_page_number }}{% if base_query %}&{{ base_query }}{% endif %}"
+          class="rounded-xl border border-(--admin-border) px-3 py-1.5 font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
+          hx-get="?page={{ page_obj.previous_page_number }}{% if base_query %}&{{ base_query }}{% endif %}"
+          hx-target="#mcp-activity-list"
+          hx-push-url="true"
+        >Previous</a>
+      {% endif %}
+      {% if page_obj.has_next %}
+        <a
+          href="?page={{ page_obj.next_page_number }}{% if base_query %}&{{ base_query }}{% endif %}"
+          class="rounded-xl border border-(--admin-border) px-3 py-1.5 font-semibold text-(--admin-ink) transition hover:bg-(--admin-bg)"
+          hx-get="?page={{ page_obj.next_page_number }}{% if base_query %}&{{ base_query }}{% endif %}"
+          hx-target="#mcp-activity-list"
+          hx-push-url="true"
+        >Next</a>
+      {% endif %}
+    </div>
+  </div>
+{% else %}
+  <div class="rounded-2xl border border-dashed border-(--admin-border) p-6 text-sm text-(--admin-muted)">
+    No MCP requests match these filters.
+  </div>
+{% endif %}

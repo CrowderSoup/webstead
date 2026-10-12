@@ -158,6 +158,7 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "analytics.middleware.AnalyticsMiddleware",
+    "core.middleware.ThemePreviewMiddleware",
     "django.middleware.common.CommonMiddleware",
     "core.middleware.RedirectMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -192,7 +193,7 @@ TEMPLATES = [
                 if DEBUG or RUNNING_TESTS
                 else [
                     (
-                        "django.template.loaders.cached.Loader",
+                        "core.template_loaders.ThemeAwareCachedLoader",
                         [
                             "core.template_loaders.ThemeTemplateLoader",
                             "django.template.loaders.filesystem.Loader",
@@ -339,6 +340,10 @@ CELERY_BEAT_SCHEDULE = {
     "publish-due-posts": {
         "task": "micropub.tasks.publish_due_posts",
         "schedule": 60,  # every minute, so scheduled posts go out on time
+    },
+    "prune-mcp-request-logs": {
+        "task": "mcp_server.tasks.prune_mcp_request_logs",
+        "schedule": 86400,  # daily; keeps the agent activity log to 90 days
     },
     "reconcile-strava-activities": {
         "task": "strava_integration.tasks.reconcile_strava_activities",

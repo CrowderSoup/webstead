@@ -110,6 +110,12 @@ urlpatterns = [
     path("settings/errors/<int:log_id>/", views.error_log_detail, name="error_log_detail"),
     path("settings/tasks/", views.task_log_list, name="task_log_list"),
     path("settings/tasks/<str:task_id>/", views.task_log_detail, name="task_log_detail"),
+    path("settings/agent-activity/", views.mcp_activity_list, name="mcp_activity_list"),
+    path(
+        "settings/agent-activity/<int:log_id>/",
+        views.mcp_activity_detail,
+        name="mcp_activity_detail",
+    ),
     path("settings/indieauth/", views.indieauth_settings, name="indieauth_settings"),
     path(
         "settings/indieauth/clients/new/",
