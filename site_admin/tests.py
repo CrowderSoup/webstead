@@ -1257,6 +1257,7 @@ class SiteAdminProfileEditTests(TestCase):
                 "footer_menu": str(footer_menu.id),
                 "default_feed_kinds": "article,note",
                 "activity_units": "imperial",
+                "analytics_retention_days": 90,
             },
             follow=True,
         )
@@ -1299,6 +1300,7 @@ class SiteAdminProfileEditTests(TestCase):
                 "main_menu": main_menu.id,
                 "footer_menu": footer_menu.id,
                 "activity_units": "metric",
+                "analytics_retention_days": 30,
                 "comments_enabled": "on",
                 "developer_tools_enabled": "on",
                 "microsub_unfollow_removes_entries": "on",
@@ -1313,6 +1315,7 @@ class SiteAdminProfileEditTests(TestCase):
         self.assertTrue(settings_obj.developer_tools_enabled)
         self.assertTrue(settings_obj.microsub_unfollow_removes_entries)
         self.assertEqual(settings_obj.activity_units, "metric")
+        self.assertEqual(settings_obj.analytics_retention_days, 30)
         self.assertIn("Disallow", settings_obj.robots_txt)
 
     def test_profile_edit_reports_photo_sync_errors(self):

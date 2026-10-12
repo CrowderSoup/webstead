@@ -40,6 +40,10 @@
       <details class="rounded-2xl border border-(--admin-border) bg-white p-5" {% if form.microsub_unfollow_removes_entries.errors %}open{% endif %}>
         <summary class="cursor-pointer font-semibold">IndieWeb reader behavior</summary><label for="{{ form.microsub_unfollow_removes_entries.id_for_label }}" class="mt-4 flex items-start gap-2 text-sm">{{ form.microsub_unfollow_removes_entries }}<span>Remove fetched entries when a Microsub feed is unfollowed</span></label><p class="mt-2 text-xs text-(--admin-muted)">{{ form.microsub_unfollow_removes_entries.help_text }}</p>{{ form.microsub_unfollow_removes_entries.errors }}
       </details>
+      <details class="rounded-2xl border border-(--admin-border) bg-white p-5" {% if form.analytics_retention_days.errors %}open{% endif %}>
+        <summary class="cursor-pointer font-semibold">Analytics</summary>
+        <div class="mt-4"><label for="{{ form.analytics_retention_days.id_for_label }}" class="text-xs font-semibold uppercase tracking-wide text-(--admin-muted)">Visit retention (days)</label>{{ form.analytics_retention_days }}<p class="mt-1 text-xs text-(--admin-muted)">{{ form.analytics_retention_days.help_text }}</p>{{ form.analytics_retention_days.errors }}</div>
+      </details>
       <details class="rounded-2xl border border-(--admin-border) bg-white p-5" {% if form.developer_tools_enabled.errors or form.robots_txt.errors %}open{% endif %}>
         <summary class="cursor-pointer font-semibold">Crawler and developer controls</summary>
         <label for="{{ form.developer_tools_enabled.id_for_label }}" class="mt-4 flex items-center gap-2 text-sm">{{ form.developer_tools_enabled }}<span>Show developer tools and diagnostics</span></label>{{ form.developer_tools_enabled.errors }}
