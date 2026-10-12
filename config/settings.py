@@ -340,6 +340,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "micropub.tasks.publish_due_posts",
         "schedule": 60,  # every minute, so scheduled posts go out on time
     },
+    "prune-mcp-request-logs": {
+        "task": "mcp_server.tasks.prune_mcp_request_logs",
+        "schedule": 86400,  # daily; keeps the agent activity log to 90 days
+    },
     "reconcile-strava-activities": {
         "task": "strava_integration.tasks.reconcile_strava_activities",
         "schedule": 3600,  # hourly safety net; the webhook does the real-time work
