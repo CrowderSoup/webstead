@@ -1539,7 +1539,7 @@ class PostPreviewTests(TestCase):
         self.assertContains(response, "a draft")
         self.assertEqual(response["X-Robots-Tag"], "noindex, nofollow")
         self.assertEqual(response["Cache-Control"], "private, no-store")
-        self.assertEqual(response["Referrer-Policy"], "no-referrer")
+        self.assertEqual(response["Referrer-Policy"], "strict-origin-when-cross-origin")
         record_visit.assert_not_called()
 
     def test_banner_is_inside_body(self):

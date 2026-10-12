@@ -1028,6 +1028,7 @@ class ThemePreviewTests(TestCase):
         self.assertContains(preview, "PREVIEW-MARKER")
         self.assertContains(preview, "Theme preview")
         self.assertEqual(preview["X-Robots-Tag"], "noindex, nofollow")
+        self.assertEqual(preview["Referrer-Policy"], "strict-origin-when-cross-origin")
         self.assertNotContains(admin, "PREVIEW-MARKER")
         self.assertNotContains(admin, "Theme preview")
         self.assertIsNone(current_preview_slug())
