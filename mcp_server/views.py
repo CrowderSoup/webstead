@@ -23,7 +23,7 @@ from indieauth.tokens import active_local_token
 
 from . import protocol as p
 from .models import McpRequestLog
-from .resources import INSTRUCTIONS, RESOURCES
+from .resources import INSTRUCTIONS, RESOURCES, public_agent_guide
 from .schema import validate
 from .tools import ToolContext, ToolError, load_tools
 
@@ -73,6 +73,19 @@ class _Call:
             )
         except Exception:  # logging must never break the response
             logger.exception("Failed to write McpRequestLog")
+
+
+def llms_txt(request):
+    """Public agent guide. Sanitized: no scopes, tools, or confirm tokens."""
+    from core.models import SiteConfiguration
+
+    config = SiteConfiguration.get_solo()
+    body = public_agent_guide(
+        title=config.title,
+        tagline=config.tagline,
+        mcp_enabled=getattr(settings, "MCP_ENABLED", False),
+    )
+    return HttpResponse(body, content_type="text/plain; charset=utf-8")
 
 
 @csrf_exempt
