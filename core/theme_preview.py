@@ -71,4 +71,8 @@ def mark_preview_response(response, slug: str):
         response.content = content[: match.end()] + banner + content[match.end() :]
     else:
         response.content = banner + content
+    # Middleware that ran earlier may have set Content-Length for the
+    # original body; a stale value makes browsers cut off the page's end.
+    if response.has_header("Content-Length"):
+        response["Content-Length"] = str(len(response.content))
     return response
