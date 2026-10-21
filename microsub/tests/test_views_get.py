@@ -461,7 +461,7 @@ class GetSearchTests(TestCase):
 
     @authorized
     @patch("microsub.views.fetch_and_parse_feed", return_value=([], None, {}))
-    @patch("microsub.views.urlopen")
+    @patch("microsub.views.safe_urlopen")
     def test_non_http_query_prepends_https(self, mock_urlopen, _mock_fetch, _auth):
         from unittest.mock import MagicMock
 
@@ -481,7 +481,7 @@ class GetSearchTests(TestCase):
 
     @authorized
     @patch("microsub.views.fetch_and_parse_feed", return_value=([], None, {"name": "Feed"}))
-    @patch("microsub.views.urlopen")
+    @patch("microsub.views.safe_urlopen")
     def test_network_error_returns_empty_results(self, mock_urlopen, _mock_fetch, _auth):
         from urllib.error import URLError
         mock_urlopen.side_effect = URLError("connection refused")
@@ -495,7 +495,7 @@ class GetSearchTests(TestCase):
 
     @authorized
     @patch("microsub.views.fetch_and_parse_feed", return_value=([], None, {"name": "Feed"}))
-    @patch("microsub.views.urlopen")
+    @patch("microsub.views.safe_urlopen")
     def test_non_html_response_returns_url_as_feed(self, mock_urlopen, _mock_fetch, _auth):
         from unittest.mock import MagicMock
 
@@ -517,7 +517,7 @@ class GetSearchTests(TestCase):
 
     @authorized
     @patch("microsub.views.fetch_and_parse_feed")
-    @patch("microsub.views.urlopen")
+    @patch("microsub.views.safe_urlopen")
     def test_html_response_discovers_alternate_feeds(self, mock_urlopen, mock_fetch, _auth):
         from unittest.mock import MagicMock
 

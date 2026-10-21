@@ -523,7 +523,7 @@ class Mf2NormalizationTests(TestCase):
     def test_fetch_target_from_url_failure_returns_none(self):
         fetch_target_from_url.cache_clear()
         with self.assertLogs("blog.mf2", level="WARNING"):
-            with patch("blog.mf2.requests.get", side_effect=requests.RequestException):
+            with patch("blog.mf2.safe_get", side_effect=requests.RequestException):
                 target = fetch_target_from_url("https://example.com/post/404")
 
         self.assertIsNone(target)

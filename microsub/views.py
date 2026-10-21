@@ -7,7 +7,7 @@ from html.parser import HTMLParser
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.parse import urljoin as _urljoin
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 from django.conf import settings
 from django.db.models import Q
@@ -20,6 +20,7 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
 from core.models import SiteConfiguration
+from core.outbound import safe_urlopen
 
 from .feed_parser import fetch_and_parse_feed
 from .models import BlockedUser, Channel, Entry, MutedUser, Subscription
@@ -214,7 +215,7 @@ def _subscribe_to_websub_with_base_url(subscription: Subscription, base_url: str
             headers={"Content-Type": "application/x-www-form-urlencoded"},
             method="POST",
         )
-        with urlopen(req, timeout=10) as resp:
+        with safe_urlopen(req, timeout=10) as resp:
             status = resp.status
         if status in (200, 202):
             subscription.websub_secret = secret
@@ -245,7 +246,7 @@ def _unsubscribe_from_websub(subscription: Subscription, base_url: str) -> None:
             headers={"Content-Type": "application/x-www-form-urlencoded"},
             method="POST",
         )
-        with urlopen(req, timeout=10):
+        with safe_urlopen(req, timeout=10):
             pass
     except (HTTPError, URLError, TimeoutError, OSError) as exc:
         logger.warning("WebSub unsubscribe failed for %s: %s", subscription.url, exc)
@@ -358,7 +359,7 @@ def _extract_feed_candidates(url: str) -> list[dict]:
 
     candidates: list[dict] = []
     req = Request(url, headers={"User-Agent": "Webstead Microsub/1.0"})
-    with urlopen(req, timeout=10) as response:
+    with safe_urlopen(req, timeout=10) as response:
         content_type = response.headers.get("Content-Type", "")
         body = response.read(100_000).decode("utf-8", errors="replace")
     if "html" not in content_type:
