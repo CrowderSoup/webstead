@@ -1086,3 +1086,109 @@ class MigrationsInSyncTests(TestCase):
             call_command("makemigrations", "--check", "--dry-run", stdout=out, stderr=out)
         except SystemExit:
             self.fail(f"Models have changes without migrations:\n{out.getvalue()}")
+
+
+def _addrinfo(*addresses):
+    return [(None, None, None, "", (address, 0)) for address in addresses]
+
+
+class OutboundURLGuardTests(TestCase):
+    def test_rejects_non_http_schemes(self):
+        from core.outbound import UnsafeURLError, safe_urlopen, validate_outbound_url
+
+        for url in ("file:///etc/passwd", "ftp://example.com/x", "gopher://example.com/"):
+            with self.subTest(url=url), self.assertRaises(UnsafeURLError):
+                validate_outbound_url(url)
+        with self.assertRaises(UnsafeURLError):
+            safe_urlopen("file:///etc/passwd")
+
+    def test_rejects_private_and_special_ip_literals(self):
+        from core.outbound import UnsafeURLError, validate_outbound_url
+
+        for url in (
+            "http://127.0.0.1/",
+            "http://10.0.0.5:6379/",
+            "http://169.254.169.254/metadata/v1/",
+            "http://100.64.0.1/",
+            "http://[::1]/",
+            "http://[::ffff:127.0.0.1]/",
+            "http://localhost/",
+            "http://vtodo-redis.localhost/",
+        ):
+            with self.subTest(url=url), self.assertRaises(UnsafeURLError):
+                validate_outbound_url(url)
+
+    def test_rejects_hostnames_resolving_to_private_addresses(self):
+        from core.outbound import UnsafeURLError, validate_outbound_url
+
+        with mock.patch("core.outbound.socket.getaddrinfo", return_value=_addrinfo("172.18.0.4")):
+            with self.assertRaises(UnsafeURLError):
+                validate_outbound_url("http://vtodo-redis:6379/")
+        # One private answer among public ones is still refused.
+        with mock.patch(
+            "core.outbound.socket.getaddrinfo", return_value=_addrinfo("93.184.215.14", "10.0.0.1")
+        ):
+            with self.assertRaises(UnsafeURLError):
+                validate_outbound_url("https://mixed.example.org/")
+
+    def test_rejects_credentials_in_url(self):
+        from core.outbound import UnsafeURLError, validate_outbound_url
+
+        with self.assertRaises(UnsafeURLError):
+            validate_outbound_url("https://user:pass@93.184.215.14/")
+
+    def test_allows_public_hosts(self):
+        from core.outbound import validate_outbound_url
+
+        with mock.patch("core.outbound.socket.getaddrinfo", return_value=_addrinfo("93.184.215.14")):
+            self.assertEqual(validate_outbound_url("https://public.example.org/a"), "https://public.example.org/a")
+
+    def test_safe_get_refuses_redirect_to_private_address(self):
+        from core.outbound import UnsafeURLError, safe_get
+
+        redirect = mock.Mock(status_code=302, headers={"Location": "http://169.254.169.254/metadata/v1/"})
+        with mock.patch("core.outbound.socket.getaddrinfo", return_value=_addrinfo("93.184.215.14")), \
+                mock.patch("core.outbound.requests.get", return_value=redirect) as mocked_get:
+            with self.assertRaises(UnsafeURLError):
+                safe_get("https://public.example.org/start", timeout=5)
+        self.assertEqual(mocked_get.call_count, 1)
+        self.assertFalse(mocked_get.call_args.kwargs["allow_redirects"])
+
+    def test_safe_urlopen_redirect_handler_refuses_private_target(self):
+        import urllib.request
+
+        from core.outbound import UnsafeURLError, _GuardedRedirectHandler
+
+        handler = _GuardedRedirectHandler()
+        request = urllib.request.Request("https://public.example.org/start")
+        with self.assertRaises(UnsafeURLError):
+            handler.redirect_request(request, None, 302, "Found", {}, "http://127.0.0.1:8000/admin/")
+        with self.assertRaises(UnsafeURLError):
+            handler.redirect_request(request, None, 302, "Found", {}, "file:///etc/passwd")
+
+    def test_connection_refused_when_peer_is_private(self):
+        # Covers DNS rebinding: the name checked as public, the socket landed elsewhere.
+        from core.outbound import UnsafeURLError, _check_peer
+
+        sock = mock.Mock()
+        sock.getpeername.return_value = ("10.0.0.7", 80)
+        with self.assertRaises(UnsafeURLError):
+            _check_peer(sock)
+        sock.close.assert_called_once()
+
+    def test_opener_has_no_file_or_ftp_handlers(self):
+        from core.outbound import _opener
+
+        self.assertEqual(set(_opener.handle_open), {"http", "https"})
+
+    def test_webmention_with_private_source_is_rejected_without_fetching(self):
+        from micropub.webmention import verify_webmention_source
+
+        with mock.patch("core.outbound._opener.open") as mocked_open:
+            ok, error, retry = verify_webmention_source(
+                "http://169.254.169.254/metadata/v1/", "https://example.com/post/"
+            )
+        self.assertFalse(ok)
+        self.assertFalse(retry)
+        self.assertIn("public", error)
+        mocked_open.assert_not_called()

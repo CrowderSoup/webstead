@@ -12,6 +12,7 @@ from django.utils import timezone
 from django.utils.encoding import force_str
 
 from blog.models import Post
+from core.outbound import UnsafeURLError, safe_urlopen
 from .models import Webmention
 
 logger = logging.getLogger(__name__)
@@ -88,7 +89,7 @@ def _normalize_url_for_compare(url: str) -> str:
 def discover_webmention_endpoint(target_url: str) -> Optional[str]:
     request = urllib.request.Request(target_url, headers={"User-Agent": "django-blog-webmention"})
     try:
-        with urllib.request.urlopen(request, timeout=10) as response:
+        with safe_urlopen(request, timeout=10) as response:
             link_header = response.headers.get("Link")
             if link_header:
                 endpoint = _parse_link_header(link_header)
@@ -117,11 +118,13 @@ def verify_webmention_source(source_url: str, target_url: str) -> tuple[bool, st
 
     request = urllib.request.Request(source_url, headers={"User-Agent": "django-blog-webmention"})
     try:
-        with urllib.request.urlopen(request, timeout=10) as response:
+        with safe_urlopen(request, timeout=10) as response:
             content_type = response.headers.get("Content-Type", "")
             if "html" not in content_type:
                 return False, "Source is not HTML", False
             body = force_str(response.read(), errors="ignore")
+    except UnsafeURLError as exc:
+        return False, str(exc.reason), False  # REJECTED: retrying won't make it public
     except urllib.error.HTTPError as exc:
         if exc.code == 410:
             return False, "Source is gone (410)", False  # REJECTED, not PENDING
@@ -200,7 +203,7 @@ def _send_webmention_request(
         method="POST",
     )
     try:
-        with urllib.request.urlopen(send_request, timeout=10) as response:
+        with safe_urlopen(send_request, timeout=10) as response:
             body = response.read()
             body_preview = body[:2000].decode("utf-8", errors="replace") if body else ""
             logger.info(

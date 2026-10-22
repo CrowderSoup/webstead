@@ -4,7 +4,9 @@ from html import escape
 from html.parser import HTMLParser
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse
-from urllib.request import Request, urlopen
+from urllib.request import Request
+
+from core.outbound import safe_urlopen
 
 from .utils import extract_content_text, normalize_entry_data, normalize_url
 
@@ -714,7 +716,7 @@ def fetch_and_parse_feed(url: str) -> tuple[list[dict], str | None, dict]:
     """
     req = Request(url, headers={"User-Agent": USER_AGENT})
     try:
-        with urlopen(req, timeout=FETCH_TIMEOUT) as response:
+        with safe_urlopen(req, timeout=FETCH_TIMEOUT) as response:
             content_type = response.headers.get("Content-Type", "").lower()
             link_header = response.headers.get("Link")
             raw = response.read(10 * 1024 * 1024)  # 10 MB cap

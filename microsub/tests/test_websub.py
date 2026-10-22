@@ -214,7 +214,7 @@ class SubscribeToWebsubTests(TestCase):
         self.assertEqual(self.sub.websub_secret, "")
         self.assertIsNone(self.sub.websub_requested_at)
 
-    @patch("microsub.views.urlopen")
+    @patch("microsub.views.safe_urlopen")
     def test_saves_secret_and_requested_at_on_202(self, mock_urlopen):
         from django.test import RequestFactory
         from microsub.views import _subscribe_to_websub
@@ -236,7 +236,7 @@ class SubscribeToWebsubTests(TestCase):
         self.assertIsNotNone(self.sub.websub_requested_at)
         self.assertIsNone(self.sub.websub_subscribed_at)
 
-    @patch("microsub.views.urlopen")
+    @patch("microsub.views.safe_urlopen")
     def test_callback_url_includes_token(self, mock_urlopen):
         from django.test import RequestFactory
         from microsub.views import _subscribe_to_websub

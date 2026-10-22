@@ -2,7 +2,6 @@ import base64
 import hashlib
 import json
 import logging
-import ipaddress
 import secrets
 import socket
 from datetime import timedelta
@@ -21,6 +20,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
 from core.models import SiteConfiguration, RequestErrorLog
+from core.outbound import is_global_address
 from core.request_logs import log_request_error
 
 from . import resources
@@ -164,17 +164,7 @@ def _is_public_host(hostname: str | None) -> bool:
         return False
     if not addresses:
         return False
-    for address in addresses:
-        ip = ipaddress.ip_address(address)
-        if (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_reserved
-            or ip.is_multicast
-        ):
-            return False
-    return True
+    return all(is_global_address(address) for address in addresses)
 
 
 def _allowed_me_urls(request) -> set[str]:

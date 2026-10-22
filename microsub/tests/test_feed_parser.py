@@ -764,14 +764,14 @@ class FetchAndParseFeedTests(SimpleTestCase):
         mock_resp.read.return_value = body
         return mock_resp
 
-    @patch("microsub.feed_parser.urlopen")
+    @patch("microsub.feed_parser.safe_urlopen")
     def test_network_error_raises_runtime_error(self, mock_urlopen):
         from urllib.error import URLError
         mock_urlopen.side_effect = URLError("no route")
         with self.assertRaises(RuntimeError):
             fetch_and_parse_feed("https://example.com/feed")
 
-    @patch("microsub.feed_parser.urlopen")
+    @patch("microsub.feed_parser.safe_urlopen")
     def test_json_feed_parsed_for_jsonfeed_content(self, mock_urlopen):
         data = json.dumps({
             "version": "https://jsonfeed.org/version/1",
@@ -782,7 +782,7 @@ class FetchAndParseFeedTests(SimpleTestCase):
         entries, hub, meta = fetch_and_parse_feed("https://example.com/feed")
         self.assertEqual(len(entries), 1)
 
-    @patch("microsub.feed_parser.urlopen")
+    @patch("microsub.feed_parser.safe_urlopen")
     def test_rss_parsed_for_xml_content_type(self, mock_urlopen):
         rss = b"""<?xml version="1.0"?><rss version="2.0"><channel>
           <item><guid>1</guid><link>https://example.com/1</link></item>
@@ -791,7 +791,7 @@ class FetchAndParseFeedTests(SimpleTestCase):
         entries, hub, meta = fetch_and_parse_feed("https://example.com/feed")
         self.assertEqual(len(entries), 1)
 
-    @patch("microsub.feed_parser.urlopen")
+    @patch("microsub.feed_parser.safe_urlopen")
     def test_hub_url_extracted_from_link_header(self, mock_urlopen):
         mock_resp = MagicMock()
         mock_resp.__enter__ = lambda s: s
@@ -805,14 +805,14 @@ class FetchAndParseFeedTests(SimpleTestCase):
         _, hub, _ = fetch_and_parse_feed("https://example.com/feed")
         self.assertEqual(hub, "https://hub.example.com/")
 
-    @patch("microsub.feed_parser.urlopen")
+    @patch("microsub.feed_parser.safe_urlopen")
     def test_no_hub_returns_none(self, mock_urlopen):
         rss = b"<rss version='2.0'><channel></channel></rss>"
         mock_urlopen.return_value = self._mock_urlopen("application/rss+xml", rss)
         _, hub, _ = fetch_and_parse_feed("https://example.com/feed")
         self.assertIsNone(hub)
 
-    @patch("microsub.feed_parser.urlopen")
+    @patch("microsub.feed_parser.safe_urlopen")
     def test_correct_user_agent_sent(self, mock_urlopen):
         rss = b"<rss version='2.0'><channel></channel></rss>"
         mock_urlopen.return_value = self._mock_urlopen("application/rss+xml", rss)
@@ -833,7 +833,7 @@ class BuildReplyContextTests(SimpleTestCase):
         mock_resp.read.return_value = body
         return mock_resp
 
-    @patch("microsub.feed_parser.urlopen")
+    @patch("microsub.feed_parser.safe_urlopen")
     def test_extracts_author_and_snippet_from_permalink_hentry(self, mock_urlopen):
         html = b"""
         <html><body>
@@ -853,7 +853,7 @@ class BuildReplyContextTests(SimpleTestCase):
         self.assertEqual(context["author"]["name"], "Alice")
         self.assertIn("Hello, this is my post.", context["snippet"])
 
-    @patch("microsub.feed_parser.urlopen")
+    @patch("microsub.feed_parser.safe_urlopen")
     def test_network_error_propagates_as_runtime_error(self, mock_urlopen):
         from urllib.error import URLError
 
@@ -861,14 +861,14 @@ class BuildReplyContextTests(SimpleTestCase):
         with self.assertRaises(RuntimeError):
             _build_reply_context("https://alice.example/post/1")
 
-    @patch("microsub.feed_parser.urlopen")
+    @patch("microsub.feed_parser.safe_urlopen")
     def test_non_mf2_page_returns_none(self, mock_urlopen):
         html = b"<html><body><p>Just a plain page, no h-entry here.</p></body></html>"
         mock_urlopen.return_value = self._mock_urlopen("text/html", html)
 
         self.assertIsNone(_build_reply_context("https://example.com/not-a-post"))
 
-    @patch("microsub.feed_parser.urlopen")
+    @patch("microsub.feed_parser.safe_urlopen")
     def test_snippet_truncated_to_280_chars(self, mock_urlopen):
         long_text = "x" * 500
         html = f"""

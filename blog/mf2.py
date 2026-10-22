@@ -9,6 +9,8 @@ from django.templatetags.static import static
 from django.utils.html import strip_tags
 from django.utils.text import Truncator
 
+from core.outbound import UnsafeURLError, safe_get
+
 
 logger = logging.getLogger(__name__)
 
@@ -277,12 +279,15 @@ def parse_target_from_html(html, base_url):
 @lru_cache(maxsize=128)
 def fetch_target_from_url(target_url):
     try:
-        response = requests.get(
+        response = safe_get(
             target_url,
             headers={"User-Agent": USER_AGENT},
             timeout=REQUEST_TIMEOUT,
         )
         response.raise_for_status()
+    except UnsafeURLError:
+        logger.info("Refusing to fetch mf2 target %s: not a public URL", target_url)
+        return None
     except requests.Timeout:
         logger.info("Timeout fetching mf2 target for %s", target_url)
         return None

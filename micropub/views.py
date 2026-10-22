@@ -45,6 +45,7 @@ from blog.services import (
     update_post,
 )
 from core.models import Page, SiteConfiguration, RequestErrorLog
+from core.outbound import safe_urlopen
 from core.request_logs import extract_response_error, log_request_error
 from files.models import Attachment, File
 from .models import Webmention
@@ -117,7 +118,7 @@ def _normalize_me_url(me_value: str) -> Optional[str]:
 def _discover_indieauth_endpoints(me_url: str) -> tuple[Optional[str], Optional[str]]:
     request = Request(me_url, headers={"User-Agent": "django-blog-indieauth"})
     try:
-        with urlopen(request, timeout=10) as response:
+        with safe_urlopen(request, timeout=10) as response:
             link_header = response.headers.get("Link")
             auth_endpoint = None
             token_endpoint = None
@@ -746,7 +747,7 @@ def _handle_create_action(request, data):
 
 def _download_and_attach_photo(post, url: str, alt_text: str = ""):
     try:
-        with urlopen(url, timeout=10) as response:
+        with safe_urlopen(url, timeout=10) as response:
             data = response.read()
             content_type = response.headers.get("Content-Type", "")
     except (HTTPError, URLError, TimeoutError, ValueError):
@@ -838,6 +839,8 @@ def _authorized(request):
         method="POST",
     )
 
+    # Plain urlopen: this is our own introspection endpoint, built from the
+    # request's (ALLOWED_HOSTS-validated) host, not a caller-supplied URL.
     try:
         with urlopen(verification_request, timeout=5) as response:
             body = response.read().decode()
@@ -1058,7 +1061,7 @@ class IndieAuthCallbackView(View):
                     "Content-Type": "application/x-www-form-urlencoded",
                 },
             )
-            with urlopen(token_request, timeout=10) as response:
+            with safe_urlopen(token_request, timeout=10) as response:
                 content_type = response.headers.get("Content-Type", "")
                 response_body = response.read().decode("utf-8", errors="ignore")
                 if "json" in content_type:

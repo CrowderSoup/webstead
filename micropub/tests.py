@@ -481,7 +481,7 @@ class IndieAuthLoginTests(TestCase):
         self.assertEqual(params["redirect_uri"][0], "http://testserver/indieauth/callback")
         self.assertEqual(params["state"][0], self.client.session.get("indieauth_state"))
 
-    @patch("micropub.views.urlopen")
+    @patch("micropub.views.safe_urlopen")
     def test_callback_stores_session_on_success(self, mocked_urlopen):
         class DummyResponse:
             def __init__(self, body):
@@ -514,7 +514,7 @@ class IndieAuthLoginTests(TestCase):
         self.assertEqual(response["Location"], "/blog/post/hello/")
         self.assertEqual(self.client.session.get("indieauth_me"), "https://example.com/")
 
-    @patch("micropub.views.urlopen")
+    @patch("micropub.views.safe_urlopen")
     def test_callback_logs_and_ignores_invalid_response(self, mocked_urlopen):
         class DummyResponse:
             def __init__(self, body):
@@ -941,7 +941,7 @@ class NormalizeUrlTests(TestCase):
 class VerifyWebmentionSourceTests(TestCase):
     """Tests for verify_webmention_source edge cases."""
 
-    @patch("micropub.webmention.urllib.request.urlopen")
+    @patch("micropub.webmention.safe_urlopen")
     def test_410_gone_returns_rejected_not_pending(self, mock_urlopen):
         exc = urllib.error.HTTPError(
             url="https://source.example/gone",
@@ -961,7 +961,7 @@ class VerifyWebmentionSourceTests(TestCase):
         self.assertIn("410", error)
         self.assertFalse(fetch_failed)  # fetch_failed=False → REJECTED status
 
-    @patch("micropub.webmention.urllib.request.urlopen")
+    @patch("micropub.webmention.safe_urlopen")
     def test_non_410_http_error_returns_fetch_failed(self, mock_urlopen):
         exc = urllib.error.HTTPError(
             url="https://source.example/error",
