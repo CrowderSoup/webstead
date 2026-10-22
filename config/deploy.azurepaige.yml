@@ -68,7 +68,7 @@ env:
     ALLOWED_HOSTS: azurepaige.art,www.azurepaige.art,localhost,127.0.0.1,*
     CSRF_TRUSTED_ORIGINS: https://azurepaige.art,https://www.azurepaige.art
     DB_NAME: azurepaige-art
-    DB_USER: doadmin
+    DB_USER: azurepaige
     DB_HOST: crowder-cloud-do-user-4979145-0.g.db.ondigitalocean.com
     DB_PORT: "25060"
     AWS_ACCESS_KEY_ID: DO801LCF6YU9ZGX9FK6Q
