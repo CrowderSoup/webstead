@@ -1321,3 +1321,78 @@ class MicropubRevisionTests(TestCase):
             self.assertEqual(revision.client_id, "https://client.example/")
         self.assertEqual(revisions[1].snapshot["content"], "Hello")
         self.assertEqual(revisions[2].snapshot["content"], "Edited")
+
+
+class WebmentionStateMachineTests(TestCase):
+    def _incoming(self, status=Webmention.PENDING, **kwargs):
+        return Webmention.objects.create(
+            source="https://remote.example/post",
+            target="https://testserver/blog/post/hello/",
+            status=status,
+            is_incoming=True,
+            **kwargs,
+        )
+
+    def test_verification_outcomes(self):
+        cases = [
+            (False, False, Webmention.REJECTED),
+            (True, False, Webmention.PENDING),
+            (True, True, Webmention.ACCEPTED),
+        ]
+        for verified, trusted, expected in cases:
+            Webmention.objects.all().delete()
+            mention = self._incoming()
+            self.assertTrue(mention.record_verification(verified=verified, trusted=trusted))
+            mention.refresh_from_db()
+            self.assertEqual(mention.status, expected)
+
+    def test_verification_does_not_override_moderator(self):
+        mention = self._incoming()
+        mention.accept()
+
+        applied = mention.record_verification(verified=False, trusted=False, error="no link")
+
+        self.assertFalse(applied)
+        mention.refresh_from_db()
+        self.assertEqual(mention.status, Webmention.ACCEPTED)
+
+    def test_only_pending_incoming_can_be_moderated(self):
+        from blog.models import InvalidTransition
+
+        accepted = self._incoming(Webmention.ACCEPTED)
+        with self.assertRaises(InvalidTransition):
+            accepted.reject()
+
+        outgoing = Webmention.objects.create(
+            source="https://testserver/blog/post/hello/",
+            target="https://remote.example/post",
+            status=Webmention.PENDING,
+            is_incoming=False,
+        )
+        with self.assertRaises(InvalidTransition):
+            outgoing.accept()
+        with self.assertRaises(InvalidTransition):
+            outgoing.reject()
+
+    def test_reject_keeps_existing_error(self):
+        mention = self._incoming(error="source 404")
+        mention.reject()
+        self.assertEqual(mention.error, "source 404")
+
+    def test_can_delete(self):
+        self.assertFalse(self._incoming().can_delete)
+        Webmention.objects.all().delete()
+        self.assertTrue(self._incoming(Webmention.REJECTED).can_delete)
+        outgoing = Webmention.objects.create(
+            source="https://testserver/a/", target="https://remote.example/b",
+            status=Webmention.ACCEPTED, is_incoming=False,
+        )
+        self.assertTrue(outgoing.can_delete)
+
+    def test_awaiting_moderation_excludes_outgoing(self):
+        incoming = self._incoming()
+        Webmention.objects.create(
+            source="https://testserver/a/", target="https://remote.example/b",
+            status=Webmention.PENDING, is_incoming=False,
+        )
+        self.assertEqual(list(Webmention.objects.awaiting_moderation()), [incoming])

@@ -292,9 +292,7 @@ def send_webmention(
 
 def resend_webmention(webmention: Webmention) -> Webmention:
     if _is_globally_blocked_target(webmention.target):
-        webmention.status = Webmention.REJECTED
-        webmention.error = "Target blocked by Microsub global block"
-        webmention.save(update_fields=["status", "error", "updated_at"])
+        webmention.record_send_result(Webmention.REJECTED, "Target blocked by Microsub global block")
         return webmention
 
     status, error = _send_webmention_request(webmention.source, webmention.target, webmention.mention_type)
@@ -304,9 +302,7 @@ def resend_webmention(webmention: Webmention) -> Webmention:
         )
         if retry_status in (Webmention.ACCEPTED, Webmention.PENDING):
             status, error = retry_status, retry_error
-    webmention.status = status
-    webmention.error = error
-    webmention.save(update_fields=["status", "error", "updated_at"])
+    webmention.record_send_result(status, error)
     return webmention
 
 

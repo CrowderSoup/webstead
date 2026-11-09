@@ -1980,6 +1980,20 @@ class SiteAdminWebmentionModerationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.context["can_moderate"])
 
+    def test_outgoing_webmention_cannot_be_rejected(self):
+        mention = Webmention.objects.create(
+            source="https://testserver/blog/post/hello/",
+            target="https://external.example/post/1/",
+            status=Webmention.PENDING,
+            is_incoming=False,
+        )
+        self.client.post(
+            reverse("site_admin:webmention_reject", kwargs={"mention_id": mention.id})
+        )
+
+        mention.refresh_from_db()
+        self.assertEqual(mention.status, Webmention.PENDING)
+
     def test_delete_webmention_message_bootstraps_on_list_page(self):
         mention = Webmention.objects.create(
             source="https://source.example/post",

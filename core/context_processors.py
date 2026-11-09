@@ -153,7 +153,7 @@ def interactions_counts(request):
 
     pending_comments = Comment.objects.filter(status=Comment.PENDING).count()
     pending_webmentions = (
-        Webmention.objects.filter(status=Webmention.PENDING)
+        Webmention.objects.awaiting_moderation()
         .filter(target_query)
         .count()
     )

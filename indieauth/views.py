@@ -566,11 +566,7 @@ def _verify_code_at_authorization_endpoint(request):
             .filter(code_hash=code_hash, used_at__isnull=True)
             .first()
         )
-        if not auth_code:
-            response = JsonResponse({"error": "invalid_grant"}, status=400)
-            _log_indieauth_error(request, response)
-            return response
-        if auth_code.expires_at <= timezone.now():
+        if not auth_code or not auth_code.is_redeemable:
             response = JsonResponse({"error": "invalid_grant"}, status=400)
             _log_indieauth_error(request, response)
             return response
@@ -589,8 +585,7 @@ def _verify_code_at_authorization_endpoint(request):
             _log_indieauth_error(request, response)
             return response
 
-        auth_code.used_at = timezone.now()
-        auth_code.save(update_fields=["used_at"])
+        auth_code.mark_used()
 
     return JsonResponse({"me": auth_code.me})
 
@@ -747,10 +742,7 @@ def token(request):
                 token_value = auth_header[7:].strip()
         if not token_value:
             return JsonResponse({"revoked": False})
-        token_hash = _hash_token(token_value)
-        IndieAuthAccessToken.objects.filter(token_hash=token_hash, revoked_at__isnull=True).update(
-            revoked_at=timezone.now()
-        )
+        IndieAuthAccessToken.objects.filter(token_hash=_hash_token(token_value)).revoke()
         return JsonResponse({"revoked": True})
     if action == "verify":
         token_value = request.POST.get("token") or request.POST.get("access_token") or ""
@@ -787,11 +779,7 @@ def token(request):
             .filter(code_hash=code_hash, used_at__isnull=True)
             .first()
         )
-        if not auth_code:
-            response = JsonResponse({"error": "invalid_grant"}, status=400)
-            _log_indieauth_error(request, response)
-            return response
-        if auth_code.expires_at <= timezone.now():
+        if not auth_code or not auth_code.is_redeemable:
             response = JsonResponse({"error": "invalid_grant"}, status=400)
             _log_indieauth_error(request, response)
             return response
@@ -814,8 +802,7 @@ def token(request):
         if requested_resource and resources.canonical(requested_resource) != auth_code.resource:
             return _oauth_error(request, "invalid_target", "resource doesn't match the authorization request")
 
-        auth_code.used_at = timezone.now()
-        auth_code.save(update_fields=["used_at"])
+        auth_code.mark_used()
 
         access_token = secrets.token_urlsafe(32)
         token_hash = _hash_token(access_token)
@@ -895,12 +882,10 @@ def _refresh_token_grant(request):
             return _oauth_error(request, "invalid_grant", "unknown refresh token")
         connection = refresh.access_token
         if refresh.used_at is not None:
-            if connection.revoked_at is None:
-                connection.revoked_at = now
-                connection.save(update_fields=["revoked_at"])
+            connection.revoke()
             logger.warning("Refresh token reuse for token %s; connection revoked", connection.pk)
             return _oauth_error(request, "invalid_grant", "refresh token already used")
-        if refresh.expires_at <= now or connection.revoked_at is not None:
+        if refresh.expires_at <= now or connection.is_revoked:
             return _oauth_error(request, "invalid_grant", "refresh token expired or revoked")
         if connection.client_id != client_id:
             return _oauth_error(request, "invalid_grant", "refresh token was issued to another client")
@@ -911,8 +896,7 @@ def _refresh_token_grant(request):
         if requested_scope - set(connection.scope.split()):
             return _oauth_error(request, "invalid_scope", "can't widen scope on refresh")
 
-        refresh.used_at = now
-        refresh.save(update_fields=["used_at"])
+        refresh.mark_used(now)
         # Retain used hashes for the connection's lifetime: replay of any
         # ancestor must still identify and revoke the active refresh chain.
 
@@ -948,13 +932,11 @@ def revoke(request):
     if not raw:
         return _oauth_error(request, "invalid_request", "token is required")
     token_hash = _hash_token(raw)
-    now = timezone.now()
-    revoked = IndieAuthAccessToken.objects.filter(token_hash=token_hash, revoked_at__isnull=True).update(revoked_at=now)
+    revoked = IndieAuthAccessToken.objects.filter(token_hash=token_hash).revoke()
     if not revoked:
         refresh = IndieAuthRefreshToken.objects.select_related("access_token").filter(token_hash=token_hash).first()
-        if refresh and refresh.access_token.revoked_at is None:
-            refresh.access_token.revoked_at = now
-            refresh.access_token.save(update_fields=["revoked_at"])
+        if refresh:
+            refresh.access_token.revoke()
     return HttpResponse(status=200)
 
 
@@ -977,13 +959,7 @@ def introspect(request):
 
     token_hash = _hash_token(token_value)
     token = IndieAuthAccessToken.objects.filter(token_hash=token_hash).first()
-    if not token:
-        return JsonResponse({"active": False})
-
-    if token.revoked_at:
-        return JsonResponse({"active": False})
-
-    if token.expires_at and token.expires_at <= timezone.now():
+    if not token or not token.is_usable:
         return JsonResponse({"active": False})
 
     return JsonResponse(_introspection_payload(token))
@@ -1015,11 +991,7 @@ def userinfo(request):
     token_value = auth_header[7:].strip()
     token_hash = _hash_token(token_value)
     token = IndieAuthAccessToken.objects.filter(token_hash=token_hash).first()
-    if not token or token.revoked_at:
-        response = JsonResponse({"error": "unauthorized"}, status=401)
-        _log_indieauth_error(request, response)
-        return response
-    if token.expires_at and token.expires_at <= timezone.now():
+    if not token or not token.is_usable:
         response = JsonResponse({"error": "unauthorized"}, status=401)
         _log_indieauth_error(request, response)
         return response
@@ -1043,10 +1015,7 @@ def _verify_access_token(request, token_value: str):
 
     token_hash = _hash_token(token_value)
     token = IndieAuthAccessToken.objects.filter(token_hash=token_hash).first()
-    if not token or token.revoked_at:
-        return JsonResponse({"active": False})
-
-    if token.expires_at and token.expires_at <= timezone.now():
+    if not token or not token.is_usable:
         return JsonResponse({"active": False})
 
     return JsonResponse(_introspection_payload(token))

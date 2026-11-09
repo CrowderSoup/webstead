@@ -13,7 +13,6 @@ from django.conf import settings
 from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
 from django.urls import reverse
-from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.text import slugify
 from django.views import View
@@ -218,12 +217,7 @@ def _subscribe_to_websub_with_base_url(subscription: Subscription, base_url: str
         with safe_urlopen(req, timeout=10) as resp:
             status = resp.status
         if status in (200, 202):
-            subscription.websub_secret = secret
-            subscription.websub_requested_at = timezone.now()
-            subscription.websub_subscribed_at = None
-            subscription.save(
-                update_fields=["websub_secret", "websub_requested_at", "websub_subscribed_at"]
-            )
+            subscription.mark_websub_requested(secret)
     except (HTTPError, URLError, TimeoutError, OSError) as exc:
         logger.warning("WebSub subscribe failed for %s: %s", subscription.url, exc)
 
@@ -779,18 +773,7 @@ class MicrosubView(View):
                     status=403,
                     description=f"This feed is managed by the {sub.managed_by} integration.",
                 )
-            sub.is_active = False
-            sub.websub_subscribed_at = None
-            sub.websub_requested_at = None
-            sub.websub_expires_at = None
-            sub.save(
-                update_fields=[
-                    "is_active",
-                    "websub_subscribed_at",
-                    "websub_requested_at",
-                    "websub_expires_at",
-                ]
-            )
+            sub.deactivate()
             if sub.websub_hub:
                 base_url = getattr(settings, "MICROSUB_BASE_URL", "").rstrip("/") or request.build_absolute_uri("/").rstrip("/")
                 _unsubscribe_from_websub(sub, base_url)
@@ -934,19 +917,10 @@ class WebSubCallbackView(View):
         if topic and topic != normalize_url(sub.url):
             return HttpResponse(status=404)
         if mode == "subscribe" and challenge and sub.is_active:
-            sub.websub_subscribed_at = timezone.now()
-            lease_seconds = request.GET.get("hub.lease_seconds")
-            if lease_seconds:
-                try:
-                    sub.websub_expires_at = timezone.now() + timezone.timedelta(seconds=int(lease_seconds))
-                except (TypeError, ValueError):
-                    pass
-            sub.save(update_fields=["websub_subscribed_at", "websub_expires_at"])
+            sub.mark_websub_subscribed(request.GET.get("hub.lease_seconds"))
             return HttpResponse(challenge, content_type="text/plain")
         if mode == "unsubscribe" and challenge and not sub.is_active:
-            sub.websub_subscribed_at = None
-            sub.websub_expires_at = None
-            sub.save(update_fields=["websub_subscribed_at", "websub_expires_at"])
+            sub.clear_websub()
             return HttpResponse(challenge, content_type="text/plain")
         return HttpResponse(status=400)
 

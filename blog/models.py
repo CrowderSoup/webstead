@@ -13,6 +13,15 @@ from django.contrib.contenttypes.fields import GenericRelation
 from files.models import Attachment
 
 
+class InvalidTransition(ValueError):
+    """A state change the model's state machine doesn't allow."""
+
+    def __init__(self, current, target):
+        self.current = current
+        self.target = target
+        super().__init__(f"can't go from {current} to {target}")
+
+
 class Tag(models.Model):
     tag = models.SlugField(max_length=64, unique=True)
     
@@ -218,6 +227,19 @@ class Comment(models.Model):
         (DELETED, "Deleted"),
     ]
 
+    # Moderation state machine. A new comment starts PENDING, or SPAM when
+    # Akismet flags it. Moderators move it freely between the review states;
+    # DELETED is a soft delete and terminal.
+    TRANSITIONS = {
+        PENDING: {APPROVED, REJECTED, SPAM, DELETED},
+        APPROVED: {REJECTED, SPAM, DELETED},
+        REJECTED: {APPROVED, SPAM, DELETED},
+        SPAM: {APPROVED, REJECTED, DELETED},
+        DELETED: set(),
+    }
+    # What each move tells Akismet's training record; REJECTED leaves it alone.
+    AKISMET_CLASSIFICATIONS = {APPROVED: "ham", SPAM: "spam", DELETED: "deleted"}
+
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="comments")
     author_name = models.CharField(max_length=255)
     author_email = models.EmailField(blank=True, null=True)
@@ -243,3 +265,24 @@ class Comment(models.Model):
 
     def __str__(self):
         return f"Comment by {self.author_name} on {self.post}"
+
+    def can_transition_to(self, status):
+        return status in self.TRANSITIONS[self.status]
+
+    def transition_to(self, status):
+        """Move to ``status`` and save. Returns False if already there.
+
+        Raises InvalidTransition for a move the state machine doesn't allow
+        (anything out of DELETED).
+        """
+        if status == self.status:
+            return False
+        if not self.can_transition_to(status):
+            raise InvalidTransition(self.status, status)
+        self.status = status
+        fields = ["status"]
+        if status in self.AKISMET_CLASSIFICATIONS:
+            self.akismet_classification = self.AKISMET_CLASSIFICATIONS[status]
+            fields.append("akismet_classification")
+        self.save(update_fields=fields)
+        return True

@@ -27,7 +27,7 @@ from django.views.decorators.http import require_http_methods, require_GET, requ
 
 from blog import services as content_service
 from indieauth.tokens import mint_personal_token
-from blog.models import Comment, Post
+from blog.models import Comment, InvalidTransition, Post
 from blog.previews import preview_path
 from analytics.bot_detection import evaluate_user_agent_against_pattern, validate_bot_pattern
 from analytics.models import (
@@ -674,37 +674,29 @@ def interaction_bulk_action(request):
         comments = Comment.objects.select_related("post").filter(
             id__in=comment_ids
         ).exclude(status=Comment.DELETED)
-        mentions = Webmention.objects.filter(
-            id__in=mention_ids, is_incoming=True, status=Webmention.PENDING
-        )
-        if action == "approve":
-            for comment in comments.exclude(status=Comment.APPROVED):
-                comment.status = Comment.APPROVED
-                comment.akismet_classification = "ham"
-                comment.save(update_fields=["status", "akismet_classification"])
-                changed += 1
+        mentions = Webmention.objects.awaiting_moderation().filter(id__in=mention_ids)
+        target = {
+            "approve": Comment.APPROVED,
+            "reject": Comment.REJECTED,
+            "spam": Comment.SPAM,
+        }[action]
+        submit = {"approve": submit_ham, "spam": submit_spam}.get(action)
+        for comment in comments:
+            if not comment.transition_to(target):
+                continue
+            changed += 1
+            if submit:
                 try:
-                    submit_ham(_akismet_payload_for_comment(comment, request))
+                    submit(_akismet_payload_for_comment(comment, request))
                 except AkismetError:
                     akismet_failures += 1
-            changed += mentions.update(status=Webmention.ACCEPTED, error="")
-        elif action == "reject":
-            changed += comments.exclude(status=Comment.REJECTED).update(
-                status=Comment.REJECTED
-            )
-            changed += mentions.update(
-                status=Webmention.REJECTED, error="Rejected by admin"
-            )
-        else:
-            for comment in comments.exclude(status=Comment.SPAM):
-                comment.status = Comment.SPAM
-                comment.akismet_classification = "spam"
-                comment.save(update_fields=["status", "akismet_classification"])
+        if action != "spam":
+            for mention in mentions:
+                if action == "approve":
+                    mention.accept()
+                else:
+                    mention.reject()
                 changed += 1
-                try:
-                    submit_spam(_akismet_payload_for_comment(comment, request))
-                except AkismetError:
-                    akismet_failures += 1
         messages.success(request, f"Updated {changed} interaction(s).")
         if action == "spam" and mention_ids:
             messages.warning(request, "Webmentions cannot be marked as spam and were skipped.")
@@ -2218,20 +2210,17 @@ def indieauth_settings(request):
         if action == "revoke_token":
             token_id = request.POST.get("token_id")
             token = get_object_or_404(IndieAuthAccessToken, pk=token_id)
-            if token.revoked_at:
-                messages.info(request, "Access token is already revoked.")
-            else:
-                token.revoked_at = timezone.now()
-                token.save(update_fields=["revoked_at"])
+            if token.revoke():
                 messages.success(request, "Access token revoked.")
+            else:
+                messages.info(request, "Access token is already revoked.")
             return redirect("site_admin:indieauth_settings")
         if action == "delete_client":
             client_pk = request.POST.get("client_pk")
             client = get_object_or_404(IndieAuthClient, pk=client_pk)
-            now = timezone.now()
             token_updates = IndieAuthAccessToken.objects.filter(
-                client_id=client.client_id, revoked_at__isnull=True
-            ).update(revoked_at=now)
+                client_id=client.client_id
+            ).revoke()
             consent_deletes, _ = IndieAuthConsent.objects.filter(
                 client_id=client.client_id
             ).delete()
@@ -2296,9 +2285,9 @@ def indieauth_settings(request):
         if scope:
             tokens = tokens.filter(scope__icontains=scope)
         if status == "active":
-            tokens = tokens.filter(revoked_at__isnull=True)
+            tokens = tokens.unrevoked()
         elif status == "revoked":
-            tokens = tokens.filter(revoked_at__isnull=False)
+            tokens = tokens.revoked()
 
     clients_paginator = Paginator(clients, 20)
     tokens_paginator = Paginator(tokens, 20)
@@ -2335,12 +2324,8 @@ def indieauth_settings(request):
         "clients_base_query": _strip_query_param(request, "clients_page"),
         "tokens_base_query": _strip_query_param(request, "tokens_page"),
         "clients_count": IndieAuthClient.objects.count(),
-        "active_tokens_count": IndieAuthAccessToken.objects.filter(
-            revoked_at__isnull=True
-        ).count(),
-        "revoked_tokens_count": IndieAuthAccessToken.objects.filter(
-            revoked_at__isnull=False
-        ).count(),
+        "active_tokens_count": IndieAuthAccessToken.objects.unrevoked().count(),
+        "revoked_tokens_count": IndieAuthAccessToken.objects.revoked().count(),
     }
 
     return render(request, "site_admin/settings/indieauth/index.html", context)
@@ -2359,18 +2344,15 @@ def indieauth_client_detail(request, client_pk):
         if action == "revoke_token":
             token_id = request.POST.get("token_id")
             token = get_object_or_404(IndieAuthAccessToken, pk=token_id)
-            if token.revoked_at:
-                messages.info(request, "Access token is already revoked.")
-            else:
-                token.revoked_at = timezone.now()
-                token.save(update_fields=["revoked_at"])
+            if token.revoke():
                 messages.success(request, "Access token revoked.")
+            else:
+                messages.info(request, "Access token is already revoked.")
             return redirect("site_admin:indieauth_client_detail", client_pk=client_pk)
         if action == "delete_client":
-            now = timezone.now()
             token_updates = IndieAuthAccessToken.objects.filter(
-                client_id=client.client_id, revoked_at__isnull=True
-            ).update(revoked_at=now)
+                client_id=client.client_id
+            ).revoke()
             consent_deletes, _ = IndieAuthConsent.objects.filter(
                 client_id=client.client_id
             ).delete()
@@ -2541,12 +2523,9 @@ def webmention_detail(request, mention_id):
         return guard
 
     mention = get_object_or_404(Webmention, pk=mention_id)
-    can_resend = mention.status in (Webmention.PENDING, Webmention.TIMED_OUT) and _is_local_url(
-        mention.source,
-        request,
-    )
-    can_delete = mention.status == Webmention.REJECTED
-    can_moderate = mention.status == Webmention.PENDING and _is_local_url(mention.target, request)
+    can_resend = mention.can_resend and _is_local_url(mention.source, request)
+    can_delete = mention.can_delete
+    can_moderate = mention.can_moderate and _is_local_url(mention.target, request)
     return render(
         request,
         "site_admin/webmentions/detail.html",
@@ -2566,7 +2545,7 @@ def webmention_resend(request, mention_id):
         return guard
 
     mention = get_object_or_404(Webmention, pk=mention_id)
-    if mention.status not in (Webmention.PENDING, Webmention.TIMED_OUT):
+    if not mention.can_resend:
         messages.error(request, "Only pending or timed-out webmentions can be resent.")
         return redirect("site_admin:webmention_detail", mention_id=mention.id)
     if not _is_local_url(mention.source, request):
@@ -2592,7 +2571,7 @@ def webmention_delete(request, mention_id):
         return guard
 
     mention = get_object_or_404(Webmention, pk=mention_id)
-    if mention.is_incoming and mention.status != Webmention.REJECTED:
+    if not mention.can_delete:
         messages.error(request, "Only rejected incoming webmentions can be deleted.")
         return redirect("site_admin:webmention_detail", mention_id=mention.id)
     mention.delete()
@@ -2610,12 +2589,10 @@ def webmention_approve(request, mention_id):
     if not mention.is_incoming:
         messages.error(request, "Cannot approve outgoing webmentions.")
         return redirect("site_admin:webmention_detail", mention_id=mention.id)
-    if mention.status != Webmention.PENDING:
+    if not mention.can_moderate:
         messages.error(request, "Only pending webmentions can be approved.")
         return redirect("site_admin:webmention_detail", mention_id=mention.id)
-    mention.status = Webmention.ACCEPTED
-    mention.error = ""
-    mention.save(update_fields=["status", "error", "updated_at"])
+    mention.accept()
     messages.success(request, "Webmention approved.")
     return redirect("site_admin:webmention_detail", mention_id=mention.id)
 
@@ -2627,13 +2604,13 @@ def webmention_reject(request, mention_id):
         return guard
 
     mention = get_object_or_404(Webmention, pk=mention_id)
-    if mention.status != Webmention.PENDING:
+    if not mention.is_incoming:
+        messages.error(request, "Cannot reject outgoing webmentions.")
+        return redirect("site_admin:webmention_detail", mention_id=mention.id)
+    if not mention.can_moderate:
         messages.error(request, "Only pending webmentions can be rejected.")
         return redirect("site_admin:webmention_detail", mention_id=mention.id)
-    mention.status = Webmention.REJECTED
-    if not mention.error:
-        mention.error = "Rejected by admin"
-    mention.save(update_fields=["status", "error", "updated_at"])
+    mention.reject()
     messages.success(request, "Webmention rejected.")
     return redirect("site_admin:webmention_detail", mention_id=mention.id)
 
@@ -2674,9 +2651,9 @@ def comment_detail(request, comment_id):
         return guard
 
     comment = get_object_or_404(Comment.objects.select_related("post"), pk=comment_id)
-    can_approve = comment.status in (Comment.PENDING, Comment.SPAM, Comment.REJECTED)
-    can_spam = comment.status in (Comment.PENDING, Comment.APPROVED, Comment.REJECTED)
-    can_delete = comment.status != Comment.DELETED
+    can_approve = comment.can_transition_to(Comment.APPROVED)
+    can_spam = comment.can_transition_to(Comment.SPAM)
+    can_delete = comment.can_transition_to(Comment.DELETED)
     return render(
         request,
         "site_admin/comments/detail.html",
@@ -2696,13 +2673,15 @@ def comment_approve(request, comment_id):
         return guard
 
     comment = get_object_or_404(Comment, pk=comment_id)
-    if comment.status == Comment.DELETED:
+    try:
+        changed = comment.transition_to(Comment.APPROVED)
+    except InvalidTransition:
         messages.error(request, "Deleted comments cannot be approved.")
         return redirect("site_admin:comment_detail", comment_id=comment.id)
+    if not changed:
+        messages.info(request, "Comment is already approved.")
+        return redirect("site_admin:comment_detail", comment_id=comment.id)
 
-    comment.status = Comment.APPROVED
-    comment.akismet_classification = "ham"
-    comment.save(update_fields=["status", "akismet_classification"])
     try:
         submit_ham(_akismet_payload_for_comment(comment, request))
     except AkismetError:
@@ -2719,13 +2698,15 @@ def comment_mark_spam(request, comment_id):
         return guard
 
     comment = get_object_or_404(Comment, pk=comment_id)
-    if comment.status == Comment.DELETED:
+    try:
+        changed = comment.transition_to(Comment.SPAM)
+    except InvalidTransition:
         messages.error(request, "Deleted comments cannot be marked as spam.")
         return redirect("site_admin:comment_detail", comment_id=comment.id)
+    if not changed:
+        messages.info(request, "Comment is already marked as spam.")
+        return redirect("site_admin:comment_detail", comment_id=comment.id)
 
-    comment.status = Comment.SPAM
-    comment.akismet_classification = "spam"
-    comment.save(update_fields=["status", "akismet_classification"])
     try:
         submit_spam(_akismet_payload_for_comment(comment, request))
     except AkismetError:
@@ -2742,13 +2723,10 @@ def comment_delete(request, comment_id):
         return guard
 
     comment = get_object_or_404(Comment, pk=comment_id)
-    if comment.status == Comment.DELETED:
+    if not comment.transition_to(Comment.DELETED):
         messages.error(request, "Comment is already deleted.")
         return redirect("site_admin:comment_detail", comment_id=comment.id)
 
-    comment.status = Comment.DELETED
-    comment.akismet_classification = "deleted"
-    comment.save(update_fields=["status", "akismet_classification"])
     messages.success(request, "Comment deleted.")
     return redirect("site_admin:comment_list")
 
@@ -4773,11 +4751,7 @@ def microsub_feed_remove(request, uid, feed_id):
         provider = sub.managed_by.capitalize()
         messages.info(request, f"This feed is managed from the {provider} integration settings.")
         return redirect("site_admin:microsub_channel_detail", uid=channel.uid)
-    sub.is_active = False
-    sub.websub_subscribed_at = None
-    sub.websub_requested_at = None
-    sub.websub_expires_at = None
-    sub.save(update_fields=["is_active", "websub_subscribed_at", "websub_requested_at", "websub_expires_at"])
+    sub.deactivate()
     if sub.websub_hub:
         base_url = getattr(settings, "MICROSUB_BASE_URL", "").rstrip("/") or request.build_absolute_uri("/").rstrip("/")
         _unsubscribe_from_websub(sub, base_url)

@@ -304,10 +304,9 @@ def import_activity(account, strava_activity_id, *, skip_if_private=False):
 
 
 def soft_delete_activity_post(link: StravaActivity) -> None:
-    post = link.post
-    if not post.deleted:
-        post.deleted = True
-        post.save(update_fields=["deleted"])
+    from blog import services
+
+    services.delete_post(services.Actor(source="strava"), link.post)
 
 
 def update_activity(account, strava_activity_id):

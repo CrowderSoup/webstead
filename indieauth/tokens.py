@@ -47,9 +47,9 @@ def active_local_token(raw: str) -> IndieAuthAccessToken | None:
         return None
     token = (
         IndieAuthAccessToken.objects.select_related("user")
-        .filter(token_hash=_hash_token(raw), revoked_at__isnull=True)
+        .filter(token_hash=_hash_token(raw))
         .first()
     )
-    if token is None or (token.expires_at and token.expires_at <= timezone.now()):
+    if token is None or not token.is_usable:
         return None
     return token

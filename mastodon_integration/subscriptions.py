@@ -27,12 +27,7 @@ def deactivate_managed_subscriptions(*, stream: str | None = None) -> None:
     qs = Subscription.objects.filter(managed_by=MANAGED_BY_MASTODON)
     if stream:
         qs = qs.filter(managed_key=stream)
-    qs.update(
-        is_active=False,
-        websub_subscribed_at=None,
-        websub_requested_at=None,
-        websub_expires_at=None,
-    )
+    qs.deactivate()
 
 
 def ensure_managed_subscription(account, stream: str) -> Subscription | None:
@@ -77,12 +72,7 @@ def ensure_managed_subscription(account, stream: str) -> Subscription | None:
     Subscription.objects.filter(
         managed_by=MANAGED_BY_MASTODON,
         managed_key=stream,
-    ).exclude(pk=sub.pk).update(
-        is_active=False,
-        websub_subscribed_at=None,
-        websub_requested_at=None,
-        websub_expires_at=None,
-    )
+    ).exclude(pk=sub.pk).deactivate()
     return sub
 
 

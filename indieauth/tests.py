@@ -304,3 +304,53 @@ class IndieAuthSecurityTests(TestCase):
         ):
             with self.assertRaises(ValueError):
                 views._fetch_client_metadata("https://client.example")
+
+
+class AccessTokenStateTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username="owner", password="pw")
+
+    def _token(self, suffix, **kwargs):
+        return IndieAuthAccessToken.objects.create(
+            token_hash=f"hash-{suffix}",
+            client_id="https://client.example/",
+            me="http://testserver/",
+            user=self.user,
+            **kwargs,
+        )
+
+    def test_expired_token_is_not_usable_but_not_revoked(self):
+        token = self._token("expired", expires_at=timezone.now() - timezone.timedelta(seconds=1))
+        self.assertFalse(token.is_usable)
+        self.assertFalse(token.is_revoked)
+        self.assertIn(token, IndieAuthAccessToken.objects.unrevoked())
+
+    def test_revoke_is_terminal_and_idempotent(self):
+        token = self._token("live")
+        self.assertTrue(token.is_usable)
+        self.assertTrue(token.revoke())
+        revoked_at = token.revoked_at
+        self.assertFalse(token.revoke())
+        token.refresh_from_db()
+        self.assertEqual(token.revoked_at, revoked_at)
+        self.assertFalse(token.is_usable)
+
+    def test_queryset_revoke_skips_already_revoked(self):
+        self._token("a")
+        self._token("b").revoke()
+        self.assertEqual(IndieAuthAccessToken.objects.all().revoke(), 1)
+        self.assertEqual(IndieAuthAccessToken.objects.revoked().count(), 2)
+
+    def test_authorization_code_is_single_use(self):
+        code = IndieAuthAuthorizationCode.objects.create(
+            code_hash="code",
+            code_challenge="c",
+            client_id="https://client.example/",
+            redirect_uri="https://client.example/cb",
+            me="http://testserver/",
+            user=self.user,
+            expires_at=timezone.now() + timezone.timedelta(minutes=5),
+        )
+        self.assertTrue(code.is_redeemable)
+        code.mark_used()
+        self.assertFalse(code.is_redeemable)
