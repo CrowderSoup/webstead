@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 class IndieAuthClient(models.Model):
@@ -29,11 +30,39 @@ class IndieAuthAuthorizationCode(models.Model):
     expires_at = models.DateTimeField()
     used_at = models.DateTimeField(null=True, blank=True)
 
+    # Single use: issued -> used (redeemed once) | expired (never redeemed).
+
     def __str__(self):
         return f"{self.client_id} -> {self.me}"
 
+    @property
+    def is_redeemable(self):
+        return self.used_at is None and self.expires_at > timezone.now()
+
+    def mark_used(self):
+        self.used_at = timezone.now()
+        self.save(update_fields=["used_at"])
+
+
+class IndieAuthAccessTokenQuerySet(models.QuerySet):
+    def unrevoked(self):
+        return self.filter(revoked_at__isnull=True)
+
+    def revoked(self):
+        return self.filter(revoked_at__isnull=False)
+
+    def revoke(self) -> int:
+        return self.unrevoked().update(revoked_at=timezone.now())
+
 
 class IndieAuthAccessToken(models.Model):
+    """One connection: a client's grant, with its current access token.
+
+    A connection is live until revoked, which is terminal. While live, its
+    access token is usable until ``expires_at``; a refresh swaps in a new
+    token and expiry, so an expired token doesn't mean a dead connection.
+    """
+
     # Personal access tokens are minted in the admin rather than through an
     # IndieAuth client, so they get this client_id instead of a URL.
     PERSONAL_CLIENT_ID = "urn:webstead:pat"
@@ -53,8 +82,31 @@ class IndieAuthAccessToken(models.Model):
     revoked_at = models.DateTimeField(null=True, blank=True)
     last_used_at = models.DateTimeField(null=True, blank=True)
 
+    objects = IndieAuthAccessTokenQuerySet.as_manager()
+
     def __str__(self):
         return f"{self.name or self.client_id} -> {self.me}"
+
+    @property
+    def is_revoked(self):
+        return self.revoked_at is not None
+
+    @property
+    def is_expired(self):
+        return self.expires_at is not None and self.expires_at <= timezone.now()
+
+    @property
+    def is_usable(self):
+        """Can authenticate a request right now."""
+        return not self.is_revoked and not self.is_expired
+
+    def revoke(self) -> bool:
+        """End the connection. Returns False if it was already revoked."""
+        if self.is_revoked:
+            return False
+        self.revoked_at = timezone.now()
+        self.save(update_fields=["revoked_at"])
+        return True
 
     @property
     def is_personal(self):
@@ -66,8 +118,6 @@ class IndieAuthAccessToken(models.Model):
 
     def mark_used(self):
         """Record use, at most once a minute so busy clients don't write on every call."""
-        from django.utils import timezone
-
         now = timezone.now()
         if self.last_used_at is None or now - self.last_used_at > timezone.timedelta(minutes=1):
             type(self).objects.filter(pk=self.pk).update(last_used_at=now)
@@ -82,6 +132,9 @@ class IndieAuthRefreshToken(models.Model):
     life, and revoking it in the admin ends the refresh chain too. Each
     refresh token works once; presenting a used one again revokes the
     connection, since it means the token leaked.
+
+    issued -> used (redeemed for a new pair) | expired. Replaying a used
+    token revokes the connection.
     """
 
     token_hash = models.CharField(max_length=64, unique=True)
@@ -94,6 +147,10 @@ class IndieAuthRefreshToken(models.Model):
 
     def __str__(self):
         return f"refresh for {self.access_token}"
+
+    def mark_used(self, now=None):
+        self.used_at = now or timezone.now()
+        self.save(update_fields=["used_at"])
 
 
 class IndieAuthConsent(models.Model):

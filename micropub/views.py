@@ -777,18 +777,13 @@ def _introspect_local(token: str) -> tuple[bool, list[str], object | None] | Non
         return None
 
     try:
-        from django.utils import timezone
         from indieauth.views import _hash_token
     except Exception:
         return None
 
     token_hash = _hash_token(token)
     token_obj = IndieAuthAccessToken.objects.filter(token_hash=token_hash).first()
-    if not token_obj:
-        return False, [], None
-    if token_obj.revoked_at:
-        return False, [], None
-    if token_obj.expires_at and token_obj.expires_at <= timezone.now():
+    if not token_obj or not token_obj.is_usable:
         return False, [], None
     if token_obj.resource:
         # Audience-bound (RFC 8707) to another resource, i.e. the MCP endpoint.

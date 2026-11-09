@@ -202,3 +202,46 @@ class BlockedUserModelTests(TestCase):
         BlockedUser.objects.create(channel=self.channel, url="https://troll.example.com/")
         self.channel.delete()
         self.assertEqual(BlockedUser.objects.count(), 0)
+
+
+class SubscriptionWebSubStateTests(TestCase):
+    def setUp(self):
+        channel = Channel.objects.create(uid="ws-state", name="WS")
+        self.sub = Subscription.objects.create(
+            channel=channel, url="https://example.com/feed", websub_hub="https://hub.example/"
+        )
+
+    def test_lifecycle(self):
+        self.assertEqual(self.sub.websub_state, Subscription.WEBSUB_NONE)
+        self.sub.mark_websub_requested("secret")
+        self.assertEqual(self.sub.websub_state, Subscription.WEBSUB_REQUESTED)
+        self.sub.mark_websub_subscribed("3600")
+        self.assertEqual(self.sub.websub_state, Subscription.WEBSUB_SUBSCRIBED)
+        self.assertFalse(self.sub.needs_websub_subscribe)
+        self.sub.deactivate()
+        self.sub.refresh_from_db()
+        self.assertFalse(self.sub.is_active)
+        self.assertEqual(self.sub.websub_state, Subscription.WEBSUB_NONE)
+
+    def test_lease_expiry(self):
+        self.sub.mark_websub_subscribed("60")
+        self.sub.websub_expires_at = timezone.now() - timezone.timedelta(seconds=1)
+        self.assertEqual(self.sub.websub_state, Subscription.WEBSUB_EXPIRED)
+        self.assertTrue(self.sub.needs_websub_subscribe)
+
+    def test_verification_without_lease_clears_old_expiry(self):
+        self.sub.mark_websub_subscribed("60")
+        self.sub.mark_websub_subscribed(None)
+        self.assertIsNone(self.sub.websub_expires_at)
+        self.assertEqual(self.sub.websub_state, Subscription.WEBSUB_SUBSCRIBED)
+
+    def test_no_hub_never_needs_subscribe(self):
+        self.sub.websub_hub = ""
+        self.assertFalse(self.sub.needs_websub_subscribe)
+
+    def test_queryset_deactivate(self):
+        self.sub.mark_websub_subscribed("60")
+        Subscription.objects.filter(pk=self.sub.pk).deactivate()
+        self.sub.refresh_from_db()
+        self.assertFalse(self.sub.is_active)
+        self.assertEqual(self.sub.websub_state, Subscription.WEBSUB_NONE)

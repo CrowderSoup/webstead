@@ -1626,3 +1626,64 @@ class PostPreviewTests(TestCase):
         self.assertTrue(url.startswith("https://example.com/blog/post/draft-post/?preview="))
         self.draft.published_on = timezone.now() - timezone.timedelta(minutes=1)
         self.assertIsNone(preview_url(actor, self.draft))
+
+
+class CommentStateMachineTests(TestCase):
+    def setUp(self):
+        self.post = Post.objects.create(title="Post", slug="post-sm", content="Body")
+
+    def _comment(self, status=Comment.PENDING):
+        return Comment.objects.create(
+            post=self.post, author_name="Ann", content="Hi", status=status
+        )
+
+    def test_moves_between_review_states(self):
+        comment = self._comment()
+        for status in (Comment.APPROVED, Comment.SPAM, Comment.REJECTED, Comment.APPROVED):
+            self.assertTrue(comment.transition_to(status))
+            comment.refresh_from_db()
+            self.assertEqual(comment.status, status)
+
+    def test_same_state_is_a_no_op(self):
+        comment = self._comment(Comment.APPROVED)
+        self.assertFalse(comment.transition_to(Comment.APPROVED))
+
+    def test_deleted_is_terminal(self):
+        from .models import InvalidTransition
+
+        comment = self._comment()
+        comment.transition_to(Comment.DELETED)
+        for status in (Comment.PENDING, Comment.APPROVED, Comment.REJECTED, Comment.SPAM):
+            self.assertFalse(comment.can_transition_to(status))
+            with self.assertRaises(InvalidTransition):
+                comment.transition_to(status)
+
+    def test_sets_akismet_classification_except_on_reject(self):
+        comment = self._comment()
+        comment.transition_to(Comment.APPROVED)
+        self.assertEqual(comment.akismet_classification, "ham")
+        comment.transition_to(Comment.REJECTED)
+        comment.refresh_from_db()
+        self.assertEqual(comment.akismet_classification, "ham")
+        comment.transition_to(Comment.SPAM)
+        comment.refresh_from_db()
+        self.assertEqual(comment.akismet_classification, "spam")
+
+
+class PublicDeletePostTests(TestCase):
+    def test_delete_records_a_revision(self):
+        from .models import PostRevision
+
+        staff = get_user_model().objects.create_user(
+            username="staff", password="pw", is_staff=True
+        )
+        self.client.force_login(staff)
+        post = Post.objects.create(title="Gone", slug="gone", content="x")
+
+        self.client.post(reverse("delete_post", kwargs={"slug": post.slug}))
+
+        post.refresh_from_db()
+        self.assertTrue(post.deleted)
+        revision = post.revisions.get()
+        self.assertEqual(revision.action, PostRevision.DELETE)
+        self.assertEqual(revision.actor_user, staff)

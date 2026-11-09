@@ -8,7 +8,7 @@ from __future__ import annotations
 from django.conf import settings
 
 from blog.comments import AkismetError, submit_ham, submit_spam
-from blog.models import Comment, Post
+from blog.models import Comment, InvalidTransition, Post
 from micropub.models import Webmention
 
 from . import READ_ONLY, WRITE, ToolError, tool
@@ -202,34 +202,24 @@ def _notify_akismet(ctx, comment, submit):
 
 
 def _moderate_comment(ctx, comment, action):
-    if comment.status == Comment.DELETED and action != "delete":
-        raise ToolError("That comment is deleted, so it can't be approved, rejected, or marked as spam.")
     target = {
         "approve": Comment.APPROVED,
         "reject": Comment.REJECTED,
         "spam": Comment.SPAM,
         "delete": Comment.DELETED,
     }[action]
-    if comment.status == target:
+    try:
+        changed = comment.transition_to(target)
+    except InvalidTransition:
+        raise ToolError("That comment is deleted, so it can't be approved, rejected, or marked as spam.")
+    if not changed:
         return {
             "message": f"Comment {comment.pk} is already {target}.",
             "kind": "comment",
             "id": comment.pk,
             "status": comment.status,
         }
-    comment.status = target
-    fields = ["status"]
     akismet = None
-    if action == "approve":
-        comment.akismet_classification = "ham"
-        fields.append("akismet_classification")
-    elif action == "spam":
-        comment.akismet_classification = "spam"
-        fields.append("akismet_classification")
-    elif action == "delete":
-        comment.akismet_classification = "deleted"
-        fields.append("akismet_classification")
-    comment.save(update_fields=fields)
     if action == "approve":
         akismet = _notify_akismet(ctx, comment, submit_ham)
     elif action == "spam":
@@ -252,11 +242,9 @@ def _moderate_webmention(mention, action):
     if action == "accept":
         if not mention.is_incoming:
             raise ToolError("Only incoming webmentions can be accepted.")
-        if mention.status != Webmention.PENDING:
+        if not mention.can_moderate:
             raise ToolError("Only pending webmentions can be accepted.")
-        mention.status = Webmention.ACCEPTED
-        mention.error = ""
-        mention.save(update_fields=["status", "error", "updated_at"])
+        mention.accept()
         return {
             "message": f"Accepted webmention {mention.pk} from {mention.source}.",
             "kind": "webmention",
@@ -264,12 +252,11 @@ def _moderate_webmention(mention, action):
             "status": mention.status,
             "source_url": mention.source,
         }
-    if mention.status != Webmention.PENDING:
+    if not mention.is_incoming:
+        raise ToolError("Only incoming webmentions can be rejected.")
+    if not mention.can_moderate:
         raise ToolError("Only pending webmentions can be rejected.")
-    mention.status = Webmention.REJECTED
-    if not mention.error:
-        mention.error = "Rejected by admin"
-    mention.save(update_fields=["status", "error", "updated_at"])
+    mention.reject()
     return {
         "message": f"Rejected webmention {mention.pk} from {mention.source}.",
         "kind": "webmention",

@@ -14,7 +14,7 @@ from django.utils import timezone
 
 from urllib.parse import urlencode, urlparse
 
-from . import previews
+from . import previews, services
 from .models import Comment, Post, Tag
 from .forms import CommentForm
 from .mf2 import DEFAULT_AVATAR_URL, fetch_target_from_url
@@ -586,6 +586,5 @@ def delete_post(request, slug):
         return guard
 
     post = get_object_or_404(Post, slug=slug)
-    post.deleted = True
-    post.save(update_fields=["deleted"])
+    services.delete_post(services.Actor(user=request.user, source="admin"), post)
     return redirect(get_posts_index_url())

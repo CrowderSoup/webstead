@@ -21,15 +21,13 @@ def verify_and_update_webmention(self, webmention_id: int) -> None:
     if fetch_failed:
         raise self.retry()
 
-    if not verified:
-        status = Webmention.REJECTED
-    else:
-        from micropub.views import _is_trusted_domain
-        status = Webmention.ACCEPTED if _is_trusted_domain(wm.source) else Webmention.PENDING
+    from micropub.views import _is_trusted_domain
 
-    wm.status = status
-    wm.error = verify_error or ""
-    wm.save(update_fields=["status", "error", "updated_at"])
+    wm.record_verification(
+        verified=verified,
+        trusted=verified and _is_trusted_domain(wm.source),
+        error=verify_error,
+    )
     close_old_connections()
 
 

@@ -1,6 +1,7 @@
 import secrets
 
 from django.db import models
+from django.utils import timezone
 
 from .utils import normalize_entry_data
 
@@ -17,7 +18,31 @@ class Channel(models.Model):
         return self.name
 
 
+class SubscriptionQuerySet(models.QuerySet):
+    def deactivate(self) -> int:
+        """Bulk form of ``Subscription.deactivate`` (no hub call)."""
+        return self.update(is_active=False, **Subscription.WEBSUB_CLEARED)
+
+
 class Subscription(models.Model):
+    # WebSub lease state, derived from the websub_* timestamps:
+    #
+    #   NONE --request accepted by hub--> REQUESTED --hub verifies--> SUBSCRIBED
+    #   SUBSCRIBED --lease runs out--> EXPIRED
+    #   REQUESTED / SUBSCRIBED / EXPIRED --re-request--> REQUESTED
+    #   any --unfollow / deactivate / hub verifies unsubscribe--> NONE
+    #
+    # Polling re-requests whenever the state isn't SUBSCRIBED.
+    WEBSUB_NONE = "none"
+    WEBSUB_REQUESTED = "requested"
+    WEBSUB_SUBSCRIBED = "subscribed"
+    WEBSUB_EXPIRED = "expired"
+    WEBSUB_CLEARED = {
+        "websub_requested_at": None,
+        "websub_subscribed_at": None,
+        "websub_expires_at": None,
+    }
+
     channel = models.ForeignKey(Channel, on_delete=models.CASCADE, related_name="subscriptions")
     url = models.URLField(max_length=2000)
     name = models.CharField(max_length=255, blank=True)
@@ -34,11 +59,67 @@ class Subscription(models.Model):
     websub_subscribed_at = models.DateTimeField(null=True, blank=True)
     websub_expires_at = models.DateTimeField(null=True, blank=True)
 
+    objects = SubscriptionQuerySet.as_manager()
+
     class Meta:
         unique_together = [["channel", "url"]]
 
     def __str__(self):
         return f"{self.url} in {self.channel}"
+
+    @property
+    def websub_state(self) -> str:
+        if self.websub_subscribed_at:
+            if self.websub_expires_at and self.websub_expires_at <= timezone.now():
+                return self.WEBSUB_EXPIRED
+            return self.WEBSUB_SUBSCRIBED
+        if self.websub_requested_at:
+            return self.WEBSUB_REQUESTED
+        return self.WEBSUB_NONE
+
+    @property
+    def needs_websub_subscribe(self) -> bool:
+        return bool(self.websub_hub) and self.websub_state != self.WEBSUB_SUBSCRIBED
+
+    def mark_websub_requested(self, secret: str) -> None:
+        """The hub accepted a subscribe request; wait for its verification."""
+        self.websub_secret = secret
+        self.websub_requested_at = timezone.now()
+        self.websub_subscribed_at = None
+        self.websub_expires_at = None
+        self.save(
+            update_fields=[
+                "websub_secret",
+                "websub_requested_at",
+                "websub_subscribed_at",
+                "websub_expires_at",
+            ]
+        )
+
+    def mark_websub_subscribed(self, lease_seconds=None) -> None:
+        """The hub verified our subscribe intent."""
+        now = timezone.now()
+        self.websub_subscribed_at = now
+        try:
+            self.websub_expires_at = now + timezone.timedelta(seconds=int(lease_seconds))
+        except (TypeError, ValueError):
+            self.websub_expires_at = None
+        self.save(update_fields=["websub_subscribed_at", "websub_expires_at"])
+
+    def clear_websub(self) -> None:
+        for field, value in self.WEBSUB_CLEARED.items():
+            setattr(self, field, value)
+        self.save(update_fields=list(self.WEBSUB_CLEARED))
+
+    def deactivate(self) -> None:
+        """Stop following: inactive, and back to WEBSUB_NONE.
+
+        Telling the hub is the caller's job (it needs a base URL).
+        """
+        self.is_active = False
+        for field, value in self.WEBSUB_CLEARED.items():
+            setattr(self, field, value)
+        self.save(update_fields=["is_active", *self.WEBSUB_CLEARED])
 
     def save(self, *args, **kwargs):
         if not self.websub_callback_token:

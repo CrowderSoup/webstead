@@ -87,7 +87,7 @@ def poll_subscription(self, sub_id: int, *, force: bool = False, doctor: bool = 
 
     _apply_feed_meta(sub, feed_meta, hub_url)
 
-    if sub.websub_hub and not sub.websub_subscribed_at:
+    if sub.needs_websub_subscribe:
         base_url = getattr(settings, "MICROSUB_BASE_URL", "").rstrip("/")
         if base_url:
             _subscribe_to_websub_with_base_url(sub, base_url)
